@@ -1,0 +1,1092 @@
+*/****************** START SPECIFICATIONS *****************************         
+*                                                                     *         
+*01* MACRO NAME - CMDAUTH                                             *         
+*                                                                     *         
+*01* DESCRIPTIVE NAME - COMMAND AUTHORIZATION MACRO                   *         
+*                                                                     *         
+*    PROPRIETARY STATEMENT =                                          *         
+*     LICENSED MATERIALS - PROPERTY OF IBM                            *         
+*     5650-ZOS COPYRIGHT IBM CORP. 1989, 2021                         *         
+*                                                                     *         
+*    STATUS = HBB77D0                                                 *         
+*                                                                     *         
+*                                                                     *         
+*01* EXTERNAL CLASSIFICATION:                                     @P9A*         
+*                                                                     *         
+*02* PI:   BASE                                                   @P9C*         
+*                                                                     *         
+*02* NONE: CHECK=                                                 @P9C*         
+*                                                                     *         
+*01* END OF EXTERNAL CLASSIFICATION                               @P9A*         
+*                                                                     *         
+*  FUNCTION   - VALIDATES A CMDAUTH REQUEST AND BUILDS A PARAMETER    *         
+*               LIST TO BE USED BY THE CMDAUTH SERVICE ROUTINE,       *         
+*               IEECB920.  THE MACRO THEN DOES A NON-SPACE SWITCH     *         
+*               PC TO IEECB920 TO PROCESS THE REQUEST.                *         
+*                                                                     *         
+*                                                                     *         
+*01* MODULE TYPE = ASSEM MACRO                                        *         
+*                                                                     *         
+*02*   PROCESSOR = ASSEM                                              *         
+*                                                                     *         
+*01* COMPONENT = SC1CK                                                *         
+*                                                                     *         
+*01* DISTRIBUTION LIBRARY = AMACLIB                                   *         
+*                                                                     *         
+*01* CHANGE ACTIVITY =                                                *         
+*      $L0=SP3132CR, JBB3313, 880430 PDCR: MVS B1 SECURITY SUPPORT    *         
+*      $L1=SP3134CR, JBB3313, 880729 PDCR: MVS B1 SECURITY SUPPORT    *         
+*      $L2=SP3135CR, JBB3313, 880901 PDCR: MVS B1 SECURITY SUPPORT    *         
+*      $P1=PGP0058 , JBB3313, 881007 PDCS: MVS B1 SECURITY SUPPORT    *         
+*      $P2=PGP0193 , JBB3313, 890127 PDCR: Return correct values      *         
+*                                          when opercmds class is     *         
+*                                          inactive                   *         
+*      $D1=DCRR0040, JBB3313, 890616 PDHK: LOGSTR, CBLKTYPE and       *         
+*                                    CNTLBLK are not mut. excl.       *         
+*      $P3=PGP0471 , JBB3313, 890619 PDHK: Line flag assemb error.    *         
+*      $D2=DCR238,   HBB4410, 890814 PDED: Add support for CMDX       *         
+*                                           control block as CBLKTYPE *         
+*      $P4=PGP0594 , JBB3313, 890921 PDHK: Copyright text errors.     *         
+*         YA30466 -- Allow SSCM as CMDAUTH control block input        *         
+*      $01=YA36775,  HBB4410, 901017 PDAD: PEO4824-Either UTOKEN or   *         
+*                                          CNTLBLK/CBLKTYPE must  @01A*         
+*                                          be specified.          @01A*         
+*      $P5=PKB1698,  HBB4430, 920608 PDCM: Return code documentation  *         
+*      $02=OW39755,  HBB6606, 990723 PDKP: Change MSGSP default       *         
+*      $P6=ME01663 , HBB7720, 040831 PDSW: Reversioning Cancelled     *         
+*      $P7=ME08332,  HBB7740, 061130 PDD0: Relative Branching         *         
+*      $P8=ME18813,  HBB7780, 100305 PDXB: Avoid null basereg         *         
+*      $P9=WI387236, HBB77D0, 200909 PDED: RC clarification           *         
+*                                                                     *         
+*01* INVOCATION =                                                     *         
+*                                                                     *         
+*      Execution Mode: Task mode                                      *         
+*                                                                     *         
+*      Authorization:                                                 *         
+*      Supervisor state, or APF authorized, or PKM allowing keys 0-7  *         
+*                                                                     *         
+*      Addressing mode: 24 or 31 bit addressing mode                  *         
+*                                                                     *         
+*      ASC mode: Primary                                              *         
+*                                                                     *         
+*      Serialization:                                                 *         
+*      Enabled for I/O and external interrupts                        *         
+*      No locks held                                                  *         
+*                                                                     *         
+*                                                                     *         
+*      Input registers:                                               *         
+*                                                                     *         
+*                   GR0-GR1    reserved                               *         
+*                   GR2-GR13   undefined                              *         
+*                   GR14-GR15  reserved                               *         
+*                                                                     *         
+*                                                                     *         
+*      Output registers:                                              *         
+*                                                                     *         
+*                                                                     *         
+*                   GR0        reason code                            *         
+*                   GR1        zero or address of messages            *         
+*                              generated by security interface        *         
+*                   GR2-GR13   unchanged                              *         
+*                   GR14       undefined                              *         
+*                   GR15       return code                            *         
+*                                                                     *         
+*   Macro Syntax:                                                     *         
+*                                                                     *         
+*   (One or more blanks must precede CMDAUTH)                         *         
+*                                                                     *         
+*   CMDAUTH                                                           *         
+*      ENTITY = entity name       RX-type addr or regs (2) - (12)     *         
+*     ,ATTR = READ ! UPDATE ! CONTROL ! RX-type addr or regs (2)-(12) *         
+*     <,REQSTOR = requester id >  RX-type address, or regs            *         
+*                                 (2) - (12)                          *         
+*     <,SUBSYS = subsystem id >   RX-type address, or regs            *         
+*                                 (2) - (12)                          *         
+*     <,MSGSUPP = YES ! NO >                                          *         
+*     <,MSGRTN = YES ! NO >                                           *         
+*     <,MSGSP = subpool number >                                      *         
+*     <,CHECK = OBTAIN ! AUTH >                                       *         
+*                                                                     *         
+*   Group A Keywords                                                  *         
+*     ,LOGSTR = log string        RX-type address or regs (2) - (12)  *         
+*     ,UTOKEN = utoken            RX-type address or regs (2) - (12)  *         
+*                                                                     *         
+*   Group B Keywords                                                  *         
+*     ,CNTLBLK = control block    RX-type address or regs (2) - (12)  *         
+*     ,CBLKTYPE = XSA ! CIB ! CSCB ! SSCM ! CMDX              @YA30466*         
+*     <,LOGSTR = log string>       RX-type address or regs (2) -(12)  *         
+*                                                                 @01A*         
+*     ,MF=(L ! E, listname <,NODSECT>)                                *         
+*                                                                     *         
+*                                                                     *         
+*   ENTITY -                                                          *         
+*       Specifies the address (RX type or address in register (2) -   *         
+*       (12)) of a 39 byte area containing the command entity name    *         
+*       to be used in the RACROUTE call for the command being         *         
+*       authority checked.  If the entity name is less than 39        *         
+*       bytes, it should be left justified and padded on the right    *         
+*       with blanks.  This is a required keyword.                     *         
+*                                                             @YA30466*         
+*   LOGSTR -                                                  @YA30466*         
+*       Specifies the address (RX-type or regs (2) - (12))    @YA30466*         
+*       of a variable length area containing the text of the  @YA30466*         
+*       command being authority checked. The first byte of    @YA30466*         
+*       the input area must contain the length of the command @YA30466*         
+*       text.                                                     @01C*         
+*       This is a required keyword when UTOKEN is specified.      @01C*         
+*       Otherwise it is an optional keyword when CNTLBLK/CBLKTYPE @01C*         
+*       is specified.                                             @01A*         
+*                                                                     *         
+*   ATTR -                                                            *         
+*       Specifies the security access level to be used in the         *         
+*       RACROUTE call for command authorization.  READ, UPDATE, or    *         
+*       CONTROL may be specified.  This is a required keyword.        *         
+*                                                                     *         
+*   REQSTOR -                                                         *         
+*       Specifies the address (RX-type or regs (2) - (12)) of an      *         
+*       8 byte area containing the identifier for use on the REQSTOR  *         
+*       keyword of the RACROUTE macro.  If the identifier is less     *         
+*       than 8 bytes, then it should be left justified and padded on  *         
+*       the right with blanks.  The REQSTOR keyword may also be       *         
+*       specified as a 'literal' of length 8 or less.  This is an     *         
+*       optional keyword.                                             *         
+*                                                                     *         
+*   SUBSYS -                                                          *         
+*       Specifies the address (RX-type or regs (2) - (12)) of an      *         
+*       8 byte area containing the identifier for use on the SUBSYS   *         
+*       keyword of the RACROUTE macro.  If the identifier is less     *         
+*       than 8 bytes, then it should be left justified and padded on  *         
+*       the right with blanks.  The SUBSYS keyword may also be        *         
+*       specified as a 'literal' of length 8 or less.  This is an     *         
+*       optional keyword.                                             *         
+*                                                                     *         
+*   MSGSUPP -                                                         *         
+*       Specifies whether or not messages generated by the security   *         
+*       interface should be suppressed.  An input of either YES or    *         
+*       NO will be accepted, with NO being the default.  This         *         
+*       CMDAUTH keyword corresponds to the RACROUTE keyword, MSGSUPP. *         
+*       This is an optional keyword.                                  *         
+*                                                                     *         
+*   MSGRTN -                                                          *         
+*       Specifies whether or not messages generated by the security   *         
+*       interface should be returned to the caller.  An input of      *         
+*       either YES or NO will be accepted, with NO being the          *         
+*       default.  If YES is specified, then the address of the        *         
+*       generated messages will be returned in register one.  This    *         
+*       CMDAUTH keyword corresponds to the RACROUTE keyword, MSGRTN.  *         
+*       This is an optional keyword.                                  *         
+*                                                                     *         
+*   MSGSP -                                                           *         
+*       Specifies the subpool to be used by the security interface    *         
+*       for the returned messages.  The default is subpool 0.  This   *         
+*       CMDAUTH keyword corresponds to the RACROUTE keyword, MSGSP.   *         
+*       This is an optional keyword.                              @02C*         
+*                                                                     *         
+*  ** THE CHECK KEYWORD IS INTENDED FOR CONTROL PROGRAM USE ONLY **   *         
+*  ** AND IS NOT CONSIDERED PART OF THE PROGRAMMING INTERFACE    **             
+*                                                                     *         
+*   CHECK -                                                           *         
+*       Specifies whether the CMDAUTH service is being called to      *         
+*       obtain a UTOKEN for a command, or for command authorization   *         
+*       via the RACROUTE interface.  Either OBTAIN or AUTH may be     *         
+*       specified, with AUTH being the default.  This is an optional  *         
+*       keyword.                                                      *         
+*                                                                     *         
+*  ** THE CHECK KEYWORD IS INTENDED FOR CONTROL PROGRAM USE ONLY **   *         
+*  ** AND IS NOT CONSIDERED PART OF THE PROGRAMMING INTERFACE    **             
+*                                                                     *         
+*   UTOKEN -                                                          *         
+*       Specifies the address (RX-type or regs (2) - (12)) of a       *         
+*       UTOKEN to be used by RACROUTE for command authority           *         
+*       checking. This is a required Group A keyword.         @YA30466*         
+*        The UTOKEN keyword and the CBLKTYPE keyword          @YA30466*         
+*       are mutually exclusive.                               @YA30466*         
+*                                                                     *         
+*   CBLKTYPE -                                                        *         
+*       Specifies the type of control block being passed via the      *         
+*       CNTLBLK keyword.  XSA, CIB, CSCB, SSCM or CMDX may be @YA30466*         
+*       specifed to indicate, respectively, an XSA, CIB,      @YA30466*         
+*       CSCB, SSCM or CMDX control block.                     @YA30466*         
+*        The CNTLBLK keyword must be coded when CBLKTYPE      @YA30466*         
+*       is specified.                                         @YA30466*         
+*        This is a required Group B keyword.                          *         
+*        The CBLKTYPE keyword and the UTOKEN keyword          @YA30466*         
+*       are mutually exclusive.                               @YA30466*         
+*                                                                     *         
+*   CNTLBLK -                                                         *         
+*       Specifies the address (RX-type or regs (2) - (12)) of a       *         
+*       control block being passed as input to the CMDAUTH service    *         
+*       routine.  The CBLKTYPE keyword must be coded when CNTLBLK     *         
+*       is specified.  This is a required Group B keyword.            *         
+*                                                                     *         
+*  ****   EITHER THE (LOGSTR AND UTOKEN) OR (CBLKTYPE     *** @YA30466*         
+*  ****   AND CNTLBLK) KEYWORDS MUST BE SPECIFIED.        *** @YA30466*         
+*                                                                     *         
+*   MF -                                                              *         
+*       The value of this keyword specifies the form of the macro     *         
+*       invocation. Either "L", for list form, or "E", for execute    *         
+*       form may be specified. "list name" specifies the address      *         
+*       (RX-type or regs (2) - (12)) of a storage area for the        *         
+*       CMDAUTH parameter list.  A dsect will be created for the      *         
+*       parameter list unless the NODSECT keyword is specified.       *         
+*       MF is a required keyword.                                     *         
+*                                                                     *         
+*---------------------------------------------------------------------*         
+*------------------   RETURN AND REASON CODES  -----------------------*         
+*---------------------------------------------------------------------*         
+*                                                                     *         
+*01*   CONDITIONS =                                                   *         
+*        Command issuer is authorized to issue the command.           *         
+*                                                                     *         
+*02*   RETURN-CODE = 0    REASON-CODE = provided by RACROUTE          *         
+*                                                                     *         
+*                                                                     *         
+*                                                                     *         
+*01*   CONDITIONS =                                                   *         
+*        No authorization decision was made by the security           *         
+*        interface.                                                   *         
+*                                                                     *         
+*02*   RETURN-CODE = 4    REASON-CODE = provided by RACROUTE          *         
+*                                                                     *         
+*                                                                     *         
+*                                                                     *         
+*01*   CONDITIONS =                                                   *         
+*        Command issuer is not authorized to issue the command.       *         
+*                                                                     *         
+*02*   RETURN-CODE = 8    REASON-CODE = provided by RACROUTE          *         
+*                                                                     *         
+*                                                                     *         
+*                                                                     *         
+*01*   CONDITIONS =                                                   *         
+*        CHECK= was specified and the command could not be        @P9C*         
+*        accepted for execution.                                  @P9C*         
+*                                                                     *         
+*02*   RETURN-CODE = 12                                               *         
+*                                                                     *         
+*                                                                     *         
+*                                                                     *         
+*---------------------------------------------------------------------*         
+*---------------------------------------------------------------------*         
+*01* MESSAGES =                                                       *         
+*                                                                     *         
+*       The CMDAUTH macro will issue the following messages during    *         
+*       compilation/ assembly:                                        *         
+*                                                                     *         
+*02* WARNING = (SEVERITY 4)                                           *         
+*                                                                     *         
+*       ENTITY KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE         *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       ENTITY(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.      *         
+*                                                                     *         
+*       ENTITY KEYWORD IGNORED.  KEYWORD IS NOT PERMITTED WHEN        *         
+*       CHECK(OBTAIN) IS SPECIFIED.                                   *         
+*                                                                     *         
+*       ATTR KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE           *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       ATTR(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.        *         
+*                                                                     *         
+*       ATTR KEYWORD IGNORED.  KEYWORD IS NOT PERMITTED WHEN          *         
+*       CHECK(OBTAIN) IS SPECIFIED.                                   *         
+*                                                                     *         
+*       REQSTOR KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE        *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       REQSTOR(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.     *         
+*                                                                     *         
+*       REQSTOR KEYWORD IGNORED.  KEYWORD IS NOT PERMITTED WHEN       *         
+*       CHECK(OBTAIN) IS SPECIFIED.                                   *         
+*                                                                     *         
+*       SUBSYS KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE         *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       NO VALUE SPECIFIED ON THE SUBSYS KEYWORD.  THE KEYWORD IS     *         
+*       IGNORED.                                                      *         
+*                                                                     *         
+*       SUBSYS(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.      *         
+*                                                                     *         
+*       SUBSYS KEYWORD IGNORED.  KEYWORD IS NOT PERMITTED WHEN        *         
+*       CHECK(OBTAIN) IS SPECIFIED.                                   *         
+*                                                                     *         
+*       NO VALUE SPECIFIED ON THE MSGSUPP KEYWORD.  THE KEYWORD IS    *         
+*       IGNORED.                                                      *         
+*                                                                     *         
+*       MSGSUPP KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE        *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       MSGSUPP(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.     *         
+*                                                                     *         
+*       UNKNOWN VALUE vvvvvvvv SPECIFIED ON MSGSUPP KEYWORD.  THE     *         
+*       VALUE IS IGNORED.                                             *         
+*           Where vvvvvvvv is the value specified on the keyword.     *         
+*                                                                     *         
+*       MSGSUPP KEYWORD IGNORED.  KEYWORD IS NOT PERMITTED WHEN       *         
+*       CHECK(OBTAIN) IS SPECIFIED.                                   *         
+*                                                                     *         
+*       NO VALUE SPECIFIED ON THE MSGRTN KEYWORD.  THE KEYWORD IS     *         
+*       IGNORED.                                                      *         
+*                                                                     *         
+*       MSGRTN KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE         *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       MSGRTN(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.      *         
+*                                                                     *         
+*       UNKNOWN VALUE vvvvvvvv SPECIFIED ON MSGRTN KEYWORD.  THE      *         
+*       VALUE IS IGNORED.                                             *         
+*           Where vvvvvvvv is the value specified on the keyword.     *         
+*                                                                     *         
+*       MSGRTN KEYWORD IGNORED.  KEYWORD IS NOT PERMITTED WHEN        *         
+*       CHECK(OBTAIN) IS SPECIFIED.                                   *         
+*                                                                     *         
+*       NO VALUE SPECIFIED ON THE MSGSP KEYWORD.  THE KEYWORD IS      *         
+*       IGNORED.                                                      *         
+*                                                                     *         
+*       MSGSP KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE          *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       MSGSP(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.       *         
+*                                                                     *         
+*       MSGSP KEYWORD IGNORED.  KEYWORD IS NOT PERMITTED WHEN         *         
+*       CHECK(OBTAIN) IS SPECIFIED.                                   *         
+*                                                                     *         
+*       NO VALUE SPECIFIED ON THE CHECK KEYWORD.  THE KEYWORD IS      *         
+*       IGNORED.                                                      *         
+*                                                                     *         
+*       CHECK KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE          *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       CHECK(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.       *         
+*                                                                     *         
+*       UNKNOWN VALUE vvvvvvvv SPECIFIED ON CHECK KEYWORD.  THE       *         
+*       VALUE IS IGNORED.                                             *         
+*           Where vvvvvvvv is the value specified on the keyword.     *         
+*                                                                     *         
+*       LOGSTR KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE         *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       LOGSTR(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.      *         
+*                                                                     *         
+*       LOGSTR KEYWORD IGNORED.  KEYWORD IS NOT PERMITTED WHEN        *         
+*       CHECK(OBTAIN) IS SPECIFIED.                                   *         
+*                                                                     *         
+*       UTOKEN KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE         *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       UTOKEN(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.      *         
+*                                                                     *         
+*       UTOKEN KEYWORD IGNORED.  KEYWORD IS NOT PERMITTED WHEN        *         
+*       CHECK(OBTAIN) IS SPECIFIED.                                   *         
+*                                                                     *         
+*       CBLKTYPE KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE       *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       CBLKTYPE(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.    *         
+*                                                                     *         
+*       CNTLBLK KEYWORD IGNORED.  NO KEYWORDS PERMITTED ON THE        *         
+*       LIST FORM OF CMDAUTH.                                         *         
+*                                                                     *         
+*       CNTLBLK(X,Y) HAS TOO MANY VALUES. VALUES IGNORED AFTER X.     *         
+*                                                                     *         
+*       MF= X,Y,Z HAS TOO MANY VALUES. VALUES IGNORED AFTER Z.        *         
+*                                                                     *         
+*                                                                     *         
+*02* ERROR = (SEVERITY 12)                                            *         
+*                                                                     *         
+*       NO TEXT GENERATED. CBLKTYPE VALUE NOT SPECIFIED.              *         
+*           (when CHECK is specified)                                 *         
+*                                                                     *         
+*       NO TEXT GENERATED. ENTITY VALUE NOT SPECIFIED.                *         
+*                                                                     *         
+*       NO TEXT GENERATED. ATTR VALUE NOT SPECIFIED.                  *         
+*                                                                     *         
+*       NO TEXT GENERATED. LOGSTR KEYWORD NOT SPECIFIED           @01C*         
+*           WHEN UTOKEN KEYWORD IS SPECIFIED.                     @01C*         
+*                                                                     *         
+*       NO TEXT GENERATED. UTOKEN KEYWORD NOT SPECIFIED           @01C*         
+*           WHEN LOGSTR KEYWORD IS SPECIFIED.                     @01C*         
+*                                                                     *         
+*       NO TEXT GENERATED. CBLKTYPE VALUE NOT SPECIFIED.              *         
+*           (when CNTLBLK is specified)                               *         
+*                                                                     *         
+*       NO TEXT GENERATED. CBLKTYPE AND UTOKEN ARE MUTUALLY           *         
+*       EXCLUSIVE.                                                    *         
+*                                                                     *         
+*       NO TEXT GENERATED. CBLKTYPE AND LOGSTR ARE MUTUALLY           *         
+*       EXCLUSIVE.                                                    *         
+*                                                                     *         
+*       NO TEXT GENERATED. CBLKTYPE VALUE NOT VALID.                  *         
+*                                                                     *         
+*       NO TEXT GENERATED. CNTLBLK VALUE NOT SPECIFIED.               *         
+*           (when CBLKTYPE is specified)                              *         
+*                                                                     *         
+*       NO TEXT GENERATED. CNTLBLK AND UTOKEN ARE MUTUALLY            *         
+*       EXCLUSIVE.                                                    *         
+*                                                                     *         
+*       NO TEXT GENERATED. CNTLBLK AND LOGSTR ARE MUTUALLY            *         
+*       EXCLUSIVE.                                                    *         
+*                                                                     *         
+*       NO TEXT GENERATED. REQUIRED KEYWORDS LOGSTR AND UTOKEN OR @01C*         
+*       CBLKTYP AND CNTLBLK NOT SPECIFIED.                        @01C*         
+*                                                                     *         
+*       NO TEXT GENERATED. MF VALUE NOT VALID.                        *         
+*                                                                     *         
+*       NO TEXT GENERATED. MF LIST NAME NOT SPECIFIED.                *         
+*                                                                     *         
+********************** END OF SPECIFICATIONS **************************         
+*  A  Add check for OPERCMDS class to increase performance         @L1A         
+*  C  Change executable version to use register notation           @L2A         
+*  C  Check for OPERCMDS class in the UCM base and not in the      @P1A         
+*     fixed extention                                              @P1A         
+*  C  When opercmds class is inactive, return 0 in reg 1, and 4    @P2A         
+*     in regs 1 and 15.                                            @P2A         
+*  A  Add the control block CMDX (IEEZB828) to the list of valid   @D2A         
+*     contol blocks on the CBLKTYPE parameter                      @D2A         
+*  C  Fix line flag assembly error.                                @P3A         
+*  C  FIX COPYRIGHT TEXT ERRORS IN PROLOG.                         @P4A         
+*  A  Allow SSCM as CMDAUTH control block input                @YA30466         
+*  A  Either UTOKEN or CNTLBLK/CBLKTYPE must be specified.         @01A         
+*  C  Clean up return code documentation in prolog                 @P5A         
+*  C  No code change.  Comment change for the MSGSP default to be  @02A         
+*     subpool 0.  It was not SP229 anyways, but rather SP0, but    @02A         
+*     that was causing problems when SAF got storage in key3 SP0,  @02A         
+*     and then IEECB920, which may free the storage, was running   @02A         
+*     in key0 (key0 and SP0 makes SP252 and then abend378-14).     @02A         
+*     Made IEECB920 to getmain/freemain in the same PSW key for    @02A         
+*     subpool 0 requests.                                          @02A         
+*  A  Support relative branching.                                  @P7A         
+*  C  Clarify external classification of CHECK= and when RC=12     @P9A         
+*     may occur.                                                   @P9A         
+***********************************************************************         
+         MACRO                                                                  
+&LABEL   CMDAUTH &ENTITY=^,&ATTR=^,&REQSTOR=^,&SUBSYS=^,&MSGSUPP=NO,   *        
+               &MSGRTN=NO,&MSGSP=^,&CHECK=AUTH,                        *        
+               &LOGSTR=^,&UTOKEN=^,&CBLKTYPE=^,&CNTLBLK=^,&MF=^                 
+.**********************************************************************         
+         LCLC  &LNAM,&OP                  -Setup internal variables    *        
+                                                                   @L2C         
+.**********************************************************************         
+.*                                                                    *         
+.*  If a label was specified on the macro invocation then             *         
+.*  generate a DS for the label.                                      *         
+.*                                                                    *         
+.**********************************************************************         
+         AIF   ('&LABEL' EQ '' OR '&MF(1)' EQ 'E').SKIPLBL   -User     *        
+                                              specified name?  @YA30466         
+&LABEL   DS    0F                         -User specified variable name         
+.SKIPLBL ANOP                             -No user specified name               
+.**********************************************************************         
+.*                                                                    *         
+.*   Verify macro parameters, generate code                           *         
+.*                                                                    *         
+.**********************************************************************         
+.*                                                                              
+&SEVLEV  SETA  0                                                                
+         AIF   (N'&MF LT 4).SKIP10        -Check for too many operands          
+         MNOTE 4,'MF= &MF HAS TOO MANY VALUES. VALUES IGNORED AFTER &MF*        
+               (3).'                                                            
+.SKIP10  AIF   ('&MF(1)' NE '' AND '&MF(1)' NE '^').SKIP20 -Check for  *        
+               no operands specified                                            
+         MNOTE 12,'NO TEXT GENERATED. MF VALUE NOT SPECIFIED.'                  
+&SEVLEV  SETA  12                         -Set error code                       
+         AGO   .EXIT                      -Leave macro                          
+.SKIP20  AIF   ('&MF(1)' EQ 'L' OR '&MF(1)' EQ 'E').SKIP25 -Check for  *        
+               a valid register                                                 
+         MNOTE 12,'NO TEXT GENERATED. MF VALUE NOT VALID.'                      
+&SEVLEV  SETA  12                         -Set error code                       
+         AGO   .EXIT                      -Leave macro                          
+.SKIP25  AIF   ('&MF(2)'(1,1) NE '(').SKIP39  -Check for value         *        
+                                           specified in a register @L2A         
+&LNAM    SETC  'LNAM'                     -Set default list name                
+&OPOBJ   SETC  '&MF(2,1)'                 -Set source              @L2A         
+&OP      SETC  'LR'                       -LR instruc. req.        @L2A         
+         AGO   .SKIP45                                             @L2A         
+.SKIP39  AIF   ('&MF(2)' NE '').SKIP40    -Check for no listname   @L2C         
+         MNOTE 12,'NO TEXT GENERATED. MF LIST NAME NOT SPECIFIED.'              
+&SEVLEV  SETA  12                         -Set error code                       
+         AGO   .EXIT                      -Leave macro                          
+.SKIP40  ANOP                                                      @L2A         
+&LNAM    SETC  '&MF(2)'                   -Set list name     @L2A               
+&OPOBJ   SETC  '&MF(2)'                   -Set source              @L2A         
+&OP      SETC  'LA'                       -LA instruc. req.        @L2A         
+.SKIP45  AIF   ('&MF(1)' EQ 'E').EXECUTE  -Check for execute form               
+         AIF   ('&ENTITY' EQ '^').SKIP50  -Go process execute form              
+         MNOTE 4,'ENTITY KEYWORD IGNORED. NO KEYWORDS PERMITTED ON THE *        
+               LIST FORM OF CMDAUTH.'                                           
+.SKIP50  AIF   ('&ATTR' EQ '^').SKIP60    -Check for ATTR keyword               
+         MNOTE 4,'ATTR KEYWORD IGNORED. NO KEYWORDS PERMITTED ON THE LI*        
+               ST FORM OF CMDAUTH.'                                             
+.SKIP60  AIF   ('&REQSTOR' EQ '^').SKIP70 -Check for REQSTOR keyword            
+         MNOTE 4,'REQSTOR KEYWORD IGNORED. NO KEYWORDS PERMITTED ON THE*        
+               LIST FORM OF CMDAUTH.'                                           
+.SKIP70  AIF   ('&SUBSYS' EQ '^').SKIP80  -Check for SUBSYS keyword             
+         MNOTE 4,'SUBSYS KEYWORD IGNORED. NO KEYWORDS PERMITTED ON THE *        
+               LIST FORM OF CMDAUTH.'                                           
+.SKIP80  AIF   ('&MSGSUPP' EQ '^'OR '&MSGSUPP' EQ 'NO').SKIP90 -Check  *        
+                                           for MSGSUPP keyword other   *        
+                                           than default of NO                   
+         MNOTE 4,'MSGSUPP KEYWORD IGNORED. NO KEYWORDS PERMITTED ON THE*        
+                LIST FORM OF CMDAUTH.'                                          
+.SKIP90  AIF   ('&MSGRTN' EQ '^' OR '&MSGRTN' EQ 'NO').SKIP100 -Check  *        
+                                           for MSGRTN keyword other    *        
+                                           than default of NO                   
+         MNOTE 4,'MSGRTN KEYWORD IGNORED. NO KEYWORDS PERMITTED ON THE *        
+               LIST FORM OF CMDAUTH.'                                           
+.SKIP100 AIF   ('&MSGSP' EQ '^').SKIP110  -Check for MSGSP keyword              
+         MNOTE 4,'MSGSP KEYWORD IGNORED. NO KEYWORDS PERMITTED ON THE L*        
+               IST FORM OF CMDAUTH.'                                            
+.SKIP110 AIF   ('&CHECK' EQ '^' OR '&CHECK' EQ 'AUTH').SKIP114 -Check  *        
+                                           for CHECK keyword other     *        
+                                           than default of AUTH                 
+         MNOTE 4,'CHECK KEYWORD IGNORED. NO KEYWORDS PERMITTED ON THE L*        
+               IST FORM OF CMDAUTH.'                                            
+.SKIP114 AIF   ('&LOGSTR' EQ '^').SKIP116 -Check for LOGSTR keyword             
+         MNOTE 4,'LOGSTR KEYWORD IGNORED. NO KEYWORDS PERMITTED ON THE *        
+               LIST FORM OF CMDAUTH.'                                           
+.SKIP116 AIF   ('&UTOKEN' EQ '^').SKIP118 -Check for UTOKEN keyword             
+         MNOTE 4,'UTOKEN KEYWORD IGNORED. NO KEYWORDS PERMITTED ON THE *        
+               LIST FORM OF CMDAUTH.'                                           
+.SKIP118 AIF   ('&CNTLBLK' EQ '^').SKIP119 -Check for CNTLBLK keyword           
+         MNOTE 4,'CNTLBLK KEYWORD IGNORED. NO KEYWORDS PERMITTED ON THE*        
+                LIST FORM OF CMDAUTH.'                                          
+.SKIP119 AIF   ('&CBLKTYPE' EQ '^').SKIP120 Check for CBLKTYPE keyword          
+         MNOTE 4,'CBLKTYPE KEYWORD IGNORED. NO KEYWORDS PERMITTED ON TH*        
+               E LIST FORM OF CMDAUTH.'                                         
+.SKIP120 ANOP                                                                   
+.**********************************************************************         
+.*                                                                    *         
+.*  BUILD CMDAUTH PARAMETER LIST                                      *         
+.*                                                                    *         
+.**********************************************************************         
+         AIF   ('&MF(3)' EQ 'NODSECT').SKIP122  -Should a dsect be     *        
+                                              created?                          
+&LNAM    DSECT                     -Dsect                                       
+         AGO   .SKIP123            -Go build parameter list                     
+.SKIP122 ANOP                      -No dsect                                    
+&LNAM    DS    0F                  -Parameter list                              
+.SKIP123 ANOP                      -Build parameter list                        
+&LNAM.01 DS    CL4                 -'CAPL ' acronym                             
+&LNAM.02 DS    BL1                 -Version level                               
+&LNAM.03 DS    BL1                 -Security access level                       
+&LNAM.04 DS    BL1                 -Miscellaneous flags                         
+&LNAM.05 DS    BL1                 -Control block type                          
+&LNAM.06 DS    F                   -Subpool number for security        *        
+                                    interface                                   
+&LNAM.07 DS    A                   -Address of requestor identifier             
+&LNAM.08 DS    A                   -Address of subsystem identifier             
+&LNAM.09 DS    A                   -Address of user specified control  *        
+                                    block                                       
+&LNAM.10 DS    A                   -Address of logstring                        
+&LNAM.11 DS    A                   -Address of entity name                      
+&LNAM.12 DS    CL12                -Reserved                                    
+&LNAM.LN EQU   *-&LNAM             -Length of parameter list                    
+         AGO   .EXIT               -Leave macro                                 
+.**********************************************************************         
+.*                                                                    *         
+.*    EXECUTE SECTION                                                 *         
+.*                                                                    *         
+.**********************************************************************         
+.*                                                                              
+.*                                                                              
+.**********************************************************************         
+.*                                                                    *         
+.*       CHECK KEYWORD PROCESSING                                     *         
+.*                                                                    *         
+.**********************************************************************         
+.EXECUTE AIF   ('&CHECK(1)' NE '').SKIP124 -Check for the CHECK keyword         
+         MNOTE 4,'NO VALUE SPECIFIED ON THE CHECK KEYWORD. THE KEYWORD *        
+               IS IGNORED.'                                                     
+         AGO   .SKIP128                 -Continue with ENTITY keyword           
+.SKIP124 AIF   (N'&CHECK EQ 1).SKIP125  -Check for more than 1 value            
+         MNOTE 4,'CHECK= &CHECK HAS TOO MANY VALUES. VALUES IGNORED AFT*        
+               ER &CHECK(1).'                                                   
+.SKIP125 AIF   ('&CHECK(1)' NE 'OBTAIN').SKIP126 -Check for OBTAIN     *        
+                                         operand                                
+         AIF   ('&CBLKTYPE' NE '^').SKIP128 -Check for CBLKTYPE keyword         
+         MNOTE 12,'NO TEXT GENERATED. CBLKTYPE KEYWORD NOT SPECIFIED WH*        
+               EN CHECK KEYWORD SPECIFIED.'                                     
+&SEVLEV  SETA  12                       -Set error code                         
+         AGO   .EXIT                    -Leave macro                            
+.SKIP126 AIF   ('&CHECK(1)' EQ 'AUTH').SKIP128 -Check for AUTH operand          
+         MNOTE 4,'UNKNOWN VALUE &CHECK SPECIFIED ON CHECK KEYWORD. THE *        
+               VALUE IS IGNORED.'                                               
+.**********************************************************************         
+.*                                                                    *         
+.*    ENTITY KEYWORD PROCESSING                                       *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP128 AIF   ('&ENTITY(1)' NE '' AND '&ENTITY(1)' NE '^').SKIP130    *        
+                                        -Check if the ENTITY keyword   *        
+                                         was specified                          
+         AIF   ('&CHECK' EQ 'OBTAIN').SKIP140 -CHECK(OBTAIN) specified *        
+                                               so ignore entity                 
+         MNOTE 12,'NO TEXT GENERATED. ENTITY VALUE NOT SPECIFIED.'              
+&SEVLEV  SETA  12                       -Set error code                         
+         AGO   .EXIT                    -Leave macro                            
+.SKIP130 AIF   ('&CHECK' NE 'OBTAIN').SKIP135 -Check for CHECK(OBTAIN)          
+         MNOTE 4,'ENTITY KEYWORD IGNORED. KEYWORD IS NOT PERMITTED WHEN*        
+               CHECK(OBTAIN) IS SPECIFIED.'                                     
+.SKIP135 AIF   (N'&ENTITY EQ 1).SKIP140 -Check for more than 1 value            
+         MNOTE 4,'ENTITY = &ENTITY HAS TOO MANY VALUES. VALUES IGNORED *        
+               AFTER &ENTITY(1).'                                               
+.**********************************************************************         
+.*                                                                    *         
+.*       ATTR KEYWORD PROCESSING                                      *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP140 AIF   ('&ATTR(1)' NE '' AND '&ATTR(1)' NE '^').SKIP150        *        
+                                        -Check if the ATTR keyword     *        
+                                         was specified                          
+         AIF   ('&CHECK' EQ 'OBTAIN').SKIP170 -CHECK(OBTAIN) specified *        
+                                               so ignore attr                   
+         MNOTE 12,'NO TEXT GENERATED. ATTR VALUE NOT SPECIFIED.'                
+&SEVLEV  SETA  12                       -Set error code                         
+         AGO   .EXIT                    -Leave macro                            
+.SKIP150 AIF   ('&CHECK' NE 'OBTAIN').SKIP160 -Check for CHECK(OBTAIN)          
+         MNOTE 4,'ATTR KEYWORD IGNORED. KEYWORD IS NOT PERMITTED WHEN C*        
+               HECK(OBTAIN) IS SPECIFIED.'                                      
+.SKIP160 AIF   (N'&ATTR EQ 1).SKIP170   -Check for more than 1 value            
+         MNOTE 4,'ATTR= &ATTR HAS TOO MANY VALUES. VALUES IGNORED AFTER*        
+                &ATTR(1).'                                                      
+.*****ENDING***********************************************************         
+.*                                                                    *         
+.*       REQSTOR KEYWORD PROCESSING                                   *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP170 AIF   ('&REQSTOR' EQ '^').SKIP190 - Check for default value            
+         AIF   ('&REQSTOR' NE '').SKIP175 -Check for reqstor keyword            
+         MNOTE 4,'NO VALUE SPECIFIED ON THE REQSTOR KEYWORD. THE KEYWOR*        
+               D IS IGNORED.'                                                   
+         AGO   .SKIP190                 -Continue with SUBSYS keyword           
+.SKIP175 AIF   ('&CHECK' NE 'OBTAIN').SKIP180 -Check for CHECK(OBTAIN)          
+         MNOTE 4,'REQSTOR KEYWORD IGNORED. KEYWORD IS NOT PERMITTED WHE*        
+               N CHECK(OBTAIN) IS SPECIFIED.'                                   
+.SKIP180 AIF   (N'&REQSTOR EQ 1).SKIP190 -Check for more than 1 value           
+         MNOTE 4,'REQSTOR= &REQSTOR HAS TOO MANY VALUES. VALUES IGNORED*        
+                AFTER &REQSTOR(1).'                                             
+.**********************************************************************         
+.*                                                                    *         
+.*       SUBSYS KEYWORD PROCESSING                                    *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP190 AIF   ('&SUBSYS(1)' EQ '^').SKIP210 -Check for default value           
+         AIF   ('&SUBSYS(1)' NE '').SKIP195 -Check for the SUBSYS      *        
+                                         keyword                                
+         MNOTE 4,'NO VALUE SPECIFIED ON THE SUBSYS KEYWORD. THE KEYWORD*        
+                IS IGNORED.'                                                    
+         AGO   .SKIP210                 -Continue with MSGSUPP keyword          
+.SKIP195 AIF   ('&CHECK' NE 'OBTAIN').SKIP200 -Check for CHECK(OBTAIN)          
+         MNOTE 4,'SUBSYS KEYWORD IGNORED. KEYWORD IS NOT PERMITTED WHEN*        
+                CHECK(OBTAIN) IS SPECIFIED.'                                    
+.SKIP200 AIF   (N'&SUBSYS EQ 1).SKIP210 -Check for than 1 value                 
+         MNOTE 4,'SUBSYS= &SUBSYS HAS TOO MANY VALUES. VALUES IGNORED A*        
+               FTER &SUBSYS(1).'                                                
+.**********************************************************************         
+.*                                                                    *         
+.*       MSGSUPP KEYWORD PROCESSING                                   *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP210 AIF   ('&MSGSUPP(1)' EQ 'NO').SKIP240 -Check for default value         
+         AIF   ('&MSGSUPP(1)' NE '').SKIP215 -Check for the MSGSUPP    *        
+                                              keyword                           
+         MNOTE 4,'NO VALUE SPECIFIED ON THE MSGSUPP KEYWORD. THE KEYWOR*        
+               D IS IGNORED.'                                                   
+         AGO   .SKIP240                 -Continue with MSGRTN keyword           
+.SKIP215 AIF   ('&CHECK' NE 'OBTAIN').SKIP220 -Check for CHECK(OBTAIN)          
+         MNOTE 4,'MSGSUPP KEYWORD IGNORED. KEYWORD IS NOT PERMITTED WHE*        
+               N CHECK(OBTAIN) IS SPECIFIED.'                                   
+.SKIP220 AIF   (N'&MSGSUPP EQ 1).SKIP230 -Continue processing MSGSUPP           
+         MNOTE 4,'MSGSUPP= &MSGSUPP HAS TOO MANY VALUES. VALUES IGNORED*        
+                AFTER &MSGSUPP(1).'                                             
+.SKIP230 AIF   ('&MSGSUPP(1)' EQ 'YES' OR '&MSGSUPP(1)' EQ 'NO').SKIP24*        
+               0                        -Check for a valid operand              
+         MNOTE 4,'UNKNOWN VALUE &MSGSUPP SPECIFIED ON MSGSUPP KEYWORD. *        
+               THE VALUE IS IGNORED.'                                           
+.**********************************************************************         
+.*                                                                    *         
+.*       MSGRTN KEYWORD PROCESSING                                    *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP240 AIF   ('&MSGRTN(1)' EQ 'NO').SKIP270 -Check for default value          
+         AIF   ('&MSGRTN(1)' NE '').SKIP245 -Check for the MSGRTN      *        
+                                         keyword                                
+         MNOTE 4,'NO VALUE SPECIFIED ON THE MSGRTN KEYWORD. THE KEYWORD*        
+                IS IGNORED.'                                                    
+         AGO   .SKIP270                 -Continue with MSGSP keyword            
+.SKIP245 AIF   ('&CHECK' NE 'OBTAIN').SKIP250 -Check for CHECK(OBTAIN)          
+         MNOTE 4,'MSGRTN KEYWORD IGNORED. KEYWORD IS NOT PERMITTED WHEN*        
+                CHECK(OBTAIN) IS SPECIFIED.'                                    
+.SKIP250 AIF   (N'&MSGRTN EQ 1).SKIP260 -Check for more than 1 value            
+         MNOTE 4,'MSGRTN= &MSGRTN HAS TOO MANY VALUES. VALUES IGNORED A*        
+               FTER &MSGRTN(1).'                                                
+.SKIP260 AIF   ('&MSGRTN(1)' EQ 'YES' OR '&MSGRTN(1)' EQ 'NO').SKIP270 *        
+                                        -Check for valid operand                
+         MNOTE 4,'UNKNOWN VALUE &MSGRTN SPECIFIED ON MSGRTN KEYWORD. TH*        
+               E VALUE IS IGNORED.'                                             
+.**********************************************************************         
+.*                                                                    *         
+.*       MSGSP KEYWORD PROCESSING                                     *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP270 AIF   ('&MSGSP(1)' EQ '^').SKIP350 -Check for default value            
+         AIF   ('&MSGSP(1)' NE '').SKIP275 -Check for the MSGSP keyword         
+         MNOTE 4,'NO VALUE SPECIFIED ON THE MSGSP KEYWORD. THE KEYWORD *        
+                IS IGNORED.'                                                    
+         AGO   .SKIP350                 -Continue with LOGSTR keyword           
+.SKIP275 AIF   ('&CHECK' NE 'OBTAIN').SKIP280 -Check for CHECK(OBTAIN)          
+         MNOTE 4,'MSGSP KEYWORD IGNORED. KEYWORD IS NOT PERMITTED WHEN *        
+               CHECK(OBTAIN) IS SPECIFIED.'                                     
+.SKIP280 AIF   (N'&MSGSP EQ 1).SKIP350  -Check for more than 1 value            
+         MNOTE 4,'MSGSP= &MSGSP HAS TOO MANY VALUES. VALUES IGNORED AFT*        
+               ER &MSGSP(1).'                                                   
+.**********************************************************************         
+.*                                                                    *         
+.*       LOGSTR KEYWORD PROCESSING                                    *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP350 AIF   ('&LOGSTR(1)' EQ '^').SKIP400 -Check for the LOGSTR     *        
+                                         keyword                                
+         AIF   ('&CHECK' NE 'OBTAIN').SKIP360 -Check for CHECK(OBTAIN)          
+         MNOTE 4,'LOGSTR KEYWORD IGNORED. KEYWORD IS NOT PERMITTED WHEN*        
+                CHECK(OBTAIN) IS SPECIFIED.'                                    
+.SKIP360 AIF   ('&CBLKTYPE(1)' NE '^' OR '&CNTLBLK(1)' NE '^').SKIP400 *        
+                                        -Check for UTOKEN          @01A         
+         AIF   ('&UTOKEN(1)' NE '^').SKIP370 -Check for UTOKEN     @01A         
+         MNOTE 12,'NO TEXT GENERATED. UTOKEN KEYWORD NOT SPECIFIED WHEN*        
+                LOGSTR KEYWORD SPECIFIED.'                         @01A         
+&SEVLEV  SETA  12                       -Set error code            @01A         
+         AGO   .EXIT                    -Leave macro               @01A         
+.SKIP370 AIF   (N'&LOGSTR EQ 1).SKIP400 -Check for more than 1 value   *        
+                                                                   @01C         
+         MNOTE 4,'LOGSTR= &LOGSTR HAS TOO MANY VALUES. VALUES IGNORED A*        
+               FTER &LOGSTR(1).'                                                
+.**********************************************************************         
+.*                                                                    *         
+.*       UTOKEN KEYWORD PROCESSING                                    *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP400 AIF   ('&UTOKEN(1)' EQ '^').SKIP450 -Check for UTOKEN keyword          
+         AIF   ('&CHECK' NE 'OBTAIN').SKIP410 -Check for CHECK(OBTAIN)          
+         MNOTE 4,'UTOKEN KEYWORD IGNORED. KEYWORD IS NOT PERMITTED WHEN*        
+                CHECK(OBTAIN) IS SPECIFIED.'                                    
+.SKIP410 AIF   (N'&UTOKEN EQ 1).SKIP420 -Check for more than 1 value            
+         MNOTE 4,'UTOKEN= &UTOKEN HAS TOO MANY VALUES. VALUES IGNORED A*        
+               FTER &UTOKEN(1).'                                                
+.SKIP420 AIF   ('&CBLKTYPE(1)' EQ '^').SKIP430 -Check for conflicting  *        
+                                         keyword specifications                 
+         MNOTE 12,'NO TEXT GENERATED. UTOKEN AND CBLKTYPE ARE MUTUALLY *        
+               EXCLUSIVE.'                                                      
+&SEVLEV  SETA  12                       -Set error code                         
+         AGO   .EXIT                    -Leave macro                            
+.SKIP430 AIF   ('&CNTLBLK(1)' EQ '^').SKIP440 -Check for conflicting   *        
+                                         keyword specifications                 
+         MNOTE 12,'NO TEXT GENERATED. UTOKEN AND CNTLBLK ARE MUTUALLY E*        
+               XCLUSIVE.'                                                       
+&SEVLEV  SETA  12                       -Set error code                         
+         AGO   .EXIT                    -Leave macro                            
+.SKIP440 AIF   ('&LOGSTR(1)' NE '^').SKIP450 -Check for required       *        
+                                         keyword LOGSTR when           *        
+                                         UTOKEN is specified                    
+         MNOTE 12,'NO TEXT GENERATED. LOGSTR KEYWORD NOT SPECIFIED WHEN*        
+                UTOKEN KEYWORD SPECIFIED.'                                      
+&SEVLEV  SETA  12                       -Set error code                         
+         AGO   .EXIT                    -Leave macro                            
+.**********************************************************************         
+.*                                                                    *         
+.*       CBLKTYPE KEYWORD PROCESSING                                  *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP450 AIF   ('&CBLKTYPE(1)' EQ '^').SKIP500 -Check for CBLKTYPE     *        
+                                         keyword                                
+         AIF   (N'&CBLKTYPE EQ 1).SKIP460 -Check for more than 1 value          
+         MNOTE 4,'CBLKTYPE= &CBLKTYPE HAS TOO MANY VALUES. VALUES IGNOR*        
+               ED AFTER &CBLKTYPE(1).'                                          
+.SKIP460 AIF   ('&CBLKTYPE(1)' EQ 'XSA' OR '&CBLKTYPE(1)' EQ 'CIB' OR  *        
+               '&CBLKTYPE(1)' EQ 'CSCB' OR                             *        
+               '&CBLKTYPE(1)' EQ 'SSCM' OR                             *        
+               '&CBLKTYPE(1)' EQ 'CMDX').SKIP490 -Check for a valid    *        
+                                         operand               @YA30466         
+         MNOTE 12,'NO TEXT GENERATED. CBLKTYPE VALUE NOT VALID.'                
+&SEVLEV  SETA  12                       -Set error code                         
+         AGO   .EXIT                    -Leave macro                            
+.SKIP490 AIF   ('&CNTLBLK(1)' NE '^').SKIP500 -Check for required      *        
+                                         keyword CNTLBLK when          *        
+                                         CBLKTYPE is specified                  
+         MNOTE 12,'NO TEXT GENERATED. CNTLBLK KEYWORD NOT SPECIFIED WHE*        
+               N CBLKTYPE KEYWORD SPECIFIED.'                                   
+&SEVLEV  SETA  12                       -Set error code                         
+         AGO   .EXIT                    -Leave macro                            
+.**********************************************************************         
+.*                                                                    *         
+.*       CNTLBLK KEYWORD PROCESSING                                   *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP500 AIF   ('&CNTLBLK(1)' EQ '^').SKIP530 -Check for CNTLBLK       *        
+                                         keyword                                
+         AIF   (N'&CNTLBLK EQ 1).SKIP520 -Check for more than 1 value           
+         MNOTE 4,'CNTLBLK= &CNTLBLK HAS TOO MANY VALUES. VALUES IGNORE *        
+               D AFTER &CNTLBLK(1).'                                            
+.SKIP520 AIF   ('&CBLKTYPE(1)' NE '^').SKIP530 -Check for required     *        
+                                         keyword CBLKTYPE when         *        
+                                         CNTLBLK is specified                   
+         MNOTE 12,'NO TEXT GENERATED. CBLKTYPE KEYWORD NOT SPECIFIED WH*        
+               EN CNTLBLK KEYWORD SPECIFIED.'                                   
+&SEVLEV  SETA  12                       -Set error code                         
+         AGO   .EXIT                    -Leave macro                            
+.**********************************************************************         
+.*                                                                    *         
+.*       GROUP A & B KEYWORD PROCESSING                               *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP530 AIF   ('&LOGSTR' NE '^' OR '&UTOKEN' NE '^' OR '&CBLKTYPE' NE *        
+               '^' OR '&CNTLBLK' NE '^').SKIP540                                
+         MNOTE 12,'NO TEXT GENERATED. REQUIRED KEYWORDS LOGSTR AND UTOK*        
+               EN OR CBLKTYPE AND CNTLBLK NOT SPECIFIED.'                       
+&SEVLEV  SETA  12                       -Set error code                         
+         AGO   .EXIT                    -Leave macro                            
+.**********************************************************************         
+.*                                                                    *         
+.*       FILL IN PARAMETER LIST AND PC TO CMDAUTH ROUTINE             *         
+.*                                                                    *         
+.**********************************************************************         
+.SKIP540 AIF   (&SEVLEV EQ 12).EXIT     -Check for severe error                 
+&NAME    SETC  '&LABEL'                                            @L2A         
+         AIF   ('&OP' EQ 'LA').SKIP541                             @L2A         
+         AIF   ('&OPOBJ' EQ '1').SKIP542 Skip if reg 1 set         @L2A         
+.SKIP541 ANOP                                                      @L2A         
+&LABEL   &OP   1,&OPOBJ                 -Parm list address         @L2A         
+&NAME    SETC  ''                       -Nullify label             @L2A         
+.SKIP542 ANOP                                                      @L2A         
+&NAME    XC    0(44,1),0(1)             -Zero parameter list       @L2C         
+         MVC   0(4,1),=C'CAPL'          -Move in acronym           @L2C         
+         OI    4(1),X'01'               -Indicate current version  @L2C         
+.SKIP545 AIF   ('&CHECK(1)' NE 'OBTAIN').SKIP546 -Check for OBTAIN     *        
+                                         attribute on CHECK keyword             
+         OI    6(1),X'10'               -Indicate OBTAIN access    @L2C         
+.SKIP546 AIF   ('&ATTR(1)' EQ '' OR '&ATTR(1)' EQ '^').SKIP570 -                
+         AIF   ('&ATTR(1)' NE 'CONTROL').SKIP550 -Check for CONTROL    *        
+                                         attribute on ATTR keyword              
+         OI    5(1),X'08'               -Indicate CONTROL access   @L2C         
+         AGO   .SKIP570                 -Continue with MSGSUPP keyword          
+.SKIP550 AIF   ('&ATTR(1)' NE 'UPDATE').SKIP560  -Check for UPDATE     *        
+                                         attribute on ATTR keyword              
+         OI    5(1),X'04'               -Indicate UPDATE access    @L2C         
+         AGO   .SKIP570                 -Continue with MSGSUPP keyword          
+.SKIP560 AIF   ('&ATTR(1)' NE 'READ').SKIP562    -Check for READ       *        
+                                         attribute on ATTR keyword              
+         OI    5(1),X'02'               -Indicate READ access      @L2C         
+         AGO   .SKIP570                 -Continue with MSGSUPP keyword          
+.SKIP562 AIF   ('&ATTR(1)' NE 'ALTER').SKIP564   -Check for ALTER      *        
+                                         attribute on ATTR keyword              
+         OI    5(1),X'80'               -Indicate ALTER access     @L2C         
+         AGO   .SKIP570                 -Continue with MSGSUPP keyword          
+.SKIP564 AIF   ('&ATTR'(1,1) EQ '(').SKIP566 -Check for address        *        
+                                         specified in register                  
+         MVC   5(1,1),&ATTR(1)          -Store value in parameter list *        
+                                                                   @L2C         
+         AGO   .SKIP570                 -Continue with MSGSUPP keyword          
+.SKIP566 STC   &ATTR(1),5(1,0)          -Store value in parameter list *        
+                                                                   @P8C         
+.SKIP570 AIF   ('&MSGSUPP(1)' NE 'YES').SKIP580 -Check for YES         *        
+                                         attribute on MSGSUPP keyword           
+         OI    6(1),X'80'               -Suppress messages indicated   *        
+                                                                   @L2C         
+.SKIP580 AIF   ('&MSGRTN(1)' NE 'YES').SKIP610 -Check for YES          *        
+                                         attribute on MSGRTN keyword            
+         OI    6(1),X'40'               -Return messages indicated @L2C         
+.SKIP610 AIF   ('&CBLKTYPE(1)' NE 'XSA').SKIP620 -Check for XSA        *        
+                                         attribute on CBLKTYPE keyword          
+         OI    7(1),X'80'               -Indicate XSA control block    *        
+                                                                   @L2C         
+         AIF   ('&CNTLBLK'(1,1) EQ '(').SKIP615 -Check for CNTLBLK     *        
+                                         specified as an address                
+         LA    15,&CNTLBLK(1)           -Get address of CNTLBLK    @L2C         
+         ST    15,20(1,0)               -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP650                 -Continue with LOGSTR keyword  *        
+                                                                   @01C         
+.SKIP615 ST    &CNTLBLK(1),20(1,0)      -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP650                 -Continue with LOGSTR keyword  *        
+                                                                   @01C         
+.SKIP620 AIF   ('&CBLKTYPE(1)' NE 'CIB').SKIP630 -Check for CIB        *        
+                                         attribute on CBLKTYPE keyword          
+         OI    7(1),X'40'               -Indicate CIB control block    *        
+                                                                   @L2C         
+         AIF   ('&CNTLBLK'(1,1) EQ '(').SKIP625 -Check for CNTLBLK     *        
+                                         specified as an address                
+         LA    15,&CNTLBLK(1)           -Get address of CNTLBLK    @L2C         
+         ST    15,20(1,0)               -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP650                 -Continue with LOGSTR keyword  *        
+                                                                   @01C         
+.SKIP625 ST    &CNTLBLK(1),20(1,0)      -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP650                 -Continue with LOGSTR keyword  *        
+                                                                   @01C         
+.SKIP630 AIF   ('&CBLKTYPE(1)' NE 'CSCB').SKIP632 -Check for CSCB      *        
+                                         attribute on CBLKTYPE keyword *        
+                                                               @YA30466         
+         OI    7(1),X'20'               -Indicate CSCB control block   *        
+                                                                   @L2C         
+         AIF   ('&CNTLBLK'(1,1) EQ '(').SKIP631 -Check for CNTLBLK     *        
+                                         specified as an address       *        
+                                                               @YA30466         
+         LA    15,&CNTLBLK(1)           -Get address of CNTLBLK    @L2C         
+         ST    15,20(1,0)               -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP650                 -Continue with LOGSTR keyword  *        
+                                                                   @01C         
+.SKIP631 ST    &CNTLBLK(1),20(1,0)      -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP650                 -Continue with LOGSTR keyword  *        
+                                                                   @01C         
+.SKIP632 AIF   ('&CBLKTYPE(1)' NE 'SSCM').SKIP636 -Check for SSCM      *        
+                                         attribute on CBLKTYPE keyword *        
+                                                               @YA30466         
+         OI    7(1),X'04'               -Indicate SSCM control block   *        
+                                                               @YA30466         
+         AIF   ('&CNTLBLK'(1,1) EQ '(').SKIP634 -Check for CNTLBLK     *        
+                                         specified as an address       *        
+                                                               @YA30466         
+         LA    15,&CNTLBLK(1)           -Get address of CNTLBLK        *        
+                                                               @YA30466         
+         ST    15,20(1,0)               -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP650                 -Continue with LOGSTR keyword  *        
+                                                                   @01C         
+.SKIP634 ST    &CNTLBLK(1),20(1,0)      -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP650                 -Continue with LOGSTR keyword  *        
+                                                                   @01C         
+.SKIP636 AIF   ('&CBLKTYPE(1)' NE 'CMDX').SKIP640 -Check for CMDX      *        
+                                         attribute on CBLKTYPE keyword *        
+                                                                   @D2A         
+         OI    7(1),X'08'               -Indicate CMDX control block   *        
+                                                                   @D2A         
+         AIF   ('&CNTLBLK'(1,1) EQ '(').SKIP638 -Check for CNTLBLK     *        
+                                         specified as an address   @D2A         
+         LA    15,&CNTLBLK(1)           -Get address of CNTLBLK    @D2A         
+         ST    15,20(1,0)               -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP650                 -Continue with LOGSTR keyword  *        
+                                                                   @01C         
+.SKIP638 ST    &CNTLBLK(1),20(1,0)      -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP650                 -Continue with LOGSTR keyword  *        
+                                                                   @01C         
+.SKIP640 AIF   ('&UTOKEN(1)' EQ '' OR '&UTOKEN(1)' EQ '^').SKIP650              
+         OI    7(1),X'10'               -Indicate UTOKEN control block *        
+                                                                   @L2C         
+         AIF   ('&UTOKEN'(1,1) EQ '(').SKIP645 -Check for UTOKEN       *        
+                                         specified as an address                
+         LA    15,&UTOKEN(1)            -Get address of UTOKEN     @L2C         
+         ST    15,20(1,0)               -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP650                 -Continue with LOGSTR keyword           
+.SKIP645 ST    &UTOKEN(1),20(1,0)       -Store value in parameter list *        
+                                                                   @P8C         
+.SKIP650 AIF   ('&LOGSTR(1)' EQ '' OR '&LOGSTR(1)' EQ '^').SKIP660              
+         OI    6(1),X'04'               -Indicate LOGSTR present   @L2C         
+         AIF   ('&LOGSTR'(1,1) EQ '(').SKIP655 -Check for LOGSTR       *        
+                                         specified as an address                
+         LA    15,&LOGSTR(1)            -Get address of LOGSTR     @L2C         
+         ST    15,24(1,0)               -Store value in parameter list *        
+                                                                   @P8C         
+         AGO   .SKIP660                 -Continue with MSGSP keyword            
+.SKIP655 ST    &LOGSTR(1),24(1,0)       -Store value in parameter list *        
+                                                                   @P8C         
+.SKIP660 AIF   ('&MSGSP(1)' EQ '^').SKIP670 -Check for MSGSP keyword            
+         LA    15,&MSGSP(1)             -Put MSGSP value in register   *        
+                                         15                        @L2C         
+         ST    15,8(1,0)                -Store value in parameter list *        
+                                                                   @P8C         
+.SKIP670 AIF   ('&REQSTOR(1)' EQ '' OR '&REQSTOR(1)' EQ '^').SKIP680            
+         AIF   ('&REQSTOR'(1,1) EQ '(').SKIP675 -Check for REQSTOR     *        
+                                         specified as an address                
+         LA    15,&REQSTOR(1)           -Get address of REQSTOR    @L2C         
+         ST    15,12(1,0)               -Put value in parameter list   *        
+                                                                   @P8C         
+         AGO   .SKIP680                 -Continue with SUBSYS keyword           
+.SKIP675 ST    &REQSTOR(1),12(1,0)      -Put value in parameter list   *        
+                                                                   @P8C         
+.SKIP680 AIF   ('&SUBSYS(1)' EQ '' OR '&SUBSYS(1)' EQ '^').SKIP690              
+         AIF   ('&SUBSYS'(1,1) EQ '(').SKIP685 -Check for SUBSYS       *        
+                                         specified as an address                
+         LA    15,&SUBSYS(1)            -Get address of SUBSYS     @L2C         
+         ST    15,16(1,0)               -Put value in parameter list   *        
+                                                                   @P8C         
+         AGO   .SKIP690                 -Continue with ENTITY keyword           
+.SKIP685 ST    &SUBSYS(1),16(1,0)       -Put value in parameter list   *        
+                                                                   @P8C         
+.SKIP690 AIF   ('&ENTITY' EQ '' OR '&ENTITY' EQ '^').SKIP700                    
+         AIF   ('&ENTITY'(1,1) EQ '(').SKIP695 -Check for ENTITY       *        
+                                         specified as an address                
+         LA    15,&ENTITY(1)            -Get address of ENTITY     @L2C         
+         ST    15,28(1,0)               -Put value in parameter list   *        
+                                                                   @P8C         
+         AGO   .SKIP700                 -Go PC to service routine               
+.SKIP695 ST    &ENTITY(1),28(1,0)       -Put value in parameter list   *        
+                                                                   @P8C         
+.SKIP700 AIF   (&SEVLEV EQ 12).EXIT     -Check for severe error                 
+.**********************************************************************         
+.*                                                                    *         
+.*       PC TO CMDAUTH ROUTINE                                        *         
+.*                                                                    *         
+.**********************************************************************         
+.PCCB920 ANOP                                                                   
+         AIF   ('&CHECK(1)' NE 'OBTAIN').SKIP710  -Check for OBTAIN    *        
+                                         attribute on CHECK keyword             
+         L     15,16(0,0)               -Get CVT address           @L1A         
+         L     15,100(,15)              -Get UCM address           @L1A         
+         L     15,240(,15)              -Get UCM Fixed Extension       *        
+                                         address                   @L1A         
+         TM    26(15),X'80'             -Is console's PC table setup?  *        
+                                                                   @L1A         
+         JNO   CnzCmdAuthNotReady_&SYSNDX - No, don't go to IEECB920   *        
+                                                                   @P7C         
+         AGO   .SKIP720                 -Go process PC             @L1A         
+.SKIP710 ANOP                                                                   
+         L     15,16(0,0)               -Get CVT address           @L1A         
+         L     15,100(,15)              -Get UCM address           @L1A         
+         TM    68(15),X'02'             -Is OPERCMDS class active? @P1C         
+         JNO   CnzCmdAuthNotReady_&SYSNDX - No, don't go to IEECB920   *        
+                                                                   @P7C         
+.SKIP720 ANOP                                                                   
+         L     15,16(0,0)               -Get CVT address                        
+         L     15,772(,15)              -Get SFT address                        
+         L     15,100(,15)              -Get console EX number                  
+         LA    15,9(15)                 -Get IEECB920 PC number                 
+         PC    0(15)                    -PC to IEECB920                         
+         J     CnzCmdAuthEnd_&SYSNDX    -CmdAuth is done           @P7C         
+CnzCmdAuthNotReady_&SYSNDX EQU *        -Branch Location when CmdAuth  *        
+                                         ready                     @P7A         
+         LA    15,4                     -No decision from CMDAUTH  @L1A         
+         LA    0,4                      -Resource is not protected @P2C         
+         LA    1,0                      -No Message Blocks         @P2C         
+CnzCmdAuthEnd_&SYSNDX EQU *             -Branch location when CmdAuth  *        
+                                                                   @P7A         
+.EXIT    ANOP                           -Leave macro                            
+         MEND                                                                   
+***********************************************************************         
+**                   PLAS/PLS SECTION                                 *         
+**                                                                    *         
+**         INVOKE PLAS VERSION OF CMDAUTH MACRO                       *         
+***********************************************************************         
+**/                                                                             
+*%CMDAUTH: MACRO KEYS(ENTITY,                                                   
+*                 ATTR,                                                         
+*                 REQSTOR,                                                      
+*                 SUBSYS,                                                       
+*                 MSGSUPP,                                                      
+*                 MSGRTN,                                                       
+*                 MSGSP,                                                        
+*                 CHECK,                                                        
+*                 LOGSTR,                                                       
+*                 UTOKEN,                                                       
+*                 CNTLBLK,                                                      
+*                 CBLKTYPE,                                                     
+*                 MF);                                                          
+*        ANS('?'!!'CMDAUTHP '!!MACKEYS!!';');    /* INVOKE MACRO     */         
+*                                                                               
+*      %END;                                                                    

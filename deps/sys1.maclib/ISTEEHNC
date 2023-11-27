@@ -1,0 +1,416 @@
+#ifndef __isteehnc_h                                                            
+#define __isteehnc_h                                                            
+                                                                                
+ /********************************************************************/         
+ /*                                                                  */         
+ /* CONTROL BLOCK NAME: ISTEEHNC                                     */         
+ /*                                                                  */         
+ /* DESCRIPTIVE NAME:   EE/HPR Network Management Record Data        */         
+ /*                                                                  */         
+ /* Copyright: Licensed Materials - Property of IBM                  */         
+ /*            5694-A01 Copyright IBM Corp. 2003, 2009               */         
+ /*            All rights reserved.                                  */         
+ /*            US Government Users Restricted Rights -               */         
+ /*            Use, duplication or disclosure restricted by          */         
+ /*            GSA ADP Schedule Contract with IBM Corp.              */         
+ /*            See IBM Copyright Instructions.                       */         
+ /*                                                                  */         
+ /* FUNCTION: Maps the request and response header for all SNA       */         
+ /*           Network Management Interface (NMI) records.  The       */         
+ /*           current processing provided is:                        */         
+ /*             (1) Socket Initialization (ISTEEHNC)                 */         
+ /*             (2) Socket Termination (ISTEEHNC)                    */         
+ /*             (3) Enterprise Extender Connection (ISTEECOC)        */         
+ /*             (4) Enterprise Extender Summary (ISTEESUC)           */         
+ /*             (5) HPR Connection (ISTHPRCC)                        */         
+ /*             (6) CSM Global Statistics (ISTCSMGC)                 */         
+ /*                                                                  */         
+ /* STORAGE USED FOR CONTROL BLOCK:                                  */         
+ /*                                                                  */         
+ /*    ALLOCATED BY:                                                 */         
+ /*                                                                  */         
+ /*    FREED BY:                                                     */         
+ /*                                                                  */         
+ /*    POINTED TO BY:                                                */         
+ /*                                                                  */         
+ /*    TYPE:                                                         */         
+ /*                                                                  */         
+ /* ALIGNMENT:                                                       */         
+ /*       This control block MUST be on a DWORD boundary.            */         
+ /*                                                                  */         
+ /* OPERATING SYSTEM SPECIFICS:                                      */         
+ /*                                                                  */         
+ /* NOTES: None                                                      */         
+ /*                                                                  */         
+ /* SERIALIZATION CONCERNS:                                          */         
+ /*                                                                  */         
+ /* LIST RECOMPILE MODULES:                                          */         
+ /*                                                                  */         
+ /* CHANGE ACTIVITY:                                                 */         
+ /*                                                                  */         
+ /* $MAC(ISTEEHNC),COMP(MGMTSVC),PROD(VTAM): EE/HPR Network          */         
+ /*                                          Management Record Data  */         
+ /*                                                                  */         
+ /* Flag Reason   Release  Date   Origin    Description              */         
+ /* ---- -------- -------- ------ --------  ------------------------ */         
+ /* $Q0= R16EEMGT CSV1R5   030312 SMOONEN : SYSEEHPR service         */         
+ /* $Q1= R16EEMGT CSV1R5   030421 HARISHS : ITNMP Processing - CSM   */         
+ /* $Q2= D132554  R16EEMGT 030505 SMOONEN : Eyecatchers, sequence #s */         
+ /* $Q3= D132578  R16EEMGT 030528 VANZIMM : Prologue update          */         
+ /* $  = D132928  X16BASE  031013 RKunkel : Fix copyright statement  */         
+ /* $X1= R8NMIEE  CSV1R8   050829 Zebrow  : Wildcard support for HPR */         
+ /*                                         Connection partner name  */         
+ /* $E1= D143380  RABASE   080117 HARISHS : Fix Typo                 */         
+ /* $F1= RBNMIENH CSV1R11  080515 AGFarrel: CSM Pool Owner Record    */         
+ /********************************************************************/         
+                                                                                
+#ifdef __cplusplus                                                              
+      extern "C" {                                                              
+#endif                                                                          
+                                                                                
+#pragma pack(1)                     /* Align structures at bytes     */         
+                                                                                
+#include <netinet/in.h>                                                         
+                                                                                
+/*********************************************************************/         
+/* Overall Record Triplet mapping, used for input data               */         
+/*********************************************************************/         
+                                                                                
+typedef struct {                                                                
+  unsigned int   EEHNMTOffset;      /* Offset to start of first                 
+                                       section of this type          */         
+  unsigned short EEHNMTLength;      /* Length of this section        */         
+  unsigned short EEHNMTNumber;      /* Number of instances of this              
+                                       section                       */         
+} EEHNMTriplet;                                                                 
+                                                                                
+/*********************************************************************/         
+/* Overall Record Quadruplet mapping, used for output data           */         
+/*********************************************************************/         
+                                                                                
+typedef struct {                                                                
+  unsigned int   EEHNMQOffset;      /* Offset to start of first                 
+                                       record data within the                   
+                                       response. Subsequent records             
+                                       are found using the length of            
+                                       the record being processed    */         
+  unsigned int   EEHNMQRsvd1;       /* Reserved for EE/HPR NMI                  
+                                       responses, since the length              
+                                       of the records are variable              
+                                       within the response data      */         
+  unsigned int   EEHNMQNumber;      /* Number of records returned               
+                                       on this response.  If less than          
+                                       EEHNMQMatch, then server is              
+                                       unable to return all of the              
+                                       record elements that matched             
+                                       the filters due to VTAM storage          
+                                       constraints.                  */         
+  unsigned int   EEHNMQMatch;       /* Number of record elements                
+                                       that matched the filters.     */         
+} EEHNMQuadruplet;                                                              
+                                                                                
+/*********************************************************************/         
+/* Internal Record Triplet mapping                                   */         
+/*********************************************************************/         
+                                                                                
+typedef struct {                                                                
+  unsigned int   EEHNM_RTOffset;    /* Offset from the start of the             
+                                       record to the first section of           
+                                       this particular type          */         
+  unsigned short EEHNM_RTLength;    /* Length of each section of this           
+                                       particular type               */         
+  unsigned short EEHNM_RTNumber;    /* Number of instances of this              
+                                       particular type of section    */         
+} EEHNMRecordTriplet;                                                           
+                                                                                
+/*********************************************************************/         
+/*                                                                   */         
+/* Overall EE/HPR Network Management Interface Request and Response  */         
+/* Header Mapping.                                                   */         
+/*                                                                   */         
+/* This header is provided in every EE/HPR NMI request from the      */         
+/* application client, and on every EE/HPR NMI response from VTAM.   */         
+/*                                                                   */         
+/*********************************************************************/         
+                                                                                
+typedef struct {                                                                
+  unsigned int   EEHNMHeaderIdent;  /* Header EyeCatcher: "EEHH"                
+                                       (required input/output)   @Q2C*/         
+  unsigned int   EEHNMHeaderLength; /* Record Header Length (required           
+                                       input/output)                 */         
+  unsigned short EEHNMVersion;      /* EE/HPR Network Monitor Version           
+                                       (required input/output)       */         
+  unsigned short EEHNMType;         /* EE/HPR Network Monitor Type              
+                                       (required input/output)       */         
+  char           EEHMNCorrelatorÝ16¨; /* Request/response correlator            
+                                         supplied by client on                  
+                                         request and returned by                
+                                         VTAM on the response        */         
+  unsigned int   EEHNMClientID;     /* Internal server identifier               
+                                       for requesting client         */         
+  unsigned int   EEHNMReturnCode;   /* Errno value (output)          */         
+  unsigned int   EEHNMReasonCode;   /* ErrnoJr value (output)        */         
+  unsigned int   EEHNMRecordLength; /* Overall length of the input              
+                                       request and/or output response           
+                                       (required input/output)       */         
+  unsigned long long EEHNMTimestamp;/* Timestamp when last piece of             
+                                       data was collected (output).             
+                                       Format is STCK value, time               
+                                       is GMT (not local).           */         
+  char           EEHNMRsvd1Ý16¨;    /* Reserved                      */         
+  EEHNMTriplet   EEHNMInputDataDescriptors; /* Input section                    
+                                               (filter) descriptors  */         
+  EEHNMTriplet   EEHNMRsvd2;        /* Reserved                      */         
+  EEHNMQuadruplet EEHNMOutputDataDescriptors;   /* Output section               
+                                                   descriptors       */         
+  EEHNMQuadruplet EEHNMRsvd3;       /* Reserved                      */         
+} EEHNMHeader;                                                                  
+#define EEHNMCorrelator  EEHMNCorrelator  /* Redefine variable   @E1A*/         
+                                                                                
+/*********************************************************************/         
+/*                                                                   */         
+/* EE/HPR Network Management Interface Request Filter Mapping        */         
+/*                                                                   */         
+/* The client application includes these filters ("pointed" to by    */         
+/* the input triplet construct) on EE/HPR NMI requests to indicate   */         
+/* what specific information the server should return for this       */         
+/* request. The valid filters are request-specific.                  */         
+/*                                                                   */         
+/* The server will set the bit EEHNMFilter_FilterCheck on output     */         
+/* if any filter parameters were included that were inapplicable     */         
+/* to the request type and thus were ignored by the server.          */         
+/*                                                                   */         
+/*********************************************************************/         
+                                                                                
+typedef struct {                                                                
+  unsigned int EEHNMFilter_Eye;      /* Filter Eyecatcher (FLTR) @Q2C*/         
+                                                                                
+  struct {                           /* Filter flags                 */         
+    unsigned int EEHNMFilter_LocIPF      :1; /* Local IP Address                
+                                                included             */         
+    unsigned int EEHNMFilter_RemIPF      :1; /* Remote IP Address               
+                                                included             */         
+    unsigned int EEHNMFilter_IPv6F       :1; /* IP Address(es) in               
+                                                IPv6 format:                    
+                                                  0 = IPv4 format               
+                                                  1 = IPv6 format    */         
+    unsigned int EEHNMFilter_LocHNF      :1; /* Local Hostname                  
+                                                included             */         
+    unsigned int EEHNMFilter_RemHNF      :1; /* Remote Hostname                 
+                                                included             */         
+    unsigned int EEHNMFilter_RTPPUF      :1; /* RTP PU Name included */         
+    unsigned int EEHNMFilter_PrtrCPF     :1; /* Partner CP Name                 
+                                                included             */         
+    unsigned int EEHNMFilter_COSF        :1; /* APPN COS name                   
+                                                included             */         
+    unsigned int EEHNMFilter_ASIDF       :1; /* ASID included    @F1A*/         
+    unsigned int EEHNMFilter_Rsvd1       :22;/* Reserved (set to 0)             
+                                                                 @F1C*/         
+    unsigned int EEHNMFilter_FilterCheck :1; /* Output indicator set            
+                                       by server if inapplicable                
+                                       filters were specified on                
+                                       request.  The server will                
+                                       ignore the inapplicable filters          
+                                       and return data matching the             
+                                       valid filters.                */         
+  } EEHNMFilter_Flags;                                                          
+                                                                                
+  /*******************************************************************/         
+  /* For EE Summary requests, no filters are expected.               */         
+  /*                                                                 */         
+  /* For EE Connection requests, no filters are required.            */         
+  /*   Optional filters:                                             */         
+  /*     Local IP address or hostname                                */         
+  /*     Remote IP address or hostname                               */         
+  /*                                                                 */         
+  /* For HPR Connection requests, RTP PU name or partner name        */         
+  /*   is required, and COS is optional when partner name is         */         
+  /*   also specified.                                               */         
+  /*                                                                 */         
+  /*   For partner name, a question mark can be used to              */         
+  /*   wildcard a single character and an asterisk can be            */         
+  /*   used to wildcard zero or more characters.                 @X1A*/         
+  /*                                                                 */         
+  /*     For example, a value of A?C* will match all                 */         
+  /*     names with a first character A and a third                  */         
+  /*     character C, but will not match two-character               */         
+  /*     names or names beginning with B through Z.              @X1A*/         
+  /*                                                                 */         
+  /*     Also, to request all known connections use                  */         
+  /*     '*.*'. To request all known connections in                  */         
+  /*     the same network as this host, use '*'.                 @X1A*/         
+  /*                                                                 */         
+  /* For CSM Statistics Requests, no filters are required.           */         
+  /*   When no filters are provided, only the CSM Global Pool        */         
+  /*   Output Section record and the CSM Summary Output Section      */         
+  /*   are provided in the response.                             @F1C*/         
+  /*                                                                 */         
+  /*   Optional filter (at least one is required for the CSM         */         
+  /*   Storage Owner Output Section record to be returned):          */         
+  /*     ASID                                                    @F1A*/         
+  /*                                                                 */         
+  /*     To request all CSM storage owner statistics,                */         
+  /*     specify an ASID filter with a value of "0".             @F1A*/         
+  /*                                                                 */         
+  /*******************************************************************/         
+                                                                                
+  union {                                                                       
+    struct in6_addr EEHNMFilter_LocIPv6_ADDR; /* Local IPv6 address  */         
+    struct {                                                                    
+      char           RsvdÝ12¨;              /* Pad                   */         
+      struct in_addr Address;               /* Local IPv4 address    */         
+    } EEHNMFilter_LocIPv4_ADDR;                                                 
+  } EEHNMFilter_Loc_ADDR;                                                       
+                                                                                
+  char EEHNMFilter_Rsvd2Ý12¨;       /* Reserved for VTAM usage       */         
+                                                                                
+  union {                                                                       
+    struct in6_addr EEHNMFilter_RemIPv6_ADDR; /* Remote IPv6 address */         
+    struct {                                                                    
+      char           RsvdÝ12¨;              /* Pad                   */         
+      struct in_addr Address;               /* Remote IPv4 address   */         
+    } EEHNMFilter_RemIPv4_ADDR;                                                 
+  } EEHNMFilter_Rem_ADDR;                                                       
+                                                                                
+  char EEHNMFilter_Rsvd3Ý12¨;       /* Reserved for VTAM usage       */         
+                                                                                
+  unsigned char EEHNMFilter_LocHN_Len;      /* Hostname len in bytes */         
+  char          EEHNMFilter_LocHNameÝ64¨;   /* Local hostname        */         
+  unsigned char EEHNMFilter_RemHN_Len;      /* Hostname len in bytes */         
+  char          EEHNMFilter_RemHNameÝ64¨;   /* Remote hostname       */         
+                                                                                
+  char          EEHNMFilter_RTPPUÝ8¨;       /* RTP PU name           */         
+                                                                                
+  unsigned char EEHNMFilter_PrtrCP_Len;     /* CP name len in bytes  */         
+  char          EEHNMFilter_PrtrCPNameÝ17¨; /* FQ Partner CP Name    */         
+                                                                                
+  char          EEHNMFilter_COSÝ8¨;         /* APPN COS name         */         
+  struct {                                  /* CSM Filter record @F1A*/         
+    unsigned short EEHNMFilter_ASID;        /* ASID              @F1A*/         
+  } EEHNMFilter_CSMFilters;                 /*                   @F1A*/         
+                                                                                
+} EEHNMFilter;                                                                  
+                                                                                
+/*********************************************************************/         
+/*                                                                   */         
+/* EE/HPR Network Management Interface Initialization Record         */         
+/*                                                                   */         
+/* This record is used to pass information about the VTAM EE/HPR     */         
+/* Management Server to the client application. This is the first    */         
+/* record written by the server to the client.                       */         
+/*                                                                   */         
+/*********************************************************************/         
+                                                                                
+typedef struct {                                                                
+  unsigned int       EEHNMI_Eye;    /* Init record eyecatcher (NMII)            
+                                                                 @Q2C*/         
+  char               EEHNMI_LevelÝ8¨;   /* VTAM Level from ATCVT     */         
+  unsigned long long EEHNMI_Time;       /* TOD VTAM started          */         
+  char               EEHNMI_CompÝ8¨;    /* Component name            */         
+                                                                                
+  struct {                          /* Functions supported           */         
+    unsigned int EEHNMI_IPv6_Supp      :1;   /* IPv6 addrs supported */         
+    unsigned int EEHNMI_Local_Hostname :1;   /* Lcl Hostnm supported */         
+    unsigned int EEHNMI_CSMStatsFilters :1;  /* CSM Statistics                  
+                                               filters supported @F1A*/         
+    unsigned int EEHNMI_Rsvd1          :5;   /* Unused - avail.  @F1C*/         
+  } EEHNMI_Supported;                                                           
+                                                                                
+  char               EEHNMI_Rsvd2Ý15¨;  /* Reserved                  */         
+} EEHNMInit;                                                                    
+                                                                                
+/*********************************************************************/         
+/*                                                                   */         
+/* EE/HPR Network Management Interface Termination Record            */         
+/*                                                                   */         
+/* This is the last record written by the server before the server   */         
+/* closes the connection to the client.  Currently all data of       */         
+/* interest resides in the header portion of this record so when     */         
+/* EEHNMType = EEHNMTerminationType, this data record portion        */         
+/* will not be included.  (EEHNMQNumber will be set to 0.)           */         
+/*                                                                   */         
+/*********************************************************************/         
+                                                                                
+typedef struct {                                                                
+  unsigned int EEHNMT_Eye;          /* Term Record Eyecatcher (NMIT)            
+                                                                 @Q2C*/         
+  char EEHNMT_RsvdÝ28¨;             /* Reserved                      */         
+} EEHNMTerm;                                                                    
+                                                                                
+/*********************************************************************/         
+/* Eyecatcher constants for EE/HPR Network Management data           */         
+/*********************************************************************/         
+                                                                                
+const unsigned int EEHNM_ID         /* EE/HPR NMI record data (EEHH) */         
+             = 0xC5C5C8C8;                                     /*@Q2C*/         
+const unsigned int EEHNM_FLTR       /* EE/HPR filter record (FLTR)   */         
+             = 0xC6D3E3D9;                                     /*@Q2C*/         
+const unsigned int EEHNM_INIT       /* EE/HPR init record (NMII)     */         
+             = 0xD5D4C9C9;                                     /*@Q2C*/         
+const unsigned int EEHNM_TERM       /* EE/HPR term record (NMIT)     */         
+             = 0xD5D4C9E3;                                     /*@Q2C*/         
+                                                                                
+/*********************************************************************/         
+/* Constant for EEHNMI_Comp                                          */         
+/*********************************************************************/         
+                                                                                
+const char EEHNMI_Comp_NameÝ7¨      /* EE/HPR network mgmt server    */         
+             = { '\xE2', '\xD5', '\xC1', '\xD4',                                
+                 '\xC7', '\xD4', '\xE3' }; /* SNAMGMT            @Q1C*/         
+                                                                                
+/*********************************************************************/         
+/* Equates for EEHNMVersion field                                    */         
+/*********************************************************************/         
+                                                                                
+const int EEHNMVersion1       = 1;  /* Initial EE/HPR service version*/         
+const int EEHNMCurrentVersion = 1;  /* Current EE/HPR service version*/         
+                                                                                
+/*********************************************************************/         
+/* Equates for EEHNMType field                                       */         
+/*********************************************************************/         
+                                                                                
+const int EEHNMInitializationType = 1;  /* Socket conn init data     */         
+const int EEHNMTerminationType    = 2;  /* Socket conn term data     */         
+const int EEHNMEEConnType  = 3;     /* EE connection data processing */         
+const int EEHNMEESummType  = 4;     /* EE summary data processing    */         
+const int EEHNMHPRConnType = 5;     /* HPR connection data processing*/         
+const int EEHNMCSMGlobalType = 6;   /* CSM GLOBAL Statistical Data              
+                                       processing                @Q1A*/         
+                                                                                
+/*********************************************************************/         
+/* Miscellaneous equates                                             */         
+/*********************************************************************/         
+                                                                                
+const int EEHNM_FNumber_Min_EESumm  = 0;    /* Minimum number of                
+                                       of filter records in a valid             
+                                       EE Summary Request            */         
+const int EEHNM_FNumber_Min_EEConn  = 0;    /* Minimum number of                
+                                       of filter records in a valid             
+                                       EE Connection Request         */         
+const int EEHNM_FNumber_Min_HPRConn = 1;    /* Minimum number                   
+                                       of filter records in a valid             
+                                       HPR Connection request        */         
+const int EEHNM_FNumber_Min_CSMStats = 0;   /* Minimum number                   
+                                       of filter records in a valid             
+                                       CSM Statistics request    @F1A*/         
+const int EEHNM_FNumber_Max_EESumm  = 0;    /* Maximum number                   
+                                       of filter records in a valid             
+                                       EE Summary Request            */         
+const int EEHNM_FNumber_Max_EEConn  = 1;    /* Maximum number                   
+                                       of filter records in a valid             
+                                       EE Connection Request         */         
+const int EEHNM_FNumber_Max_HPRConn = 4;    /* Maximum number                   
+                                       of filter records in a valid             
+                                       HPR Connection request        */         
+const int EEHNM_FNumber_Max_CSMStats = 4;   /* Maximum number                   
+                                       of filter records in a valid             
+                                       CSM Global Stats request  @F1A*/         
+                                                                                
+#ifdef __cplusplus                                                              
+      }   /* extern "C" */                                                      
+#endif                                                                          
+                                                                                
+#pragma pack(reset)                 /* Return to prior alignment     */         
+                                                                                
+#endif   /* __isteehnc_h */                                                     
+                                                                                

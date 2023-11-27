@@ -1,0 +1,1116 @@
+*/********************************************************************/ 00000100
+*/*MACRO NAME: IHADFA.                                               */ 00000200
+*/*                                                                  */ 00000300
+*/*release maintenance is identified by change flag             @####*/ 00000400
+*/*                                                                  */ 00000500
+*/*PROPRIETARY V3 STATEMENT                                          */ 00000600
+*/*Licensed Materials - Property of IBM                              */ 00000700
+*/*"Restricted Materials of IBM"                                     */ 00000800
+*/*5650-ZOS                                                          */ 00000900
+*/*Copyright IBM Corp. 1985,2021                                     */ 00001000
+*/*END PROPRIETARY V3 STATEMENT                                      */ 00001100
+*/*                                                                     00001200
+*                                                                       00001300
+*PURPOSE: MAP THE 'DATA FACILITIES AREA', WHICH CONTAINS INFORMATION    00001400
+*     THAT APPLIES TO DFP OR DFSMS.  THE DFA STORAGE IS FIXED,          00001500
+*     GLOBAL, PROTECTION KEY 0, NOT FETCH PROTECTED.                    00001600
+*                                                                       00001700
+*USAGE:                                                            @LEA 00001800
+*     1) WHILE A PROGRAM IS EXECUTING, IT MAY:                     @LEA 00001900
+*       A) TEST FOR SPECIFIC FEATURES OF DFSMS (OR DFP) WHICH MAY  @LEA 00002000
+*          BE INDICATED BY FEATURE BITS.                           @LEA 00002100
+*       B) DETERMINE THE CURRENT LEVEL OF DFSMS. THE DFARELS FIELD @LEA 00002200
+*          (A 4-BYTE FIELD) INDICATES THE PRODUCT LEVEL. IF THE    @LEA 00002300
+*          FIRST BYTE CONTAINS X'00', THEN YOUR PROGRAM IS NOT     @LEA 00002400
+*          EXECUTING ON DFSMS, IT IS RUNNING ON MVS/XA DFP VERSION @LEA 00002500
+*          2 OR MVS/DFP VERSION 3 AND THE FOLLOWING THREE BYTES    @LEA 00002600
+*          WILL ALSO CONTAIN X'00'. ON THOSE TWO PRODUCTS YOU MAY  @LEA 00002700
+*          DETERMINE THE RELEASE LEVEL FROM THE 2-BYTE FIELD       @LEA 00002800
+*          DFPREL.                                                 @LEA 00002900
+*                                                                  @LEA 00003000
+*          IF THE FIRST BYTE OF DFARELS CONTAINS A X'01', THEN     @LEA 00003100
+*          YOUR PROGRAM IS RUNNING ON DFSMS/MVS AND THE FOLLOWING  @LEA 00003200
+*          THREE BYTES DESIGNATE THE VERSION, RELEASE AND          @LEA 00003300
+*          MODIFICATION LEVEL OF DFSMS/MVS. FOR EXAMPLE A VALUE    @LEA 00003400
+*          OF X'01010200' IN DFARELS DESIGNATES DFSMS/MVS          @LEA 00003500
+*          VERSION 1, RELEASE 2, MODIFICATION LEVEL 0.             @LEA 00003600
+*                                                                  @LEA 00003700
+*          IF THE FIRST BYTE OF DFARELS CONTAINS A X'02', THEN     @LOA 00003800
+*          YOUR PROGRAM IS RUNNING ON DFSMS THAT IS SHIPPED ONLY   @LOA 00003900
+*          ON OS/390.  THIS FOLLOWED DFSMS/MVS 1.5.0.  SINCE DFSMS @LOA 00004000
+*          MIGHT NOT BE SHIPPED WITH EACH OS/390 RELEASE,          @LOA 00004100
+*          THE NEXT THREE BYTES INDICATE THE VERSION, RELEASE, AND @LOA 00004200
+*          MODIFICATION LEVELS IN WHICH THIS LEVEL OF DFSMS WAS    @LOA 00004300
+*          FIRST SHIPPED.                                          @LOA 00004400
+*                                                                  @LOA 00004500
+*          IF THE FIRST BYTE OF DFARELS CONTAINS A X'03', THEN     @LQA 00004600
+*          YOUR PROGRAM IS RUNNING ON DFSMS THAT IS SHIPPED ONLY   @LQA 00004700
+*          ON z/OS. SINCE DFSMS                                    @LQA 00004800
+*          MIGHT NOT BE SHIPPED WITH EACH RELEASE,                 @LQA 00004900
+*          THE NEXT THREE BYTES INDICATE THE VERSION, RELEASE, AND @LQA 00005000
+*          MODIFICATION LEVELS IN WHICH THIS LEVEL OF DFSMS WAS    @LQA 00005100
+*          FIRST SHIPPED.                                          @LQA 00005200
+*                                                                  @LQA 00005300
+*             FIRST BYTE VALUES:                                   @LOA 00005400
+*                X'00' DFP                                         @LOA 00005500
+*                X'01' DFSMS/MVS                                   @LOA 00005600
+*                X'02' DFSMS that is exclusive to OS/390           @LOA 00005700
+*                X'03' DFSMS that is exclusive to z/OS             @LQA 00005800
+*                                                                  @LEA 00005900
+*          THE INTENT IS THAT IN ANY FUTURE LEVEL OF THE DFA, THE  @LEA 00006000
+*          4-BYTE DFARELS WILL NOT CONTAIN A SMALLER VALUE. IF     @LEA 00006100
+*          YOUR PURPOSE IN TESTING DFARELS IS TO DETERMINE WHETHER @LEA 00006200
+*          A PARTICULAR FEATURE OF DFSMS IS AVAILABLE, THEN        @LEA 00006300
+*          YOUR PROGRAM SHOULD TEST ALL FOUR BYTES OF DFARELS.     @LEA 00006400
+*     2) WHILE A PROGRAM IS BEING ASSEMBLED, IT MAY DETERMINE THE  @LEA 00006500
+*        LEVEL OF DFSMS MACRO SUPPORT AVAILABLE BY TESTING THE     @LEA 00006600
+*        GLOBAL MACRO VARIABLE &IHADFARELS. THIS WILL ALLOW YOU    @LEA 00006700
+*        TO ASSEMBLE A PROGRAM WHICH OPTIONALLY USES A NEW MACRO   @LEA 00006800
+*        OR MACRO PARAMETER THAT IS AVAILABLE ONLY ON A CERTAIN    @LEA 00006900
+*        LEVEL OF THE SYSTEM. NOTE: YOUR PROGRAM'S TEST OF THIS    @LEA 00007000
+*        VARIABLE MUST FOLLOW INVOCATION OF THE IHADFA MACRO.      @LEA 00007100
+*                                                                  @LEA 00007200
+*        FOR EXAMPLE, THE FOLLOWING CODE EXPANDS ONE OF TWO MACRO  @LEA 00007300
+*        INVOCATIONS.                                              @LEA 00007400
+*                                                                  @LEA 00007500
+*        GBLC  &IHADFARELS  SET BY IHADFA MACRO TO BE SYSTEM LEVEL @LEA 00007600
+*        IHADFA             SET &IHADFARELS AND DEFINE DFARELS     @LEA 00007700
+*        ...                                                       @LEA 00007800
+*        AIF   ('&IHADFARELS' LT '01010300').OLD                   @LEA 00007900
+*        DEVTYPE UCBLIST=(MYLIST,1,ANY),MF=(E,DEVTLIST)            @LEA 00008000
+*        AGO   .CONT                                               @LEA 00008100
+*.OLD    DEVTYPE UCBLIST=(MYLIST,1),MF=(E,DEVTLIST)                @LEA 00008200
+*.CONT   ANOP                                                      @LEA 00008300
+*******************************************************************@LEA 00008400
+*STATUS: SEE CHANGE ACTIVITY BELOW                                      00008500
+*                                                                       00008600
+*PROCESSOR: PL/X, High Level Assembler                             @LVC 00008700
+*                                                                       00008800
+*POINTED TO BY: CVTDFA, ABPDFPID, AND CVTCKRAS.                         00008900
+*                                                                       00009000
+*INVOCATION:                                                            00009100
+*     ASSEMBLER: IHADFA                                                 00009200
+*                USING DFA,XX                                           00009300
+*     PL/X:  %INCLUDE SYSLIB(IHADFA)                                    00009400
+*            TO CHANGE THE ADDRESSABILITY, THIS CAN BE PRECEDED WITH    00009500
+*                                                                @03D   00009600
+*            %DFADEF = 'XXXXX'                                          00009700
+*                                                                  @M4A 00009800
+*NOTES:                                                            @M4A 00009900
+*     Minimum changes made in each release:                        @M4A 00010000
+*     - Update the second copyright year in comments.              @M4A 00010100
+*     - Update the second copyright year in DFASECT.               @M4A 00010200
+*     - Define a new assembler global symbol with GBLC for this    @M4A 00010300
+*       release like &IHADFARELS_ZOSvr, where vr is version & rel. @M4A 00010400
+*     - Set the above new assembler global symbol with SETC.       @M4A 00010500
+*     - Set &IHADFARELS with a SETC statement.                     @M4A 00010600
+*     - Define a new PL/X constant with a name like                @M4A 00010700
+*       IHADFARELS_ZOSvr.                                          @M4A 00010800
+*     - Change the value of the PL/X IHADFARELSDec constant.       @M4A 00010900
+*                                                                  @M4A 00011000
+*                                                                       00011100
+* $L7=DFP,HDP2210,,STLSJE:ADDITION OF FEATURE BITS FOR 2.1.0 SPE        00011200
+* $L7=DFP,HDP2210,,STLSJE:210 SPE EXPORT BY CI INDICATOR         @L7A   00011300
+*                                                            @ZA89387   00011400
+* $01=DFP,HDP2230,,STLREB:UPDATE RELEASE INDICATOR               @01A   00011500
+* $02=DFP,JDP2231,,STLREB:UPDATE RELEASE INDICATOR               @02A   00011600
+*                         ADD POINTER TO DFVT                    @02A   00011700
+* $03=KSC0008,JDP2231,871015,STLLTH: REMOVE DFADEF DECLARATION   @03A   00011800
+* $04=DFP,HDP2232,,STLLTH:UPDATE RELEASE INDICATOR               @04A   00011900
+* $05=DFP,HDP3310,,STLLTH:ADDITION OF FEATURE BIT DFASMS         @05A   00012000
+* $L8=DFP,HDP3320,,STLREB:SUPPORT FOR PDSE                       @L8A   00012100
+* $L9=DFP,HDP3320,,STLJRC:SUPPORT FOR IGW086ED (KET0765)         @L9A   00012200
+* $06=DFP,HDP2240,,STLREB:COMPACTION FEATURE  BIT                @06A   00012300
+* $P1=KET1794,HDP3320,,STLCC: IPDS,ILIB -> PDSE NAME CHANGE      @P1A   00012400
+* $P2=KSJ0060,JDP3311,890131,STLREB: BYPASS CHANNEL PGM PREFIX BLD @P2A 00012500
+* $P3=KET2541,HDP3320,890417,STLREB: DEFINE DFASSF               @P3A   00012600
+* $LA=3490,HDP3320,900904,STLREB: SUPPORT FOR 3490 TAPE          @LAA   00012700
+* $LB=OY32461,HDP3320,891010,STLREB: DEFINE DFAMMEXT             @LBA   00012800
+* @07=OY48341,HDP3330,911031,SJPLJAL: VOLNSNS SUPPORT            @07A   00012900
+* $L5=PPS,JDP3331,900815,SJPLREB: DFP COPYRIGHT STATEMENT        @L5A   00013000
+*                                                                       00013100
+*       DFSMS 1.1.0 CHANGES                                             00013200
+*                                                                       00013300
+* $LC=DFSMS,JDZ1110,910723,STLREB: DFSMS SUPPORT                 @LCA   00013400
+* $08=OY61541,JDZ1110,930226,SJPLREB: EXTENDED SAM               @08A   00013500
+* $09=OY64065,JDZ1110,930505,SJPLREB: DEFINE DFARECAL            @09A   00013600
+*                                                                       00013700
+*       DFSMS 1.2.0 CHANGES                                             00013800
+*                                                                       00013900
+* $0A=OW02507,HDZ11B0,940510,SJPLREB: DEFINE DFADEEXT            @0AA   00014000
+* $LD=DFSMS,HDZ11B0,930226,SJPLREB: VSAM STRIPE AND COMPRESSION  @LDA   00014100
+*                                                                       00014200
+*                                                                       00014300
+*       DFSMS 1.3.0 CHANGES                                             00014400
+*                                                                       00014500
+* $LE=DFSMS,HDZ11C0,930408,SJPLREB: DFARLSJ3 & &IHADFARELS &     @LEA   00014600
+*                                   DFACSSVT & DFAOPT & DFADFP0  @LEA   00014700
+* $LF=DFSMS,HDZ11C0,950606,SJPLGEC: REPLACE DFATLKT WITH         @LFA   00014800
+*                                   DFAISMFE. DELETE DFAOAT.     @LFA   00014900
+* $0B=OW16044,HDZ11C0,9501002,SJPLGEC: DELETE DFAISMFE           @0BA   00015000
+* $0C=OW16740,HDZ11C0,951002,SJPLREB: DFACIR2                    @0CA   00015100
+* $LG=DYNLINK,HDZ11C0,960409,SJPLRK: DEFINE DFANSRV, DFADYNL     @LGA   00015200
+* $LH=PM3    ,HDZ11D0,961022,SJPLREB: DEFINE DFARTLS, DFADYLPA   @LHA   00015300
+* $LI=PM3    ,HDZ11D0,970120,SJPLRK:  DEFINE DFAFORK             @LIA   00015400
+* $LJ=DFSMS  ,HDZ11E0,970623,SJPLREB: DEFINE DFAALVER, DFAALFOR    @LJA 00015500
+* $LK=K150118,HDZ11E0,971101,SJPLRK: Remove DFARTLS, DFADYLPA      @LKA 00015600
+* $LL=K150128,HDZ11E0,971106,SJPLRK: Temporarily leave DFAFORK,         00015700
+*                                    DFARTLS, DFADYLPA on          @LLA 00015800
+* $LM=TVS,    HDZ11E0,980409,SJPLREB: DEFINE DFATVMSG              @LMA 00015900
+* $P4=K150834,HDZ11E0,980422,SJPLREB: MOVE DFAALVER and DFAALFOR   @P4A 00016000
+* $0D=SNAPSHOT,HDZ11D0,970731,SJPLREB: DEFINE DFASMBK, DFASNAP   @0DA   00016100
+* $LN=ANSIV4 ,HDZ11E0,980813,SJPLCC: ANSI/ISO V4 Data Conversion   @LNA 00016200
+* $LO=OS/390R10,HDZ11F0,990628,SJPLREB: UPDATE DFARELS             @LOA 00016300
+* $0E=OW39810,HDZ11D0,990622,SJPLGMD:                            @0EA   00016400
+*   1. Add new DFAUPDSE flag for unmanaged PDSE support          @0EA   00016500
+* $LP=COPYSDB,HDZ11F0,000112,SJPLREB: COPYSDB SUPPORT            @LPA   00016600
+* $LQ=z/OS   ,HDZ11G0,010226,SJPLREB: UPDATE RELEASE AND COPYRGHT@LQA   00016700
+* $LR=z/OS   ,HDZ11H0,020315,SJPLREB: UPDATE RELEASE AND COPYRGHT@LRA   00016800
+* $LS=z/OS   ,HDZ11J0,031115,SJPLREB: UPDATE RELEASE AND COPYRGHT@LSA   00016900
+* $LT=z/OS   ,HDZ11K0,031201,SJPLREB: UPDATE RELEASE AND COPYRGHT@LTA   00017000
+*$LU=OA07104,HDZ11G0,040226,SJPLJAL: WORM TAPE SUPPORT             @LUA 00017100
+*$LV=LARGFMT,HDZ11K0,20041020,SJPLWER: BLOCKTOKENSIZE for large DS @LVA 00017200
+* $0F=OA09866,HDZ11J0,20041112,sjplreb:                          @0FA   00017300
+*   1. BLDL START STOP PARMS                                            00017400
+*$LW=z/OS1.8,HDZ1180,20050405,SJPLREB: Tape Data Set Authorization @LWA 00017500
+*$LX=Z/OS,HDZ1180,20050616,SJPLREB: UPDATE RELEASE AND COPYRGHT  @LXA   00017600
+*$P5=Z/OS,HDZ1180,20060119,SJPLML: CHANGE BLOCKTOKENSIZE DEFAULT   @P5A 00017700
+*$Ly=Z/OS,HDZ1190,20060721,SJPLREB: UPDATE RELEASE AND COPYRGHT  @LyA   00017800
+*$LZ=Z/OS,HDZ1A10,06Sep19,SJPLRU : EAV support                     @LZa 00017900
+*                                  - define USEEAV and break-      @LZa 00018000
+*                                    point value variables and     @LZa 00018100
+*                                    set the system default        @LZa 00018200
+*                                    values of on and 10           @LZa 00018300
+*                                    respectively                  @LZa 00018400
+*$M0=STIFF  ,HDZ1A10,110505,SJPLTX: STIFF SUPPORT                  @M0A 00018500
+*$10=OA27577,HDZ1A10,09Jan30,SJPJBC : EAV EAS-eligibility flags    @10A 00018600
+*$MX=BAMXTIOT,HDZ1C10,090430,SJPLJAL: BAM XTIOT NOCAPT SUPPORT     @MXA 00018700
+*$P6=K1C0222,HDZ1C10,09May31,SJPJBC : Chg EAS data set type        @P6A 00018800
+*                                     enablement                   @P6A 00018900
+*$11=OA30341,HDZ1190,SJPLTLB:      MR1106083759: Define DFADDRSZ        00019000
+*                                  to store the limit on storage        00019100
+*                                  usage for Tape DDR Swap         @11A 00019200
+*$M1=TPMVREC,HDZ1C10.091230,SJPLJAL: Recover missing outseq        @M1A 00019300
+*$12=OA32229,HDZ1B10,20100330,SVLTM: add BSAMpipes performance bit @12A 00019400
+*$M2=BAMzHPF,HDZ1D10,20100427,SVLTM: add SAMHPF bit                @M2A 00019500
+*$M3=EXTOCEA,HDZ1D10,100530,SJPLJAL: Externalize abend text        @M3A 00019600
+*$M4=z/OS2.1,HDZ2210,110202,SVLTM:   UPDATE RELEASE AND COPYRIGHT  @M4A 00019700
+*$P7=K210016,HDZ2210,110204,SVLLLL:  Change IHADFARELSDec to compile    00019800
+*                                                                  @P7A 00019900
+*$M5=LI1605 ,HDZ2210,110303,SVLDM:   Sam EF FlashCopy support.     @M5A 00020000
+*$M6=JES3R14,HDZ2210,SJPLJAL: JES3 ALLOCATION ASSIST               @M6A 00020100
+*$13=OA37423,HDZ1D10,OCT2011,SVLTHN: Reserve PPRC symmetrical      @13A 00020200
+*                    configuration flag and add PTF enable flag.   @13A 00020300
+*$P8=SM00238,HDZ2210,120306,SVLTM:   OA37423 SDI merge error       @P8A 00020400
+*    SDI for OA37423 merged into the IHADFA incorrectly            @P8A 00020500
+*$14=OA39409,HDZ1D10,APR2012,SVLTHN: Number of PRSDx47 tasks.      @14A 00020600
+*$15=SM01011,HDZ1D10,AUG2012,SVLTHN: Disable/enable HPF features   @15A 00020700
+*    OA40245,HDZ1D10,JAN2012,SVLTHN: Processed SDI for this APAR   @15A 00020800
+* === Start of V2.1 retrofitted changes ==== OA40911 ============= @16A 00020900
+*$16=OA40911,HDZ2210,120910,AIMMRO: Member Selection User Exit     @16A 00021000
+* === End of V2.1 retrofitted changes ====== OA40911 ============= @16A 00021100
+*$M5=z/OS2.2,HDZ2220,130415,RBretschneider  RELEASE AND COPYRIGHT  @M5A 00021200
+*$17=OA40826,HDZ1D10,NOV2012,SVLJRP: FCR 780 - add DFARejDevGrp    @17A 00021300
+*   =OA40719         to indicate DASD SIO Exit support             @17A 00021400
+*$18=OA41965,HDZ2210,MAR2013,SVLTHN: Mutiple Incremental FLC flag  @18A 00021500
+*                                    Update HPF to match assembler @18A 00021600
+*$M7=PDSEGENS,HDZ2210,20130725,JerryDearing:                       @M7A 00021700
+*   1. Add bit for PDSE Generations                                @M7A 00021800
+*$19=OA43951,HDZ2210,20131121,JerryDearing:                        @19A 00021900
+*  1. Add maxgens field.                                                00022000
+*$20=SM02232,HDZ2220,2014FEB,ARCTHN: ERASE-ON-SCRATCH OVERWRITE    @20A 00022100
+*                                    ERASE-ON-SCRATCH LR ERASE    1@20A 00022200
+*$21=OA44016,HDZ2220,2014FEB,ARCTHN: Get rid of compiler warnings  @21A 00022300
+*$22=SM02298,HDZ2220,2014FEB,ARCTHN: Move DFA47S to SSVT area      @22A 00022400
+*$M8=zEDC   ,HDZ2210,130315,SVLDM: zEDC compression support        @M8A 00022500
+*$M9=ssr,HDZ2210,20140219,RonBretschneider"                        @M9A 00022600
+*   1. Secondary Space Reduction enable/disable switch             @M9A 00022700
+*   2. change some DS statements to DC                             @M9A 00022800
+*$23=SM02444,HDZ2220,20140414,SJPLLM: Fix constant for SSR bit     @23A 00022900
+*$MT=SM02801,HDZ2220,2014AUG,ARCREG: Multi-Target PPRC Support:    @MTA 00023000
+*    OA43754                         - Add DFAMTPPRC flag.         @MTA 00023100
+*$23=OA44356,HDZ2220,06302014,SJPLJAL: HYDRA 3.2 SUPPORT           @23A 00023200
+*$MI=OA46254,HDZ2220,OCT2014,ARCTHN: - Shipped Multiple Incremental@MIA 00023300
+*$24=OA46972,HDZ1D10,20150123,RBretschneider:                      @24A 00023400
+* 1. Support for OA46106/OA46623 DFASYSZADR                        @24A 00023500
+*$25=OA48211,HDZ2220,20150622,RBretschneider:                      @25A 00023600
+* 1. correct setting of DFASSREN                                   @25A 00023700
+*$M6=z/OS2.3,HDZ2230,20150821,RBretschneider release and copyrght  @M6A 00023800
+*$VF=OA49447,HDZ2230,NOV2015,ARCTHN: Support ICKDSF VERIFYOFFLINE  @VFA 00023900
+*$MA=OA48124,HDZ2220,20150615,sjplccl:                             @MAA 00024000
+* 1. New function - DCBE Bypass authority checking                 @MAA 00024100
+*$ND=OA51085,HDZ2220,MAR2014,SVLTHN: ICKDSF NODSEXIST flag(W133427)@NDA 00024200
+*$26=OA50569,HDZ2210,20161006,RBretschneider:                      @26A 00024300
+* 1. DFAENCRYPT - Encryption support                               @26A 00024400
+*$27=OA50193,HDZ2210,NOV2016,MDCASAD:                              @27A 00024500
+* 1. DFAROSEC - Read-Only Secondary Volumes support                @27A 00024600
+*$28=OA52646,HDZ2220,20170424,RBretschneider:                      @28A 00024700
+* 1. New function - DSSB Above the Bar                             @28A 00024800
+*$SI=W212074,HDZ2240,Aug2017,SVLTHN: Support for DEBCHK S/I        @SIA 00024900
+*$29=OA55384,HDZ2220,04/24/2018,BrianLee:                          @29A 00025000
+* 1. New function - zHyperLink (SyncIo) Write Support              @29A 00025100
+*$M6=W226620,HDZ2240,Jan2018,JPaveza         release and copyrght  @MBA 00025200
+*$MC=260108,HDZ2240,20180629,ezhova:                               @MCA 00025300
+* 1. DFAPDSEENCRYPT - PDSE Encryption support                      @MCA 00025400
+* 2. DFAPDSEGENCPY - PDSE Generation Copy Support                  @MCA 00025500
+*$UF=W294311,HDZ2240,DEC2018,SVLTHN: REFUCB failure support        @UFA 00025600
+*$MD=W294634,HDZ2240,20190111,ezhova:                              @MDA 00025700
+* 1. Change DFAPDSEENCRYPT value to x'02'                          @MDA 00025800
+* 2. Update the comment for DFABLKSZ (see the Story 262110)        @MDA 00025900
+*$ME=D338082,HDZ2250,20190917,JerryDearing:                        @MEA 00026000
+*  1. Add support for HDZ2250                                           00026100
+*$FG=OA57173,HDZ2250,AUG2019,SVLTHN: FlashCopy to Global Mirror    @FGA 00026200
+*$HP=w348222,HDZ2250,NOV2019,SVLTHN: VTOC_USE_ZHPF keyword added   @HPA 00026300
+*$MF=ENCRYPT,HDZ2240,20190617,TUCJRB: Basic and large format       @MFA 00026400
+*    data set encryption                                           @MFA 00026500
+*$HP=OA58111,HDZ2250,MAY2020,SVLTHN: SDI updated with no changes. 1@HPA 00026600
+*$30=OA52706,HDZ2230,APR2017,SVLTHN: Support for DEVTYPE XTIOT     @30A 00026700
+*$31=OA58134,HDZ2220,20190918,RBretschneider:                      @31A 00026800
+* 1. Media Manager Dual Logging support                            @31A 00026900
+*$32=OA59468,HDZ2250,20200630,MDCASAD:                             @32A 00027000
+* 1. Transparent Cloud Tiering - TCT Compression support           @32A 00028000
+*    keyword added                                                 @32A 00029000
+*$33=W381682,HDZ2250,20200717,MDCASAD: Change some @ME to @MF      @33A 00030000
+*$34=OA59290,HDZ2230,25Mar2020,SMBranch: New fields for Catalog    @34A 00040000
+*    features.                                                     @34A 00050000
+* 1. GDGEFLAGs:                                                    @34A 00060000
+*    - GDG Extended enablement                                     @34A 00070000
+*    - GDG FIFO                                                    @34A 00080000
+*    - GDG SCRATCH default                                         @34A 00090000
+*    - GDG PURGE default                                           @34A 00100000
+* 2. SYS%FLAG: Indicates if the SYS% function is enabled           @34A 00110000
+* 3. ALIASLEVEL: Number of aliases levels                          @34A 00120000
+*$35=OA62225,HDZ2250,06Oct2021,SMBranch: New field for             @35A 00120104
+*    Catalog DFAGDGLimitMax                                        @35A 00120203
+* 1. DFAGDGLimitMax is the maximum number of generation data sets  @35A 00120301
+*    that can be in a Generation Data Group. Value range: 0 to 999 @35A 00120401
+*    If zero, LIMIT maximum has has not been set.                  @35A 00120501
+**********************************************************************/ 00120600
+* %GOTO DFAPLS;                    /* Skip around assembler code   @LVC 00120700
+         MACRO                                                          00120800
+         IHADFA &DSECT=YES                                              00120900
+         LCLC  &SECT                                                    00121000
+&SECT    SETC  'DSECT'         ASSUME DSECT=YES                         00121100
+         AIF   ('&DSECT' EQ 'YES').START                                00121200
+         AIF   ('&DSECT' EQ 'NO').NODSECT                               00121300
+         MNOTE 8,'DSECT PARAMETER MUST BE NO OR YES.  ''YES'' ASSUMED.' 00121400
+         AGO   .START                                                   00121500
+.NODSECT ANOP                 MUST NOT HAVE DSECT                       00121600
+DFASECT  CSECT                                                   @L5C   00121700
+DFASECT  RMODE  24                                               @L5C   00121800
+    DC  C'LICENSED MATERIALS - PROPERTY OF IBM '                 @L5A   00121900
+    DC  C'THIS PRODUCT CONTAINS "RESTRICTED MATERIALS OF IBM" '  @L5A   00122000
+    DC  C'5650-ZOS COPYRIGHT IBM CORPORATION 1979, 2019. '       @MBC   00122100
+    DC  C'ALL RIGHTS RESERVED. '                                 @L5A   00122200
+    DC  C'US GOVERNMENT USERS RESTRICTED RIGHTS - USE, '         @L5A   00122300
+    DC  C'DUPLICATION OR DISCLOSURE RESTRICTED BY '              @L5A   00122400
+    DC  C'GSA ADP SCHEDULE CONTRACT WITH IBM CORPORATION '       @L5A   00122500
+    DC  C'SEE IBM COPYRIGHT INSTRUCTIONS '                       @L5A   00122600
+DFAELNM  DS     0H            ELEMENT NAME STRUCTURE             @LQA   00122700
+         AGO .NODSECT2                                           @LQA   00122800
+.START   ANOP                                                    @LQA   00122900
+DFAELNM  DSECT                ELEMENT NAME STRUCTURE             @LQA   00123000
+.NODSECT2 ANOP                MUST NOT HAVE DSECT FOR NAME STRUCT@LQA   00123100
+DFAELNML DC     H'10'         LENGTH OF SIGNIFICANT CHARACTERS   @LQA   00123200
+*                             IN ELEMENT NAME, DFAELNAM.         @LQA   00123300
+DFAELTXT DC     CL22'z/OS DFSMS' ELEMENT NAME TEXT. THIS FIELD   @LQA   00123400
+*                             MAY CONTAIN LOWER CASE CHARACTERS. @LQA   00123500
+         AIF   ('&DSECT' EQ 'YES').DSECT1                        @LQA   00123600
+DFAIDTAB DC    0D'0'          CVTDFA POINTS HERE                 @L5A   00123700
+         ENTRY  DFAIDTAB      EXTERNAL SYMBOL FOR LINKAGE EDITOR @L5A   00123800
+&SECT    SETC  'DC'           ELIMINATE DSECT INSTRUCTION               00123900
+.DSECT1  ANOP                                                    @LQA   00124000
+DFA      &SECT 0D'0'          START OF DATA FACILITIES AREA             00124100
+.*                                                                      00124200
+**********************************************************************  00124300
+*     THE FOLLOWING TABLE MAY BE USED BY ANY PROGRAM THAT RUNS WITH  *  00124400
+*   MULTIPLE LEVELS OF THIS PRODUCT BUT WHERE NOT ALL OF THE         *  00124500
+*   SUPPORTED LEVELS OF THIS PRODUCT SUPPORT A PARTICULAR FEATURE.   *  00124600
+*                                                                    *  00124700
+*      THE TABLE MAY BE USED FOR THOSE FEATURES THAT THE CALLER MUST *  00124800
+*   KNOW WHETHER IT SHOULD WORK BEFORE ATTEMPTING IT.                *  00124900
+*                                                                    *  00125000
+*     THE TWO-BYTE DFAREL FIELD OR THE FOUR BYTE DFARELS FIELD   @LCC*  00125100
+*   MAY BE TESTED IN ORDER TO DETERMINE IF                           *  00125200
+*   IT HAS A VALUE GREATER THAN OR EQUAL TO THE APPROPRIATE LEVEL.   *  00125300
+*                                                                    *  00125400
+*    IF A DFA FEATURE BIT WAS ASSIGNED TO THE NEEDED FEATURE, THEN   *  00125500
+*   THE DFA FEATURE BIT MAY BE TESTED. IT MAY BE NECESSARY TO TEST   *  00125600
+*   DFALEN TO SEE WHETHER THE RELEVANT FEATURE BYTE IS DEFINED. NOT  *  00125700
+*   EVERY FEATURE WILL HAVE A BIT ASSIGNED.                          *  00125800
+**********************************************************************  00125900
+*                                                                    *  00126000
+DFALEN   DC    Y(DFAEND-*)    LENGTH OF THIS TABLE                      00126100
+*                                                                    *  00126200
+**********************************************************************  00126300
+*   VERSION, RELEASE, AND MODIFICATION LEVEL INFORMATION FOR DFP.    *  00126400
+*   THE FIRST THREE DIGITS OF DFAREL REPRESENTS THE LAST LEVEL   @LCC*  00126500
+*   OF DFP. THE FOURTH DIGIT OF DFAREL BEING NON-ZERO INDICATES  @LCA*  00126600
+*   THE LEVEL OF THIS PRODUCT IS HIGHER THAN THE INDICATED LEVEL.@LCA*  00126700
+**********************************************************************  00126800
+*                                                                    *  00126900
+DFAREL   DC    X'3321'        FOUR DIGITS = VERSION, RELEASE, MOD, X    00127000
+*                             DFAREL field will never be changed  @M4C  00127100
+**********************************************************************  00127200
+*   THE FOLLOWING ARE THE FEATURE BYTES.  WHEN A BIT IS ON, IT MEANS *  00127300
+*   EITHER THAT THE CURRENT RELEASE SUPPORTS THE FEATURE OR THAT     *  00127400
+*   THIS PARTICULAR INSTANCE OF THE SYSTEM SUPPORTS THE FEATURE. IF  *  00127500
+*   THE SOFTWARE SUPPORTS A FEATURE BUT IT CANNOT BE USED, PERHAPS   *  00127600
+*   BECAUSE COREQUISITE SOFTWARE OR HARDWARE IS NOT AVAILABLE, THEN  *  00127700
+*   THE FEATURE BIT WILL BE OFF.                                     *  00127800
+**********************************************************************  00127900
+DFAFEATS DS    0F             ALL FEATURES BYTES-USED BY CS INSTR @L9A  00128000
+DFAFEAT1 DC    X'FE'          FEATURES BYTE 1                     @05M  00128100
+DFAXA    EQU   X'80'          MVS/XA (COPY OF CVTMVSE IN CVT)           00128200
+DFALSR   EQU   X'40'          MULTIPLE VSAM LSR POOLS SUPPORTED (1.1.0) 00128300
+DFAEOS   EQU   X'20'          DASDM ERASE ON SCRATCH SUPPORTED (2.1.0)  00128400
+DFAXRF   EQU   X'10'          EXTENDED RECOVERY FACILITY (2.1.0)        00128500
+DFAEXPCI EQU   X'08'          EXPORT BY CONTROL INTERVAL (2.1.0) @L7A   00128600
+DFAEOSIC EQU   X'04'          ERASE ON SCRATCH FOR ICF (2.1.0) @L7A     00128700
+DFASMS   EQU   X'02'          SYSTEM MANAGED STORAGE (3.1.0)   @05A     00128800
+DFAPDSE  EQU   X'01'          PDSE SUPPORT AVAILABLE ON THE SYSTEM @P1C 00128900
+*                               SET BY IEAVNP26 WHEN DFP LEVEL IS  @L8A 00129000
+*                               3.2.0 OR GREATER AND AN APPROPRIATE@L8A 00129100
+*                               LEVEL OF SP EXISTS.                @L8A 00129200
+DFAIPDS  EQU   DFAPDSE        IPDS IS OLD NAME FOR PDSE            @P1A 00129300
+*                                                                       00129400
+DFAFEAT2 DC    X'2A'          FEATURES BYTE 2                           00129500
+DFADLS   EQU   X'80'          RESERVED                             @L8A 00129600
+DFAPML   EQU   X'40'          RESERVED                             @L8A 00129700
+DFAFMS   EQU   X'20'          FILE MANAGEMENT SERVICES SUPPORTED   @L8A 00129800
+DFACMPAC EQU   X'10'          INSTALLATION DEFAULT FOR COMPACTION  @06A 00129900
+*                                                                  @L8A 00130000
+DFABPBLD EQU   X'08'          BYPASS CHANNEL PROGRAM PREFIX BUILD  @P2A 00130100
+DFASSF   EQU   X'04'          SSF SERVICES ARE AVAILABLE           @P3A 00130200
+DFAMMEXT EQU   X'02'          MMS SUPPORTS XTIOT                   @LBA 00130300
+DFAINDEF EQU   X'01'          COMPACTION DEFAULT EXPLICITLY SET BY @LAA 00130400
+*                              INSTALLATION                        @LAA 00130500
+DFAFEAT3 DC    X'63'          FEATURES BYTE 3                      @LEC 00130600
+DFAVOLSN EQU   X'80'          VOLSER EXTRACTED FROM SENSE INFO     @07A 00130700
+*                              ACCEPTABLE BY THE INSTALLATION      @07A 00130800
+DFASAMEX EQU   X'40'          EXTENDED FORMAT SEQUENTIAL DATA SET  @08A 00130900
+DFASMSEX EQU   X'40'          ALIAS FOR DFASAMEX                   @08A 00131000
+DFAKSDEX EQU   X'20'          EXTENDED FORMAT VSAM KSDS            @LDA 00131100
+DFACMPCT EQU   X'10'          DFSMS/MVS ACCESS METHOD COMPRESSION  @LDA 00131200
+*                              SUPPORTED. BIT SET BY               @LDA 00131300
+*                              SMS SUB-SYSTEM INITIALIZATION       @LDA 00131400
+DFARLSJ3 EQU   X'08'          THE SMSVSAM SERVER HAS SUCCESSFULLY  @LEA 00131500
+*                              INITIALIZED ON THIS SYSTEM. THIS BIT@LEA 00131600
+*                              IS USED BY SMS SCHEDULING. ONCE ON, @LEA 00131700
+*                              THIS BIT REMAINS ON FOR THE LIFE OF @LEA 00131800
+*                              THE IPL. THIS BIT DOES NOT INDICATE @LEA 00131900
+*                              THAT THE SMSVSAM SERVER IS          @LEA 00132000
+*                              CURRENTLY OPERATIONAL.              @LEA 00132100
+DFARECAL EQU   X'04'          DATA SET RECALL CAPABILITY VIA THE   @09A 00132200
+*                              ARCHRCAL MACRO IS AVAILABLE         @09A 00132300
+DFADEEXT EQU   X'02'          DESERV EXIT FUNCTION IS AVAILABLE    @0AA 00132400
+DFADLL   EQU   X'01'          DFSMS SUPPORT FOR DLL IS AVAILABLE   @LEA 00132500
+DFAFEAT4 DC    X'7C'          FEATURES BYTE 4                      @LLC 00132600
+DFAFDAT  EQU   X'80'          RESERVED                             @0CA 00132700
+DFANSRV  EQU   X'40'          DFP NIP SERVICES CAN BE INVOKED VIA  @LGC 00132800
+*                              IGGSSRV MACRO                       @LGA 00132900
+DFADYNL  EQU   X'40'          DYNAMIC LINKLIST IS SUPPORTED        @LGC 00133000
+DFACIR2  EQU   X'20'          THE CATALOG INFORMATION ROUTINE,     @0CA 00133100
+*                              IKJEHCIR, SUPPORTS A FORMAT 2 WORK  @0CA 00133200
+*                              AREA. I.E. FULL WORD LENGTH FIELDS  @0CA 00133300
+DFARTLS  EQU   X'10'          DFSMS SUPPORT FOR RTLS IS AVAILABLE  @LHA 00133400
+DFADYLPA EQU   X'08'          DFSMS SUPPORT FOR DYNAMIC LPA IS     @LHA 00133500
+*                              AVAILABLE.                          @LHA 00133600
+DFAFORK  EQU   X'04'          DFSMS LOADER FORK EXIT IS PRESENT    @LIA 00133700
+DFASNBK  EQU   X'02'          software support providing "fast"    @0DA 00133800
+*                              backup using the Snapshot feature of@0DA 00133900
+*                              the RAMAC Virtual Array (RVA) is    @0DA 00134000
+*                              installed                           @0DA 00134100
+DFASNAP  EQU   X'01'          The API support for the Snapshot     @0DA 00134200
+*                              feature of the RAMAC Virtual Array  @0DA 00134300
+*                              (RVA) is installed.                 @0DA 00134400
+DFAACRON DC    C'DFA '        ACRONYM FOR THIS CONTROL BLOCK            00134500
+DFAFEAT5 DC    X'B4'          FEATURES BYTE 5                      @12C 00134600
+DFAUPDSE EQU   X'80'          Support for unmanaged PDSEs installed@0EA 00134700
+DFABTSREQ EQU  X'40'     1:BLOCKTOKENSIZE=REQUIRE in IGDSMSxx,     @LVA*00134800
+                         Restrictions on opening large format DS's @LVA*00134900
+                         0: BLOCKTOKENSIZE=NOREQUIRE               @LVC 00135000
+DFABLDLS EQU   X'20'          BLDL START=, STOP= PARMS SUPPORTED   @0FA 00135100
+DFAUSEAV EQU   X'10'          System default for USEEAV=YES        @LZa 00135200
+DFASAMHPF EQU  X'08'          SAM_USE_HPF                          @M2A 00135300
+DFAPIPES EQU   X'04'       BSAM Pipes performance SPE(LBI support) @12A 00135400
+DFAALVER EQU   X'02'          Version level at which new tape      @P4M 00135500
+*                              labels will be written.             @P4M 00135600
+*                              off - ANSI label ver 3              @P4M 00135700
+*                              on  - ANSI label ver 4              @P4M 00135800
+DFAALFOR EQU   X'01'          Force parameter for ANSI label ver   @P4M 00135900
+*                              3 or 4 processing. If on - causes   @P4M 00136000
+*                              all "AL" labeled tapes to be written@P4M 00136100
+*                              in the format specified by DFAALVER.@P4M 00136200
+*                              If off - only new labels are        @P4M 00136300
+*                              written in the format specified by  @P4M 00136400
+*                              DFAALVER.                           @P4M 00136500
+DFAFEAT6 DC    X'00'          FEATURES BYTE 6                           00136600
+DFACPSDB EQU   X'F0'          COPYSDB VALUES                       @LPA 00136700
+DFACPSNO EQU   B'00010000'       COPYSDB = NO                      @LPA 00136800
+DFACPSYE EQU   B'00100000'       COPYSDB = YES                     @LPA 00136900
+DFACPSSM EQU   B'00100000'       COPYSDB = SMALL (same as YES)     @LPA 00137000
+DFACPSIN EQU   B'00110000'       COPYSDB = INPUT                   @LPA 00137100
+DFACPSLA EQU   B'01000000'       COPYSDB = LARGE                   @LPA 00137200
+DFADCMET EQU   X'08'          Dataclas media enfrcd for all sa tape@LUA 00137300
+DFADCMEJ EQU   X'04'          Dataclas media enfrcd for jag/3592 sa@LUA 00137400
+DFAMTLAM EQU   X'02'          When no preference accept all media  @LUA 00137500
+*                              types for MTL (Manual Tape Lib)     @LUA 00137600
+DFASTIFF EQU   X'01'          STIFF SUPPORT                        @M0A 00137700
+DFABPV   DC    X'000A'        System default breakpoint value for  @LZa 00137800
+*                              EAVs                                @LZa 00137900
+**********************************************************************  00138000
+* PRODUCT, VERSION, RELEASE, AND MODIFICATION LEVEL INFORMATION. @LCA*  00138100
+* BYTE 0 DEFINES A PRODUCT CODE, BYTES 1-3 DEFINE THE VERSION,   @LCA*  00138200
+* RELEASE, AND MODIFICATION LEVELS OF THIS PRODUCT.              @LCA*  00138300
+*                                                                @LCA*  00138400
+* A PRODUCT BYTE (DFAPROD) OF X'00' INDICATES DFP AS A PRODUCT,  @LCA*  00138500
+* BYTES 1-3 OF DFARELS WILL ALSO BE X'00' IN THIS CASE. THE      @LCA*  00138600
+* USER MAY CHOOSE TO CHECK DFAREL FOR THE RELEASE LEVEL OF THE   @LCA*  00138700
+* DFP PRODUCT IN THIS CASE.                                      @LCA*  00138800
+*                                                                @LCA*  00138900
+* IF DFAPROD IS NOT EQUAL TO X'00' DFAREL SHOULD NOT BE CHECKED  @LCA*  00139000
+* AS IT WILL BE FROZEN AT THE LAST LEVEL OF DFP PRODUCT SHIPPED. @LCA*  00139100
+*                                                                @LCA*  00139200
+* A PRODUCT BYTE (DFAPROD) OF X'01' INDICATES DFSMS AS A PRODUCT.@LCA*  00139300
+* BYTES 1-3 OF DFARELS WILL INDICATE THE VERSION, RELEASE AND    @LCA*  00139400
+* MODIFICATION LEVELS OF THE DFSMS PRODUCT.                      @LCA*  00139500
+*                                                                @LCA*  00139600
+* A PRODUCT BYTE (DFAPROD) OF X'02' INDICATES YOUR PROGRAM IS    @LOA*  00139700
+* RUNNING ON A LEVEL OF DFSMS THAT IS SHIPPED ONLY ON OS/390.    @LOA*  00139800
+*                                                                @LCA*  00139900
+* A PRODUCT BYTE (DFAPROD) OF X'03' INDICATES YOUR PROGRAM IS    @LQA*  00140000
+* RUNNING ON A LEVEL OF DFSMS THAT IS SHIPPED ONLY ON z/OS.      @LQA*  00140100
+*                                                                @LCA*  00140200
+* SINCE DFSMS MIGHT NOT BE REFRESHED WITH EACH RELEASE, THE      @LOA*  00140300
+* VERSION, RELASE, AND MODIFICATION FIELDS INDICATE THE LEVEL OF @LOA*  00140400
+* THE PRODUCT IN WHICH THIS LEVEL OF DFSMS WAS FIRST SHIPPED.    @LOA*  00140500
+*                                                                @LCA*  00140600
+* THE VERSION RELEASE AND MODIFICATION FIELDS ARE BINARY VALUES  @LOA*  00140700
+* (FOR EXAMPLE TEN WOULD BE X'0A').                              @LOA*  00140800
+* THE MACRO VARIABLE IHADFARELS REPRESENTS VALUES IN DECIMAL SO  @LOA*  00140900
+* RELEASE 10 IS IDENTIFIED AS 10 (IN '02021000').                @LOA*  00141000
+**********************************************************************  00141100
+.******************************************************************@LEA 00141200
+.******* MACRO VARIABLES FOR DFSMS RELEASE INDICATOR **************@LEA 00141300
+.******************************************************************@LEA 00141400
+         GBLC  &IHADFARELS    DEFINE GLOBAL MACRO VARIABLE        @LEA  00141500
+         GBLC  &IHADFARELS_ZOS25                                  @MEA  00141600
+         GBLC  &IHADFARELS_ZOS24                                  @MBA  00141700
+         GBLC  &IHADFARELS_ZOS23                                  @M6A  00141800
+         GBLC  &IHADFARELS_ZOS22                                  @M5A  00141900
+         GBLC  &IHADFARELS_ZOS21                                  @M4A  00142000
+         GBLC  &IHADFARELS_ZOS113                               @####   00142100
+         GBLC  &IHADFARELS_ZOS112                                       00142200
+         GBLC  &IHADFARELS_ZOS111                                       00142300
+         GBLC  &IHADFARELS_ZOS110                                       00142400
+         GBLC  &IHADFARELS_ZOS19                                        00142500
+         GBLC  &IHADFARELS_ZOS18                                        00142600
+         GBLC  &IHADFARELS_ZOS17                                        00142700
+         GBLC  &IHADFARELS_ZOS16                                        00142800
+         GBLC  &IHADFARELS_ZOS15                                        00142900
+         GBLC  &IHADFARELS_ZOS13                                        00143000
+&IHADFARELS_ZOS25  SETC '03020500'     Z/OS 2.5                   @MEA  00143100
+&IHADFARELS_ZOS24  SETC '03020400'     Z/OS 2.4                   @MBA  00143200
+&IHADFARELS_ZOS23  SETC '03020300'     Z/OS 2.3                   @M6A  00143300
+&IHADFARELS_ZOS22  SETC '03020200'     Z/OS 2.2                   @M5A  00143400
+&IHADFARELS_ZOS21  SETC '03020100'     Z/OS 2.1                   @M4A  00143500
+&IHADFARELS_ZOS113 SETC '03011300'     Z/OS 1.13                @####   00143600
+&IHADFARELS_ZOS112 SETC '03011200'     Z/OS 1.12                        00143700
+&IHADFARELS_ZOS111 SETC '03011100'     Z/OS 1.11                        00143800
+&IHADFARELS_ZOS110 SETC '03011000'     Z/OS 1.10                        00143900
+&IHADFARELS_ZOS19 SETC '03010900'     Z/OS 1.9                          00144000
+&IHADFARELS_ZOS18 SETC '03010800'     Z/OS 1.8                          00144100
+&IHADFARELS_ZOS17 SETC '03010700'     Z/OS 1.7                          00144200
+&IHADFARELS_ZOS16 SETC '03010600'     Z/OS 1.6                          00144300
+&IHADFARELS_ZOS15 SETC '03010500'     Z/OS 1.5                          00144400
+&IHADFARELS_ZOS13 SETC '03010300'     DFSMS 1.3 ON Z/OS 1.3 OR 1.4      00144500
+&IHADFARELS SETC '&IHADFARELS_ZOS25'(1,8) SET DFSMS LEVEL    @####@MBE  00144600
+.*                                                                   *  00144700
+         LCLC  &DFARELS_PROD                                       @LEA 00144800
+&DFARELS_PROD SETC  '&IHADFARELS'(1,2)                             @LEA 00144900
+         LCLC  &DFARELS_VER                                        @LEA 00145000
+&DFARELS_VER  SETC  '&IHADFARELS'(3,2)                             @LEA 00145100
+         LCLC  &DFARELS_REL                                        @LEA 00145200
+&DFARELS_REL  SETC  '&IHADFARELS'(5,2)                             @LEA 00145300
+         LCLC  &DFARELS_MOD                                        @LEA 00145400
+&DFARELS_MOD  SETC  '&IHADFARELS'(7,2)                             @LEA 00145500
+.******************************************************************@LEA 00145600
+DFARELS  DS    0CL4                                                @LEC 00145700
+         DC    AL1(&DFARELS_PROD,&DFARELS_VER,&DFARELS_REL,&DFARELS_MOD*00145800
+               )                                                  @LEA  00145900
+         ORG   DFARELS        REDEFINE THE DFARELS FIELD          @LCA  00146000
+DFAPROD  DS    X               PRODUCT BYTE                       @L9A  00146100
+DFAVER   DS    X               VERSION BYTE                       @LCA  00146200
+DFARLSE  DS    X               RELEASE BYTE                       @LCA  00146300
+DFAMOD   DS    X               MODIFICATION BYTE                  @LCA  00146400
+DFADFP   EQU   X'00'          PRODUCT CODE FOR DFP                @LCA  00146500
+DFADFSMS EQU   X'01'          PRODUCT CODE FOR DFSMS              @LCA  00146600
+DFAOS390 EQU   X'02'          PRODUCT CODE FOR DFSMS that is      @LOA  00146700
+*                                exclusive to OS/390              @LOA  00146800
+DFAZOS   EQU   X'03'          PRODUCT CODE FOR DFSMS that is      @LQA  00146900
+*                                exclusive to z/OS                @LQA  00147000
+.*****************************************************************@LEA  00147100
+.****** SET MACRO VARIABLE FOR VALUE OF DFAMSMDE *****************@LEA  00147200
+.*****************************************************************@LEA  00147300
+         AIF   ('&DSECT' EQ 'YES').SETZERO                        @LEA  00147400
+&DFAMSMDE_VAL SETC 'SMDE_MAXLEN-SMDE_PO1_NAME_MAXLEN+8'           @LEA  00147500
+         AGO   .SETSMDE                                           @LEA  00147600
+.SETZERO ANOP                                                     @LEA  00147700
+&DFAMSMDE_VAL SETC '0'                                            @LEA  00147800
+.SETSMDE ANOP                                                     @LEA  00147900
+.*****************************************************************@LEA  00148000
+DFAMSMDE DC    AL2(&DFAMSMDE_VAL) MAXIMUM LENGTH OF THE SMDE IN   @LEA  00148100
+*                              THIS RELEASE WITH AN 8 BYTE ALIAS  @LEA  00148200
+*                              NAME                               @LEA  00148300
+DFAVERBO DC    X'0'           flags                                @LMC 00148400
+DFAMTPPRC EQU  X'80'          Multi-Target PPRC                    @MTA 00148500
+DFATVS   EQU   X'40'          tvs flag                             @LMA 00148600
+DFAFCXHS EQU   X'20'          FlashCopy accross Hyperswap enable   @P8A 00148700
+DFASYMCF EQU   X'10'          Reserved for PPRC symmetrical confg. @P8A 00148800
+DFARejDevGrp EQU X'08'        SIO Support for Reject IO if Grouped @17A 00148900
+DFAINCFC EQU   X'04'          Multiple Incremental FlashCopy       @18A 00149000
+DFAXPMFC EQU   X'02'          Reserved                             @20C 00149100
+DFASEOS  EQU   X'01'          Erase-On-Scratch Overwrite function  @20A 00149200
+DFASEFVR DC    X'0'          SAM EF format version                @M5A  00149300
+DFACSSVT DC    AL4(0)        CALLABLE SYSTEM SERVICES VECTOR TABLE@LEA  00149400
+DFADCVSO DC    AL4(0)        Data Conversion Services-OPEN        @LNA  00149500
+DFADCVSD DC    AL4(0)        Data Conversion Services-CONVERT     @LNA  00149600
+DFADCVSC DC    AL4(0)        Data Conversion Services-CLOSE       @LNA  00149700
+DFAELNMP DC    A(DFAELNM)    DFSMS ELEMENT NAME ADDRESS. ELEMENT  @LQC  00149800
+*                            NAME IS MAPPED BY DSECT DFAELNM.     @LQA  00149900
+DFADFVAD DC    V(DFVTAB)      DATA FACILITIES VECTOR TABLE ADDR   @02A  00150000
+.**  THE FOLLOWING COMMENT IS NEVER TO BE CHANGED.  IN LATER RELEASES   00150100
+.**  IT WILL TELL HOW LONG THE DFA WAS.  THIS COMMENT SHOULD ALWAYS BE  00150200
+.**  AT 48 (X'30') IN THE DFA.                                          00150300
+*   END OF DFA AS IT WAS WHEN IT WAS FIRST SHIPPED IN                   00150400
+*   MVS/XA DFP VERSION 2 RELEASE 1 MODIFICATION LEVEL 0.                00150500
+**** PRIOR TO REFERENCING ANY FIELD BEYOND THIS COMMENT,          @LOA  00150600
+**** THE USER MUST ENSURE THAT DFARELS IS GREATER THAN or         @LOA  00150700
+**** EQUAL TO X'02020A00' OR DFALEN IS BIG ENOUGH (SEE DFALEN).   @LOA  00150800
+****                                                              @LOA  00150900
+DFABLKSZ DC    0D'0',F'0,32760' Limit on system determined block  @LPA  00151000
+*                             size.Set by TAPEBLKSZLIM in DEVSUPxx @MDC 00151100
+*                             in PARMLIB. Default is 32760.        @MDC 00151200
+DFAFEAT7 DC    X'00'          FEATURES BYTE 7                      @LWA 00151300
+DFATADSN EQU   X'80'          TAPEAUTHDSN=YES                      @LWA 00151400
+DFATADS1 EQU   X'40'          TAPEAUTHF1=YES                       @LWA 00151500
+DFATARC8 EQU   X'20'          TAPEAUTHRC8=WARN                     @LWA 00151600
+DFATARC4 EQU   X'10'          TAPEAUTHRC4=FAIL                     @LWA 00151700
+DFAXTBAM EQU   X'08'          XIOT/UNCAPT UCBS FOR BAM             @MXA 00151800
+DFATPMVA EQU   X'04'          TAPEMULTIVOLUMEERROR=ALLOW           @M1A 00151900
+DFATPMVF EQU   X'02'          TAPEMULTIVOLUMEERROR=FAIL            @M1A 00152000
+DFA253   EQU   X'01'               GREATER THAN 253 SUBSYSTEMS     @23C 00152100
+*                                  ALLOWED                         @23A 00152200
+DFAFEAT8 DC    X'FE'          FEATURES BYTE 8                      @P6C 00152300
+* The following 7 flags indicate VSAM and non-VSAM data set support     00152400
+* for the Extended Addressing Space (EAS) on an EAV.               @10A 00152500
+DFAVSAMFOREAS  EQU X'80'      VSAM enabled for EAS                 @10A 00152600
+DFASEQFOREAS   EQU X'40'      Basic, large format seq (QSAM, BSAM       00152700
+*                             BDAM access) enabled for EAS         @10A 00152800
+DFAPDSEFOREAS  EQU X'20'      PDSE enabled for EAS                 @10A 00152900
+DFAPDSFOREAS   EQU X'10'      PDS enabled for EAS                  @10A 00153000
+DFADIRFOREAS   EQU X'08'      Direct (BDAM access) enabled for          00153100
+*                             EAS                                  @10A 00153200
+DFAEFSEQFOREAS EQU X'04'      Ext format seq enabled for EAS       @10A 00153300
+DFAUNDEFFOREAS EQU X'02'      Undefined DSORGs enbld for EAS       @10A 00153400
+DFAEXPMSG      EQU X'01'      EXPIRATION_MESSAGE=NEVER             @XXA 00153500
+DFADDRSZ DC    XL2'0000'      Storage size limit allowed in             00153600
+*                             DDR swap (number of Meg-bytes)       @11A 00153700
+DFAFEAT9 DC    X'7F'          FEATURES BYTE 9                      @26C 00153800
+DFAJ3AA  EQU   X'80'          JES3_ALLOC_ASSIST ENABLED            @M6A 00153900
+DFAMEMUX EQU   X'40'          MEMBER SELECTION USER EXIT SUPPORT   @16A 00154000
+DFAPDSEG EQU   X'20'          PDSE Generation support is installed @M7A 00154100
+DFAZEDCCMP EQU X'10'          zEDC Compression support is installed@M8A 00154200
+DFASSREN EQU   X'08'          DADSM Extend Secondary-Space         @M9A 00154300
+*                             Reduction enabled                    @M9A 00154400
+DFASYSZADRV  EQU  X'04'       DSS full volume dump and restore will@24A 00154500
+*                             obtain SYSZADRV/volser/SYSTEMS       @24A 00154600
+*                             resource to avoid lockout            @24A 00154700
+DFABYPAUTH   EQU  X'02'       DCBE Bypass Authorization support    @MAA 00154800
+*                               is installed                       @MAA 00154900
+DFAENCRYPT   EQU  X'01'       DFSMS support for Data Set Encryption@26A 00155000
+*                               is installed                       @26A 00155100
+DFASEOSC DC    XL1'00'        Erase-On-Scratch Overwrite Cycles    @20A 00155200
+DFADEVSP DS   0XL2            DEVSUPXX PARMLIB FLAGS              1@20C 00155300
+DFADEVX1 DC    X'00'          DEVSUPXX PARMLIB FLAG-1             1@20C 00155400
+DFAEOSV2       EQU X'80'      ERASE-ON-SCRATCH VERSION 2          1@20C 00155500
+DFADDSFVOFF    EQU X'40'      Disable ICKDSF VERIFYOFFLINE         @VFA 00155600
+DFADSFNODS     EQU X'20'      ICKDSF NODSEXIST status flag         @NDa 00155700
+DFAREFUCBFA    EQU X'10'      REFUCB Failure action flag           @UFA 00155800
+DFAVTOCZHPF    EQU X'08'      VTOC_USE_ZHPF keyword added          @HPA 00155900
+DFATCTCOMP     EQU X'04'      TCTCOMPRESSION enabled               @32A 00156000
+DFADEVX2 DC    X'0'           DEVSUPXX PARMLIB FLAG-2             1@20C 00156100
+         DC    XL8'0'         Reserved                             @22C 00156200
+DFAFEATC DS   0XL4            Feature Code bytes                   @18C 00156300
+DFAHPFC1 DC    X'00'          Byte-1: HPF Feature                  @18A 00156400
+DFAFCX_TTEDcw     EQU X'08'   4 Transfer TCA Extension             @18C 00156500
+DFAFCX_REL1       EQU X'04'   5 HPF phase 1                        @18C 00156600
+DFAFCX_ImbeddedLR EQU X'02'   6 Imbedded LR List                   @18C 00156700
+DFAFCX_FmtUpdWrt  EQU X'01'   7 Format Update Writes               @18C 00156800
+DFAHPFC2 DC    X'00'          Byte-2: HPF Feature                  @18A 00156900
+DFAFCX_FmtWrite   EQU X'80'   8 Format Write Enable                @18A 00157000
+DFARSVRF DC    XL2'0000'      Reserved                             @18A 00157100
+DFAMAXGN DC    F'0'           PDSE Maximum generations allowed     @19A 00157200
+DFACMPTYPEDEF  DC FL1'0'      Default Cmp Type                     @M8A 00157300
+DFACMPTYPEGEN     EQU X'00'   Generic compression                  @M8A 00157400
+DFACMPTYPETLRD    EQU X'01'   Tailored compression                 @M8A 00157500
+DFACMPTYPEzEDCR   EQU X'02'   zEDC compression required            @M8A 00157600
+DFACMPTYPEzEDCP   EQU X'03'   zEDC compression prefered            @M8A 00157700
+DFAFEAT10 DC   X'FF'          Features Byte 10.                    @FGC 00157800
+DFAROSEC          EQU X'80'   READ-ONLY Secondary support          @27A 00157900
+*                               installed on the system            @27A 00158000
+DFADSSBAbove      EQU x'40'   DSSB Above the Bar for data sets     @28A 00158100
+*                               accessed with VSAM or MMSRV        @28A 00158200
+DFADEVTYPEXTIOT   EQU X'20'   DEVTYPE XTIOT support                @30A 00158300
+DFADEBLock        EQU X'10'   DEBCHK DEB lock support              @SIa 00158400
+DFASyncIoWrites   EQU X'08'   zHyperLink (SyncIO) Write support    @29A 00158500
+*                               installed on the system            @29A 00158600
+DFAPDSEGENCPY     EQU X'04'   PDSE Generation Copy Support         @MCA 00158700
+DFAPDSEENCRYPT    EQU X'02'   PDSE Encryption support              @MDC 00158800
+DFAFlashCopy2GM   EQU X'01'   FlashCopy to Global Mirror           @FGA 00158900
+DFAFEAT11 DC   X'60'          Features Byte 11.                    @34C 00159000
+DFASEQENCRYPT     EQU X'80'   Basic and large ds encryption support@MFA 00159100
+DFACatalogInfoValid EQU X'40' Catalog fields DFACATINFO and        @34A 00159200
+DFAMmDualLog      EQU X'20'   Media Manager Dual Log support       @31A 00159300
+*                               DFACatAliasLvl below are valid.    @34A 00159400
+DFACATINFO DC   X'00'         Catalog Information                  @34A 00159500
+*     These fields are provided for programs that need information @34A 00159600
+*       about Catalog functions.                                   @34A 00159700
+DFACatGDGExt      EQU X'80'   GDG Extended enabled                 @34A 00159800
+DFACatGDGFIFO     EQU X'40'   GDG FIFO enabled                     @34A 00159900
+DFACatGDGScrD     EQU X'20'   GDG Scratch Default enabled          @34A 00160000
+DFACatGDGPrgD     EQU X'10'   GDG Purge Default enabled            @34A 00170000
+DFACatSYSPer      EQU X'08'   SYS% enabled                         @34A 00180000
+DFACatAliasLvl DC FL1'0'      Alias Level number                   @34A 00190000
+          DC   XL1'0'         RESERVED                             @35A 00200001
+DFAGDGLimitMax DC FL2'0'      LIMIT maximum for GDG                @35A 00210001
+          DC   XL24'0'        RESERVED                             @35C 00220001
+.**  THE FOLLOWING COMMENT IS NEVER TO BE CHANGED IN LATER        @LOA  00230000
+.**  RELEASES IT WILL TELL HOW LONG THE DFA WAS LENGTHENED TO     @LQC  00240000
+.**  IN OS/390 V2 R10. THIS COMMENT                               @LQC  00240100
+.**  SHOULD ALWAYS BE AT 112 (X'70') IN THE DFA.                  @LOA  00240200
+*   END OF DFA AS IT WAS WHEN IT WAS SHIPPED IN OS/390 V2 R10.    @LQC  00240300
+.**  REPLACE THIS LINE AND THE NEXT IN THE FIRST RELEASE IN WHICH THE   00240400
+.**  ABOVE RESERVED FIELDS START RUNNING OUT.                           00240500
+*   FUTURE ADDITIONS WILL BE INSERTED IMMEDIATELY BEFORE THIS LINE.     00240600
+DFAEND   EQU   *              ALWAYS END OF DFA                         00240700
+*                                                                       00240800
+*                                                                       00240900
+*                                                                       00241000
+*                                                                       00241100
+DFPIDTAB EQU   DFA            LABEL FOR COMPATIBILITY WITH DFPIDTAB     00241200
+DFPIDLEN EQU   DFALEN         LABEL FOR COMPATIBILITY WITH DFPIDTAB     00241300
+DFPIDREL EQU   DFAREL         LABEL FOR COMPATIBILITY WITH DFPIDTAB     00241400
+DFPIDFLG EQU   DFAFEAT1       LABEL FOR COMPATIBILITY WITH DFPIDTAB     00241500
+DFPIDXA  EQU   DFAXA          LABEL FOR COMPATIBILITY WITH DFPIDTAB     00241600
+DFPIDLSR EQU   DFALSR         LABEL FOR COMPATIBILITY WITH DFPIDTAB     00241700
+         AIF   ('&DSECT' EQ 'YES').END                             @LEA 00241800
+         IGWSMDE                                                   @LEA 00241900
+.END     ANOP                                                      @LEA 00242000
+         MEND                                                    @LVC*/ 00242100
+ %DFAPLS:;                                                              00242200
+                                                             /*  @03D*/ 00242300
+ %IF DFADEF = ''                                                        00242400
+ %THEN %DFADEF = 'CVTDFA';                                              00242500
+ DCL 1 DFA  BASED(DFADEF),      /* START OF DATA FACILITIES AREA */     00242600
+ /********************************************************************/ 00242700
+ /*   THE FOLLOWING TABLE MAY BE USED BY ANY PROGRAM THAT RUNS WITH  */ 00242800
+ /* MULTIPLE LEVELS OF THIS PRODUCT BUT WHERE NOT ALL OF THE         */ 00242900
+ /* SUPPORTED LEVELS OF THIS PRODUCT SUPPORT A PARTICULAR FEATURE.   */ 00243000
+ /*                                                                  */ 00243100
+ /*    THE TABLE MAY BE USED FOR THOSE FEATURES THAT THE CALLER MUST */ 00243200
+ /* KNOW WHETHER IT SHOULD WORK BEFORE ATTEMPTING IT.                */ 00243300
+ /*                                                                  */ 00243400
+ /*   THE TWO-BYTE DFAREL FIELD OR THE FOUR BYTE DFARELS FIELD   @LCC*/ 00243500
+ /* MAY BE TESTED IN ORDER TO DETERMINE IF                           */ 00243600
+ /* IT HAS A VALUE GREATER THAN OR EQUAL TO THE APPROPRIATE LEVEL.   */ 00243700
+ /*                                                                  */ 00243800
+ /*  IF A DFA FEATURE BIT WAS ASSIGNED TO THE NEEDED FEATURE, THEN   */ 00243900
+ /* THE DFA FEATURE BIT MAY BE TESTED. IT MAY BE NECESSARY TO TEST   */ 00244000
+ /* DFALEN TO SEE WHETHER THE RELEVANT FEATURE BYTE IS DEFINED. NOT  */ 00244100
+ /* EVERY FEATURE WILL HAVE A BIT ASSIGNED.                          */ 00244200
+ /********************************************************************/ 00244300
+       2 DFALEN   FIXED(15) UNSIGNED,  /* LENGTH OF THIS TABLE       */ 00244400
+ /********************************************************************/ 00244500
+ /* VERSION, RELEASE, AND MODIFICATION LEVEL INFORMATION FOR DFP.    */ 00244600
+ /* THE FIRST THREE DIGITS OF DFAREL REPRESENT THE LAST LEVEL    @LCC*/ 00244700
+ /* OF DFP. THE FOURTH DIGIT OF DFAREL BEING NON-ZERO INDICATES  @LCA*/ 00244800
+ /* THE LEVEL OF THIS PRODUCT IS HIGHER THAN THE INDICATED LEVEL.@LCA*/ 00244900
+ /********************************************************************/ 00245000
+       2 DFAREL   BIT(16), /* FOUR DIGITS = VERSION, RELEASE, MOD, X */ 00245100
+ /********************************************************************/ 00245200
+ /* THE FOLLOWING ARE THE FEATURE BYTES.  WHEN A BIT IS ON, IT MEANS */ 00245300
+ /* EITHER THAT THE CURRENT RELEASE SUPPORTS THE FEATURE OR THAT     */ 00245400
+ /* THIS PARTICULAR INSTANCE OF THE SYSTEM SUPPORTS THE FEATURE. IF  */ 00245500
+ /* THE SOFTWARE SUPPORTS A FEATURE BUT IT CANNOT BE USED, PERHAPS   */ 00245600
+ /* BECAUSE COREQUISITE SOFTWARE OR HARDWARE IS NOT AVAILABLE, THEN  */ 00245700
+ /* THE FEATURE BIT WILL BE OFF.                                     */ 00245800
+ /********************************************************************/ 00245900
+       2 DFAFEATS BIT(32) BDY(WORD), /*ALL FEATURES BYTES-              00246000
+                                         USED BY CS INSTR        @L9A*/ 00246100
+         3 DFAFEAT1 BIT(8),   /* FEATURES BYTE 1                     */ 00246200
+           4 DFAXA  BIT(1),   /*MVS/XA (COPY OF CVTMVSE IN CVT)      */ 00246300
+           4 DFALSR BIT(1),   /*MULTIPLE VSAM LSR POOLS                 00246400
+                                 SUPPORTED (1.1.0)                   */ 00246500
+           4 DFAEOS BIT(1),   /*DASDM ERASE ON SCRATCH                  00246600
+                                 SUPPORTED (2.1.0)                   */ 00246700
+           4 DFAXRF BIT(1),   /*EXTENDED RECOVERY FACILITY(2.1.0)    */ 00246800
+           4 DFAEXPCI BIT(1), /*EXPORT BY CONTROL INTERVAL(2.1.0)@L7A*/ 00246900
+           4 DFAEOSIC BIT(1), /*ERASE ON SCRATCH FOR ICF (2.1.0) @L7A*/ 00247000
+           4 DFASMS BIT(1),   /*SYSTEM MANAGED STORAGE (3.1.0)   @05A*/ 00247100
+           4 DFAPDSE BIT(1),  /*PDSE SUPPORT AVAILABLE ON THE CPC       00247200
+                                 SET BY IEAVNP26 WHEN DFP LEVEL         00247300
+                                 IS 3.2.0 OR GREATER AND AN             00247400
+                                 APPROPRIATE LEVEL OF SP EXISTS. @L8A*/ 00247500
+             5 DFAIPDS BIT(1),/*IPDS IS OLD NAME FOR PDSE        @P1A*/ 00247600
+         3 DFAFEAT2 BIT(8),   /* FEATURES BYTE 2                     */ 00247700
+           4 DFADLS   BIT(1), /* RESERVED                        @L8A*/ 00247800
+           4 DFAPML   BIT(1), /* RESERVED                        @L8A*/ 00247900
+           4 DFAFMS   BIT(1), /* FILE MGMT SERVICES SUPPORTED    @L8A*/ 00248000
+           4 DFACMPAC BIT(1), /* INSTALLATION DEFAULT-COMPACTION @06A*/ 00248100
+           4 DFABPBLD BIT(1), /* BYPASS CHANNEL PROGRAM PREFIX          00248200
+                                   BUILD                         @P2A*/ 00248300
+           4 DFASSF   BIT(1), /* SSF SERVICES ARE AVAILABLE      @P3A*/ 00248400
+           4 DFAMMEXT BIT(1), /* MMS SUPPORTS XTIOT              @LBA*/ 00248500
+           4 DFAINDEF BIT(1), /*COMPACTION DEFAULT EXPLICITLY SET       00248600
+                                 BY INSTALLATION                 @LAA*/ 00248700
+         3 DFAFEAT3 BIT(8),   /* FEATURES BYTE 3                     */ 00248800
+           4 DFAVOLSN BIT(1), /* VOLSER EXTRACTED FROM SENSE            00248900
+                                 ACCEPTABLE BY THE INSTALLATION  @07A*/ 00249000
+           4 DFASMSEX BIT(1), /* EXTENDED FORMAT SEQUENTIAL DATA        00249100
+                                 SET SUPPORTED                   @08A*/ 00249200
+             5 DFASAMEX BIT(1), /* ALIAS FOR DFASMSEX            @08A*/ 00249300
+           4 DFAKSDEX BIT(1), /* EXTENDED FORMAT VSAM KSDS       @LDA*/ 00249400
+           4 DFACMPCT BIT(1), /* DFSMS/MVS ACCESS METHOD                00249500
+                                  COMPRESSION SUPPORTED. BIT SET BY     00249600
+                                  SMS SUB-SYSTEM INITIALIZATION  @LDA*/ 00249700
+           4 DFARLSJ3 BIT(1), /* THE SMSVSAM SERVER HAS SUCCESSFULLY    00249800
+                                 INITIALIZED ON THIS SYSTEM. THIS BIT   00249900
+                                 IS USED BY SMS SCHEDULING.             00250000
+                                 ONCE ON, THE BIT REMAINS ON FOR        00250100
+                                 THE LIFE OF THE IPL. THIS BIT          00250200
+                                 DOES NOT INDICATE THAT THE             00250300
+                                 SERVER IS CURRENTLY OPERATIONAL.@LEA*/ 00250400
+           4 DFARECAL BIT(1), /* DATA SET RECALL CAPABILITY VIA         00250500
+                                 THE ARCHRCAL MACRO IS AVAILABLE @09A*/ 00250600
+           4 DFADEEXT BIT(1), /* DESERV EXIT FUNCTION AVAILABLE  @0AA*/ 00250700
+           4 DFADLL   BIT(1), /* DFSMS DLL SUPPORT IS AVAILABLE  @LEC*/ 00250800
+         3 DFAFEAT4 BIT(8),   /* FEATURES BYTE 4                     */ 00250900
+           4 DFAFDAT  BIT(1), /* RESERVED                        @0CA*/ 00251000
+           4 DFANSRV  BIT(1), /* DFP NIP SERVICES CAN BE INVOKED VIA    00251100
+                                  IGGSSRV MACRO                  @LGC*/ 00251200
+            5 DFADYNL BIT(1), /* DYNAMIC LINKLIST IS SUPPORTED   @LGC*/ 00251300
+           4 DFACIR2  BIT(1), /* THE CATALOG INFORMATION ROUTINE,       00251400
+                                 IKJEHCIR, SUPPORTS A FORMAT 2 WORKAREA.00251500
+                                 I.E. FULL WORD LENGTH FIELDS    @0CA*/ 00251600
+           4 DFARTLS  BIT(1), /* DFSMS RTLS SUPPORT IS AVAILABLE @LHA*/ 00251700
+           4 DFADYLPA BIT(1), /* DFSMS DYNAMIC LPA SUPPORT IS           00251800
+                                 AVAILABLE.                      @LHA*/ 00251900
+           4 DFAFORK  BIT(1), /* DFSMS Loader Fork Exit present  @LIA*/ 00252000
+           4 DFASNBK  BIT(1), /* Software support providing "fast"      00252100
+                               backup using the Snapshot feature of     00252200
+                               the RAMAC Virtual Array (RVA) is         00252300
+                               installed                         @0DA*/ 00252400
+           4 DFASNAP  BIT(1), /* The API support for the Snapshot       00252500
+                               feature of the RAMAC Virtual Array       00252600
+                               (RVA) is installed.               @0DA*/ 00252700
+       2 DFAACRON CHAR(4),    /* ACRONYM FOR THIS CONTROL BLOCK      */ 00252800
+       2 DFAFEAT5 BIT(8),     /* FEATURES BYTE 5                     */ 00252900
+           4 DFAUPDSE BIT(1), /* Unmanaged PDSE support installed on    00253000
+                                 this system                     @0EA*/ 00253100
+           4 DFABTSREQ BIT(1),/* 1: BLOCKTOKENSIZE=REQUIRE in IGDSMSxx, 00253200
+                                 Large format DS's highly restricted.   00253300
+                                 0: BLOCKTOKENSIZE=NOREQUIRE.    @LVA*/ 00253400
+           4 DFABLDLS BIT(1), /* BLDL START=, STOP= PARMS SUPPORTED     00253500
+                                                                 @0FA*/ 00253600
+           4 DFAUsEAV BIT(1), /* System deflt for USEEAV, On=Yes @LZa*/ 00253700
+           4 DFASAMHPF BIT(1), /* 1: SAM_USE_HPF(YES)            @M2A*/ 00253800
+           4 DFAPIPES BIT(1), /* BSAM Pipes performance SPE             00253900
+                                 (LBI support)                   @12A*/ 00254000
+           4 DFAALVER BIT(1), /* Version level at which new tape        00254100
+                                  labels will be written.               00254200
+                                  off - ANSI label ver 3                00254300
+                                  on - ANSI label ver 4          @LJM*/ 00254400
+           4 DFAALFOR BIT(1), /* Force parameter for ANSI label ver     00254500
+                                  3 or 4 processing. If on - causes     00254600
+                                  all "AL" labeled tapes to be written  00254700
+                                  in the format specified by DFAALVER.  00254800
+                                  If off - only new labels are          00254900
+                                  written in the format specified by    00255000
+                                  DFAALVER.                      @LJM*/ 00255100
+       2 DFAFEAT6 BIT(8),     /* FEATURES BYTE 6                     */ 00255200
+         3 DFACPSDB BIT(4),   /* copysdb values see constants below     00255300
+                                 DFACPS**                        @LPA*/ 00255400
+         3 DFADCMET BIT(1),   /* Dataclas media enforced for all @LUA   00255500
+                                 standalone tape scratch mounts  @LUA*/ 00255600
+         3 DFADCMEJ BIT(1),   /* Dataclas media enforced for 3592@LUA   00255700
+                                 standalone tape scratch mounts  @LUA*/ 00255800
+         3 DFAMTLAM BIT(1),   /* When no preference accept all   @LUA   00255900
+                                  mediatypes for MTL (Man Tp Lib)@LUA*/ 00256000
+         3 DFASTIFF BIT(1),   /* STIFF Support                   @M0A*/ 00256100
+       2 DFABPV   Fixed(16),  /* System default breakpoint value @LZa   00256200
+                                 for EAVs                        @LZa*/ 00256300
+ /********************************************************************/ 00256400
+ /*PRODUCT, VERSION, RELEASE, AND MODIFICATION LEVEL INFORMATION.@LCA*/ 00256500
+ /*BYTE 0 DEFINES A PRODUCT CODE, BYTES 1-3 DEFINE THE VERSION,  @LCA*/ 00256600
+ /*RELEASE, AND MODIFICATION LEVELS OF THIS PRODUCT.             @LCA*/ 00256700
+ /*                                                              @LCA*/ 00256800
+ /*A PRODUCT BYTE (DFAPROD) OF X'00' INDICATES DFP AS A PRODUCT, @LCA*/ 00256900
+ /*BYTES 1-3 OF DFARELS WILL ALSO BE X'00' IN THIS CASE. THE     @LCA*/ 00257000
+ /*USER MAY CHOOSE TO CHECK DFAREL FOR THE RELEASE LEVEL OF THE  @LCA*/ 00257100
+ /*DFP PRODUCT IN THIS CASE.                                     @LCA*/ 00257200
+ /*                                                              @LCA*/ 00257300
+ /*IF DFAPROD IS NOT EQUAL TO X'00' DFAREL SHOULD NOT BE CHECKED @LCA*/ 00257400
+ /*AS IT WILL BE FROZEN AT THE LAST LEVEL OF DFP PRODUCT SHIPPED.@LCA*/ 00257500
+ /*                                                              @LCA*/ 00257600
+ /*A PRODUCT BYTE (DFAPROD) OR X'01' INDICATES DFSMS AS A PRODUCT@LCA*/ 00257700
+ /*BYTES 1-3 OF DFARELS WILL INDICATE THE VERSION, RELEASE AND   @LCA*/ 00257800
+ /*MODIFICATION LEVELS OF THE DFSMS PRODUCT.                     @LCA*/ 00257900
+ /*                                                              @LCA*/ 00258000
+ /*A PRODUCT BYTE (DFAPROD) OF X'02' INDICATES OS/390.           @LOA*/ 00258100
+ /*THIS VALUE INDICATES THIS LEVEL OF DFSMS IS OS/390 EXCLUSIVE. @LOA*/ 00258200
+ /*                                                              @LOA*/ 00258300
+ /*A PRODUCT BYTE (DFAPROD) OF X'03' INDICATES z/OS.             @LQA*/ 00258400
+ /*THIS VALUE INDICATES THIS LEVEL OF DFSMS IS z/OS EXCLUSIVE.   @LQA*/ 00258500
+ /*                                                              @LQA*/ 00258600
+ /*SINCE DFSMS MIGHT NOT BE REFRESHED WITH EACH RELEASE,         @LOA*/ 00258700
+ /*THE VERSION, RELASE, AND MODIFICATION FIELDS INDICATE THE     @LOA*/ 00258800
+ /*LEVEL OF THE RELEASE IN WHICH THIS LEVEL OF DFSMS WAS FIRST   @LOA*/ 00258900
+ /*SHIPPED. THE VERSION RELEASE AND MODIFICATION FIELDS ARE      @LOA*/ 00259000
+ /*BINARY VALUES. (FOR EXAMPLE TEN WOULD BE X'0A').              @LOA*/ 00259100
+ /********************************************************************/ 00259200
+       2 DFARELS  CHAR(4)  BDY(WORD), /* 4 BYTES = PRODUCT,             00259300
+                                 VERSION, RELEASE, MODIFICATION  @LCA*/ 00259400
+         3 DFAPROD  CHAR(1),  /*   PRODUCT BYTE                  @LCA*/ 00259500
+         3 DFAVER   CHAR(1),  /*   VERSION BYTE                  @LCA*/ 00259600
+         3 DFARLSE  CHAR(1),  /*   RELEASE BYTE                  @LCA*/ 00259700
+         3 DFAMOD   CHAR(1),  /*   MODIFICATION BYTE             @LCA*/ 00259800
+       2 DFAMSMDE FIXED(16),  /* MAXIMUM LENGTH OF THE SMDE (IN THIS    00259900
+                                 RELEASE) WITH AN 8 BYTE ALIAS          00260000
+                                 NAME                            @LEA*/ 00260100
+       2 DFAVERBO FIXED(8),   /* FLAGS                           @LMA*/ 00260200
+         3 DFAMTPPRC BIT(1),  /* Multi-Target PPRC               @MTA*/ 00260300
+         3 DFATVS   BIT(1),   /* tvs flag                        @lma*/ 00260400
+         3 DFAFCXHS BIT(1),   /* FlashCopy across Hyperswap PTF  @P8M*/ 00260500
+                              /* enable flag.                    @P8M*/ 00260600
+         3 DFASYMCF BIT(1),   /* Reserved: PPRC symmetrical conf.@P8M*/ 00260700
+         3 DFARejDevGrp BIT(1),  /* SIO Exit Reject IO if Grouped@17A*/ 00260800
+         3 DFAINCFC BIT(1),   /* Multiple Incremental FlashCopy  @18A*/ 00260900
+         3 DFAXPMFC BIT(1),   /* reserved                        @20C*/ 00261000
+         3 DFASEOS  BIT(1),   /* Erase-On-Scratch Overwrite      @20A*/ 00261100
+       2 DFASEFVR FIXED(8),   /* SAM EF format version           @M5A*/ 00261200
+       2 DFACSSVT  PTR(31),   /* CALLABLE SYSTEM SERVICES VECTOR        00261300
+                                 TABLE                           @LEA*/ 00261400
+       2 DFADCVSO  PTR(31),   /* Data Conversion Services-OPEN   @LNA*/ 00261500
+       2 DFADCVSD  PTR(31),   /* Data Conversion Services-CONVERT@LNA*/ 00261600
+       2 DFADCVSC  PTR(31),   /* Data Conversion Services-CLOSE  @LNA*/ 00261700
+       2 DFAELNMP PTR(31),    /* DFSMS ELEMENT NAME ADDRESS. POINTS TO  00261800
+                                 DFAELNM STRUCTURE               @LQC*/ 00261900
+       2 DFADFVAD PTR(31),    /* DATA FACILITIES VECTOR TABLE ADDR02A*/ 00262000
+ %GOTO DFAPLS2;                                                         00262100
+                       /*  THE FOLLOWING COMMENT IS NEVER               00262200
+                           TO BE CHANGED IN LATER RELEASES              00262300
+                           IT WILL TELL HOW LONG THE DFA WAS.           00262400
+                           THIS COMMENT SHOULD ALWAYS BE                00262500
+                           AT 48 (X'30') IN THE DFA.     */             00262600
+ %DFAPLS2: ;                                                            00262700
+        /* END OF DFA AS IT WAS WHEN IT WAS FIRST SHIPPED IN      */    00262800
+        /* MVS/XA DFP VERSION 2 RELEASE 1 MODIFICATION LEVEL 0    */    00262900
+        /* PRIOR TO REFERENCING ANY FIELD BEYOND THIS COMMENT,   @LOA*/ 00263000
+        /* THE USER MUST ENSURE THAT DFARELS IS GREATER THAN or  @LOA*/ 00263100
+        /* EQUAL TO X'02020A00' OR DFALEN IS BIG ENOUGH (SEE     @LOA*/ 00263200
+        /* DFALEN).                                              @LOA*/ 00263300
+                                                                        00263400
+       2 DFABLKSZ BIT(64),    /* Limit on system determined block size. 00263500
+                                 Set by TAPEBLKSZLIM in DEVSUPxx in     00263600
+                                 PARMLIB. Default is 32760.      @MDC*/ 00263700
+       2 DFAFEAT7 BIT(8),     /* FEATURES BYTE 7                 @LWA*/ 00263800
+         3 DFATADSN BIT(1),   /* TAPEAUTHDSN=YES                 @LWA*/ 00263900
+         3 DFATADS1 BIT(1),   /* TAPEAUTHF1=YES                  @LWA*/ 00264000
+         3 DFATARC8 BIT(1),   /* TAPEAUTHRC8=WARN                @LWA*/ 00264100
+         3 DFATARC4 BIT(1),   /* TAPEAUTHRC4=FAIL                @LWA*/ 00264200
+         3 DFAXTBAM BIT(1),   /* XTIOT/UNCAPT UCBS FOR BAM       @MXA*/ 00264300
+         3 DFATPMVA BIT(1),   /*TAPEMULTIVOLUMEERROR=ALLOW       @M1A*/ 00264400
+         3 DFATPMVF BIT(1),   /*TAPEMULTIVOLUMEERROR=FAIL        @M1A*/ 00264500
+         3 DFA253   BIT(1),   /*     GREATER THAN 253 SUBSYTEMS  @23C   00264600
+                                     ALLOWED                     @23A*/ 00264700
+       2 DFAFEAT8 BIT(8),     /* FEATURES BYTE 8                 @10A*/ 00264800
+         /* The following 7 flags indicate VSAM and non-VSAM data set   00264900
+            support for the Extended Addressing Space (EAS) on an EAV   00265000
+                                                                 @10A*/ 00265100
+         3 DFAVSAMFOREAS BIT(1), /* VSAM enabled for EAS         @10A*/ 00265200
+         3 DFASEQFOREAS BIT(1), /* Basic, large format seq (QSAM, BSAM, 00265300
+                                 BDAM access) enabled for EAS    @10A*/ 00265400
+         3 DFAPDSEFOREAS BIT(1), /* PDSE enabled for EAS         @10A*/ 00265500
+         3 DFAPDSFOREAS BIT(1), /* PDS enabled for EAS           @10A*/ 00265600
+         3 DFADIRFOREAS BIT(1), /* Direct (BDAM access) enabled for     00265700
+                                 EAS                             @10A*/ 00265800
+         3 DFAEFSEQFOREAS BIT(1), /* Ext format seq enbld for EAS@10A*/ 00265900
+         3 DFAUNDEFFOREAS BIT(1), /* Undef DSORGs enbld for EAS  @10A*/ 00266000
+         3 DFAEXPMSG BIT(1),   /* EXPIRATION_MESSAGE=NEVER       @XXA*/ 00266100
+       2 DFADDRSZ FIXED(16),  /* Storage size limit allowed in          00266200
+                                 DDR swap (number of Meg-bytes)  @11A*/ 00266300
+       2 DFAFEAT9 BIT(8),   /* FEATURES BYTE 9                   @16A*/ 00266400
+         3 DFAJ3AA BIT(1),    /* JES3_ALLOC_ASSIST ENABLED       @M6A*/ 00266500
+         3 DFAMEMUX BIT(1), /* MEMBER SELECTION USER EXIT SUPPORT@16A*/ 00266600
+         3 DFAPDSEG BIT(1), /* PDSE Generation support is installed     00266700
+                                                                 @M7A*/ 00266800
+         3 DFAZEDCCMP BIT(1), /* zEDC Compression support is installed  00266900
+                                                                 @M8A*/ 00267000
+         3 DFASSREN BIT(1), /* DADSM Extend Secondary-Space      @M9A   00267100
+                               Reduction enabled                 @M9A*/ 00267200
+         3 DFASYSZADRV BIT(1), /* DSS full volume dump and restore      00267300
+                               will obtain SYSZADRV/volser/SYSTEMS      00267400
+                               resource to avoid lockout         @24A*/ 00267500
+         3 DFABYPAUTH BIT(1), /* DCBE Bypass Authorization support      00267600
+                                 is installed                    @MAA*/ 00267700
+         3 DFAENCRYPT BIT(1), /* DFSMS support for Data Set Encryption  00267800
+                                 is installed                    @26A*/ 00267900
+       2 DFASEOSC   FIXED(8), /* Erase-On-Scratch Overwrite Cycle@20A*/ 00268000
+       2 DFADEVSP CHAR(2),    /* DEVSUPXX PARMLIB FLAGS         1@20A*/ 00268100
+         3 DFADEVX1 CHAR(1),  /* DEVSUPXX PARMLIB FLAG-1        1@20A*/ 00268200
+           5 DFAEOSV2 BIT(1), /* ERASE-ON-SCRATCH VERSION 2     1@20A*/ 00268300
+           5 DFADDSFVOFF BIT(1),       /* Disable DSF VOFF       @VFA*/ 00268400
+           5 DFADSFNODS BIT(1),        /* DSF NODSEXIST status   @NDa*/ 00268500
+           5 DFAREFUCBFA BIT(1),       /* REFUCB Failure Action  @UFa*/ 00268600
+           5 DFAVTOCZHPF BIT(1),       /* VTOC_USE_ZHPF keyword  @HPa*/ 00268700
+           5 DFATCTCOMP  BIT(1),       /* TCTCOMPRESSION enabled @32A*/ 00268800
+         3 DFADEVX2 CHAR(1),  /* DEVSUPXX PARMLIB FLAG-2         @21A*/ 00268900
+       2 *        CHAR(8),             /* Reserved               @22C*/ 00269000
+       2 DFAFEATC CHAR(4),             /* Feature Code Bytes     @18C*/ 00269100
+         3 DFAHPFC1 CHAR(1),           /* Byte-1: HPF Feature    @18A*/ 00269200
+           5 *               BIT(1),   /*0 RESERVED (Phase 0)    @18C*/ 00269300
+           5 *               BIT(1),   /*1 RESERVED              @18C*/ 00269400
+           5 *               BIT(1),   /*2 RESERVED (Multi Track)@18C*/ 00269500
+           5 *               BIT(1),   /*3 RESERVED              @18C*/ 00269600
+           5 DFAFCX_TTEDcw   BIT(1),   /*4 Transfer TCA Extension@18C*/ 00269700
+           5 DFAFCX_REL1     BIT(1),   /*5 HPF phase 1           @18C*/ 00269800
+           5 DFAFCX_ImbeddedLR BIT(1), /*6 Imbedded LR List      @18C*/ 00269900
+           5 DFAFCX_FmtUpdWrt  BIT(1), /*7 Format Update Writes  @18C*/ 00270000
+         3 DFAHPFC2 CHAR(1),           /* Byte-2: HPF Feature    @18A*/ 00270100
+           5 DFAFCX_FmtWrite   BIT(1), /*8 Format Write Enable   @18C*/ 00270200
+         3 DFARSVRF CHAR(2),           /* Bytes reserved         @18A*/ 00270300
+       2 DFAMAXGN Fixed(31),           /* Maximum Generations           00270400
+                                          supported for this system     00270500
+                                                                 @19A*/ 00270600
+       2 DFACMPTYPEDEF     Fixed(8),/* Default compression type  @M8C*/ 00270700
+       2 DFAFEAT10 CHAR(1),            /* Features Byte 10       @27A*/ 00270800
+         3 DFAROSEC BIT(1),            /* READ-ONLY Secondary    @27A*/ 00270900
+                                       /* support installed on   @27A*/ 00271000
+                                       /* the system             @27A*/ 00271100
+         3 DFADSSBAbove BIT(1),        /* DSSB Above the Bar for data   00271200
+                                          sets accessed with VSAM or    00271300
+                                          MMSRV                  @28A*/ 00271400
+         3 DFADEVTYPEXTIOT BIT(1),     /* DEVTYPE XTIOT support  @30A*/ 00271500
+         3 DFADEBLock      BIT(1),     /* DEBCHK DEB lock support@SIa*/ 00271600
+         3 DFASyncIoWrites BIT(1),     /* zHyperLink (Sync IO) write    00271700
+                                          support installed on the      00271800
+                                          system.                @29A*/ 00271900
+         3 DFAPDSEGENCPY   BIT(1),     /* PDSE Generation Copy          00272000
+                                          Support                @MCA*/ 00272100
+         3 DFAPDSEENCRYPT  BIT(1),     /* PDSE Encryption support@MDA*/ 00272200
+         3 DFAFlashCopy2GM BIT(1),     /* FlashCopy to GM        @FGC*/ 00272300
+       2 DFAFEAT11 CHAR(1),            /* Features Byte 11       @MFA*/ 00272400
+         3 DFASEQENCRYPT   BIT(1),     /* Basic and large ds            00272500
+                                          encryption support     @MFA*/ 00272600
+         3 DFACatalogInfoValid Bit(1), /* Catalog fields                00272700
+                                           DFACATINFO and               00272800
+                                           DFACatAliasLvl               00272900
+                                           below are valid.      @34A*/ 00273000
+         3 DFAMmDualLog    Bit(1),     /* Media Manager Dual Log        00274000
+                                          support                @31A*/ 00275000
+         3 *               BIT(5),     /* RESERVED               @31C*/ 00276000
+       2 DFACATINFO           CHAR(1), /* Catalog Information    @34A*/ 00277000
+ /*   These fields are provided for programs that need           @34A*/ 00278000
+ /*     information about Catalog functions.                     @34A*/ 00279000
+         3 DFACatGDGExt       Bit(1),  /*   GDG Extended enabled @34A*/ 00280000
+         3 DFACatGDGFIFO      Bit(1),  /*   GDG FIFO enabled     @34A*/ 00290000
+         3 DFACatGDGScrD      Bit(1),  /*   GDG Scratch Default  @34A*/ 00300000
+         3 DFACatGDGPrgD      Bit(1),  /*   GDG Purge Default    @34A*/ 00310000
+         3 DFACatSYSPer       Bit(1),  /*   SYS% enabled         @34A*/ 00320000
+         3 *                  Bit(3),  /*   Reserved             @34A*/ 00330000
+       2 DFACatAliasLvl       Fixed(8),/*   Alias Level number   @34A*/ 00340000
+       2 *        CHAR(1),    /* RESERVED                        @35A*/ 00350001
+       2 DFAGDGLimitMax       Fixed(15),/*  LIMIT maximum for GDG@35A*/ 00360001
+       2 *        CHAR(24),   /* RESERVED                        @35C*/ 00370001
+                                                                        00370100
+ %GOTO DFAPLS3;                                                         00370200
+                       /*  THE FOLLOWING COMMENT IS NEVER               00370300
+                           TO BE CHANGED IN LATER RELEASES              00370400
+                           IT WILL TELL HOW LONG THE DFA WAS LENGTHENED 00370500
+                           TO BE IN OS/390 V2 R10.                      00370600
+                           THIS COMMENT SHOULD ALWAYS BE                00370700
+                           AT 112(X'70') IN THE DFA.     */             00370800
+ %DFAPLS3: ;                                                            00370900
+        /* END OF DFA AS IT WAS WHEN IT WAS SHIPPED IN OS/390 R10 */    00371000
+ %GOTO DFAPLS4;                                                         00371100
+ /*  REPLACE THIS LINE AND THE NEXT IN THE FIRST RELEASE IN WHICH THE   00371200
+     ABOVE RESERVED FIELDS START RUNNING OUT.                        */ 00371300
+ %DFAPLS4: ;                                                            00371400
+ /* FUTURE ADDITIONS WILL BE INSERTED IMMEDIATELY BEFORE THIS LINE.  */ 00371500
+       2 DFAEND   CHAR(0);               /* ALWAYS END OF DFA        */ 00371600
+                                                                        00371700
+   DCL DFPIDTAB  CHAR(LENGTH(DFA))       /* LABEL FOR COMPATIBILITY  */ 00371800
+                 DEF(DFA);                                              00371900
+   DCL DFPIDLEN  FIXED (15) UNSIGNED     /* LABEL FOR COMPATIBILITY  */ 00372000
+                 DEF(DFALEN);                                           00372100
+   DCL DFPIDREL  BIT(16)                 /* LABEL FOR COMPATIBILITY  */ 00372200
+                 DEF(DFAREL);                                           00372300
+   DCL 1 DFPIDFLG  BIT(16)               /* LABEL FOR COMPATIBILITY  */ 00372400
+                 DEF(DFAFEAT1),                                         00372500
+         2 DFPIDXA   BIT(1),             /* LABEL FOR COMPATIBILITY  */ 00372600
+         2 DFPIDLSR  BIT(1);             /* LABEL FOR COMPATIBILITY  */ 00372700
+                                                                        00372800
+ /* CONSTANTS FOR FIRST BYTE OF DFARELS (DFAPROD).               @LOA*/ 00372900
+   DCL DFADFP   BIT(8)  CONSTANT('00'X); /* DFP    PRODUCT CODE  @LOA*/ 00373000
+   DCL DFADFSMS BIT(8)  CONSTANT('01'X); /* DFSMS  PRODUCT CODE  @LOA*/ 00373100
+   DCL DFAOS390 BIT(8)  CONSTANT('02'X); /* OS/390 PRODUCT CODE FOR     00373200
+                               DFSMS that is exclusive to OS/390 @LOA*/ 00373300
+   DCL DFAZOS  BIT(8)  CONSTANT('03'X); /* z/OS   PRODUCT CODE FOR      00373400
+                               DFSMS that is exclusive to z/OS   @LQA*/ 00373500
+ ]IHADFARELSDec contains four two-digit decimal numbers that            00373600
+ ]represent the four bytes.  This is needed for SMF type 42 records.    00373700
+ DECLARE                                                                00373800
+   IHADFARELSDec Char(8)                                        ]@####  00373900
+                     CONSTANT('03020500');  ]Level in dec digits  @MEC  00374000
+                                                                        00374100
+ /* CONSTANTS FOR DFARELS                                            */ 00374200
+ DECLARE                                                                00374300
+  (IHADFARELS_ZOS25  CONSTANT('03020500'X),  ] Z/OS 2.5          @MEA   00374400
+   IHADFARELS_ZOS24  CONSTANT('03020400'X),  ] Z/OS 2.4          @MBA   00374500
+   IHADFARELS_ZOS23  CONSTANT('03020300'X),  ] Z/OS 2.3          @M6A   00374600
+   IHADFARELS_ZOS22  CONSTANT('03020200'X),  ] Z/OS 2.2          @M5A   00374700
+   IHADFARELS_ZOS21  CONSTANT('03020100'X),  ] Z/OS 2.1          @M4A   00374800
+   IHADFARELS_ZOS113 CONSTANT('03010D00'X),  ] Z/OS 1.13        @####   00374900
+   IHADFARELS_ZOS112 CONSTANT('03010C00'X),  ] Z/OS 1.12                00375000
+   IHADFARELS_ZOS111 CONSTANT('03010B00'X),  ] Z/OS 1.11                00375100
+   IHADFARELS_ZOS110 CONSTANT('03010A00'X),  ] Z/OS 1.10                00375200
+   IHADFARELS_ZOS19  CONSTANT('03010900'X),  ] Z/OS 1.9                 00375300
+   IHADFARELS_ZOS18  CONSTANT('03010800'X),  ] Z/OS 1.8                 00375400
+   IHADFARELS_ZOS17  CONSTANT('03010700'X),  ] Z/OS 1.7                 00375500
+   IHADFARELS_ZOS16  CONSTANT('03010600'X),  ] Z/OS 1.6                 00375600
+   IHADFARELS_ZOS15  CONSTANT('03010500'X),  ] Z/OS 1.5                 00375700
+   IHADFARELS_ZOS13  CONSTANT('03010300'X) ]DFSMS 1.3 ON Z/OS 1.3 OR 1.400375800
+  ) bit(32);                                                            00375900
+                                                                        00376000
+ /* CONSTANTS FOR DFACPSDB                                       @LPA*/ 00376100
+ DECLARE                                                                00376200
+   DFACPSNO BIT(4) CONSTANT('0001'B), /* COPYSDB = NO            @LPA*/ 00376300
+   DFACPSYE BIT(4) CONSTANT('0010'B), /* COPYSDB = YES           @LPA*/ 00376400
+   DFACPSSM BIT(4) CONSTANT('0010'B), /* COPYSDB = SMALL (same as       00376500
+                                           COPYSDB = YES)        @LPA*/ 00376600
+   DFACPSIN BIT(4) CONSTANT('0011'B), /* COPYSDB = INPUT         @LPA*/ 00376700
+   DFACPSLA BIT(4) CONSTANT('0100'B); /* COPYSDB = LARGE         @LPA*/ 00376800
+ DECLARE 1 DFAELNM BASED(DFAELNMP), /* ELEMENT NAME STRUCTURE    @LQA*/ 00376900
+           3 DFAELNML FIXED(15), /* LENGTH OF SIGNIFICANT CHARACTERS    00377000
+                                   IN THE ELEMENT NAME, DFAELNAM @LQA*/ 00377100
+           3 DFAELTXT CHAR(22);  /* ELEMENT NAME TEXT. THIS FIELD MAY   00377200
+                                    CONTAIN LOWER CASE CHARACTERS@LQA*/ 00377300
+ /* Constants for Compression default                            @M8A*/ 00377400
+ Declare                                                                00377500
+    DFACMPTYPEGEN   Fixed(8) Constant(0) /* Generic compression      */ 00377600
+   ,DFACMPTYPETLRD  Fixed(8) Constant(1) /* Tailored compression     */ 00377700
+   ,DFACMPTYPEzEDCR Fixed(8) Constant(2) /* zEDC compression required*/ 00377800
+   ,DFACMPTYPEzEDCP Fixed(8) Constant(3) /* zEDC compression prefered*/ 00377900
+ ;                                                                      00378000

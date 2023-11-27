@@ -1,0 +1,587 @@
+*/********************************************************************/ 00010000
+*/* COMMON NAME: Exit Parameters                                     */ 00024990
+*/*                                                                  */ 00030000
+*/*01* COPYRIGHT= 5694-AO1 (c) Copyright IBM Corp. 1984, 2001        */ 00040000
+*/*                                                                  */ 00050000
+*/*    Licensed Materials - Property of IBM                          */ 00060000
+*/*                                                                  */ 00070000
+*/*                                                                  */ 00080000
+*/* STATUS = VERSION 1, RELEASE 2, LEVEL 0                           */ 00090000
+*/*                                                                  */ 00100000
+*/* CHANGE ACTIVITY =                                                */ 00110000
+*/* 96/09/13 XXX Initial version                              @23418N*/ 00120000
+*/* 96/11/12 XXX Fields for new exits                         @24227A*/ 00130000
+*/* 97/01/17 XXX Fields for new LRECL, RECFM                  @25068A*/ 00140000
+*/* 97/08/30 JAU Fields for socket support                    @27209A*/ 00150000
+*/* 97/09/26 JAS New bit for concatenation                    @27867A*/ 00160000
+*/* 00/06/06 JAU documentation update for options             @44464A*/ 00170000
+*/* 00/10/13 XXX protocol in exits                            @45368A*/ 00180000
+*/* 00/02/22 HL  ANFUEXTP OFF 1 BYTE AT XTPOPTNS              @48211A*/ 00190000
+*/*              WHEN ANFUCALL CALLS ANFUXRC1                 @48211A*/ 00200000
+*/* 01/06/19 HL  add XTP_FIRST_REC bit to indicate the first  @50068A*/ 00202000
+*/*              record of a dataset.                         @50068A*/ 00204000
+*/*              Provide JCL DEST, CLASS, and FORMS to exits  @50068A*/ 00206000
+*/* 10/01/01 HL  add e-mail support                           @48556A*/ 00208000
+*/* 04/14/02 JAU add non-blocking connect                     @53883A*/ 00209000
+*/* 06/10/04 JAU add version and system origination ids      OA07929A*/ 00209300
+*/*              add XTP_MAIL_INCOM                          OA07929A*/ 00209600
+*/* 09/14/04 HL  e-mail JCL keywords support,recompile only    08940A*/ 00209800
+*/* 01/04/05 JAU add interface to change document header and   08940A*/ 00209820
+*/*              trailer using the BDS/EDS exits             OA14034A*/ 00209840
+*/*          anfieopt and anfaopo don't need to be included in the   */ 00209860
+*/*          apar because the change does not affect any options in  */ 00209880
+*/*          the options mapping                                     */ 00209900
+*/* 03/06/2008 DDA add XTPMLINL in reserved space            OA24246A*/ 00209905
+*/*                                                                  */ 00209920
+*/********************************************************************/ 00210000
+*  %GOTO EXTPPRO; /*                                                    00220000
+          MACRO                                                         00230000
+          ANFUEXTP &LIST=NO                                             00240000
+*           */                                                          00250000
+*  %EXTPPRO: ;                                                          00260000
+*  %GOTO XTPDCL; /*                                                     00270000
+         PUSH  PRINT                                                    00280000
+         AIF   ('&LIST' EQ 'YES').MAP1                                  00290000
+*        PRINT OFF                                                      00300000
+.MAP1    ANOP                                                           00310000
+ANFUEXTP DSECT                                                          00320000
+         SPACE 1                                                        00330000
+XTPID    DS    CL4                  eye catcher - 'XTP '                00340000
+XTPSAVE  DS    18F                  save area for exit                  00350000
+XTPWORK1 DS    AL4                  work area for exit                  00360000
+XTPWORK2 DS    AL4                  work area for exit                  00370000
+XTPDSNAM DS    CL53                 data set name                       00380000
+XTPVERS  DS    BL1                  version: 0 - 705 or lower, 1 - 708  00392990
+         DS    CL2                                                      00395980
+XTPUSRID DS    CL8                  user id of submitter                00400000
+XTPSRCFL DS    BL1                  flags showing where values          00410000
+*                                   came from.  If the bit is on        00420000
+*                                   the value came from JCL on          00430000
+*                                   OUTPUT.  otherwise it came          00440000
+*                                   from ROUTING or defaults            00450000
+XTPSOPTS EQU   X'80'                PRTOPTNS from JCL                   00460000
+XTPSIPAD EQU   X'40'                IPADDR from JCL                     00470000
+XTPSPRTQ EQU   X'20'                PRTQUEUE from JCL                   00480000
+XTPSRTNS EQU   X'10'                RETAINS from JCL                    00490000
+XTPSRTNF EQU   X'08'                RETAINF from JCL                    00500000
+XTPSRTYL EQU   X'04'                RETRYL from JCL                     00510000
+XTPSRTYT EQU   X'02'                RETRYT from JCL                     00520000
+XTPSPORT EQU   X'01'                PORTNO from JCL           @27209A   00530000
+*                                                                       00540000
+XTPDSFLG DS    BL1                  data set information flags          00550000
+XTPDSCC  EQU   X'80'                data set has carriage ctl           00560000
+XTPDSHLD EQU   X'40'                release dataset as unprtble         00570000
+XTPDSTRM EQU   X'20'                release dataset                     00580000
+XTPDSRTG EQU   X'10'                reselect routing                    00590000
+XTPDSJOB EQU   X'08'                data set is first in job            00600000
+XTPDSJNW EQU   X'04'                data set is JES NEWS                00610000
+XTPDSEJB EQU   X'02'                data set is last in job             00620000
+XTPDSCON EQU   X'01'                data set is in a concaten'n @27867A 00630000
+*                                                                       00640000
+XTPRCFLG DS    BL1                  record flags                        00650000
+XTPRCTRN EQU   X'80'                translate record from exit          00660000
+XTPRCCC  EQU   X'40'                record from exit has                00670000
+*                                   carriage control                    00680000
+XTPRCORG EQU   X'20'                print original record as is         00690000
+XTPRDFST EQU   X'10'                first call for rec or ds            00700000
+XTPRLAST EQU   X'08'                last call                           00710000
+XTPRCEXT EQU   X'04'                print record from exit              00720000
+XTPRCDBL EQU   X'02'                record from exit is double byte     00730000
+XTPRCCCT EQU   X'01'                record cc type, on=machine cc       00735000
+*                                                                       00740000
+XTPMSGFL DS    BL1                  flags for message processing        00750000
+XTPM2CON EQU   X'80'                issue message to console            00760000
+XTPM2MDS EQU   X'40'                issue message to message data set   00770000
+*                                                                       00780000
+XTPERPTR DS    AL4                  pointer to record from exit         00790000
+XTPERLEN DS    F                    length of record from exit          00800000
+XTPPRPTR DS    AL4                  pointer to record from PW           00810000
+XTPPRLEN DS    F                    length of record from PW            00820000
+XTPOPTNM DS    CL16                 options entry name                  00830000
+XTPLOLEN DS    H                    LPR options length                  00840000
+XTPPQLEN DS    H                    PRTQUEUE length                     00850000
+XTPIALEN DS    H                    IPADDR length                       00860000
+XTPMSGLN DS    H                    exit message length                 00870000
+XTPPRTQU DS    CL256                print queue name                    00880000
+XTPIPADR DS    CL256                IP address                          00890000
+XTPRETNS DS    F                    successful retain time              00900000
+XTPRETNF DS    F                    unsuccessful retain time            00910000
+XTPRTRYL DS    F                    retry limit                         00920000
+XTPRTRYT DS    F                    retry time                          00930000
+XTPKEY   DS    0CL17                key for routing                     00940000
+XTPDEST  DS    CL8                  DEST                                00950000
+XTPCLASS DS    CL1                  CLASS                               00960000
+XTPFORMS DS    CL8                  FORMS                               00970000
+XTPRECFM DS    CL1                  record format from JFCB             00980000
+XTPMRECL DS    CL2                  data set record length   (LRECL)    00990000
+XTPSWBTP DS    AL4                pointer to SWBTU area                 01000000
+XTPSWBTL DS    F                  length of SWBTU area                  01010000
+XTPJSPAP DS    AL4                pointer to JSPA                       01020000
+XTPCOPYS DS    F                  copies                                01030000
+XTPMSGP  DS    AL4                  ptr to msg produced by exit         01040000
+XTPIPORT DS    F                  PORT number                 @27209A   01050000
+XTP_MISC_FLAGS DS     BL1         miscellaneous flags         @50068A   01061990
+XTP_FIRST_REC  EQU    X'80'       first record of a dataset   @50068A   01063980
+XTP_MAIL_INCOM EQU    X'40'       incomplete XTPIPADR address @07929A   01064880
+XTP_TRANS_DOC_HEADER EQU X'20'                               OA14034A   01065180
+XTP_TRANS_DOC_TRAILER EQU X'10'                              OA14034A   01065480
+         DS    CL1                RESERVED                     OA24246C 01065970
+XTPMLINL DS    CL2                0 or max line length in DS   OA24246A 01065975
+XTPBIFLG DS    BL1                input flags for block routine         01070000
+XTPBSLNT EQU   X'80'                slant the letters                   01080000
+XTPBPRFM EQU   X'40'                performance (narrow) letters        01090000
+XTPBLJST EQU   X'20'                left justify letters                01100000
+XTPBFRST EQU   X'10'                first call to blk for this string   01110000
+XTPBOFLG DS    BL1                output flags from block routine       01120000
+XTPBLAST EQU   X'80'                this is the last line               01130000
+XTPBLENG DS    BL1                length of output record               01140000
+         DS    CL1                reserved                              01150000
+XTPBSTRG DS    CL8                string to convert, blank pad          01160000
+XTPBOUTP DS    CL150              output string                         01170000
+XTPBWRKA DS    CL16               work area for block routine           01180000
+         DS    CL2                allignment               /* @27049A*/ 01190000
+XTPRSPCD DS    F                                           /* @27049A*/ 01200000
+XTP_ADDR_TYPE                  DS    F                      /* @FSSDA*/ 01210000
+XTP_ROUTING_KEY_TYPE           DS    F                      /* @FSSDA*/ 01220000
+XTP_FILTERING                  DS    F                     /* @44216A*/ 01230000
+XTP_NOT_FILTERING              EQU   0      /* resubmit_for_filtering*/ 01240000
+*                                           /* not specified         */ 01250000
+XTP_FILTERING_FIRST_PASS       EQU   1                                  01260000
+XTP_FILTERING_SECOND_PASS      EQU   2      /* misspelling    @48211M*/ 01270000
+XTP_JCL_KEY   DS    0CL17                key for routing   /* @50068A*/ 01280990
+XTP_JCL_DEST  DS    CL8                  DEST              /* @50068A*/ 01281980
+XTP_JCL_CLASS DS    CL1                  CLASS             /* @50068A*/ 01282970
+XTP_JCL_FORMS DS    CL8                  FORMS             /* @50068A*/ 01283960
+XTP_ORIGINATING_MVS_SYSTEM  DS CL8                         /*OA07929A*/ 01285940
+XTP_ORIGINATING_JES2_SYSTEM DS CL4                         /*OA07929A*/ 01286930
+                               DS    CL7                   /* @50068C*/ 01287920
+*/*-------------------------------------------------------------------  01290000
+*/*                                                                     01300000
+*/* The following fields replace the Version 1 Printway option strings  01310000
+*/*                                                                     01320000
+*/* To check if an IP Printway option was specified or has a valid      01330000
+*/*    value, check that the length field is not a -1. A value greater  01340000
+*/*    than 0 indicates that the value field has a valid value. The     01350000
+*/*    length field can be used to obtain the value for character       01360000
+*/*    strings.                                                         01370000
+*/*                                                                     01380000
+*/* To add an option, set the option value and then set the length of   01390000
+*/*    the option in the corresponding length field.                    01400000
+*/*                                                                     01410000
+*/*    examples:                                                        01420000
+*/*        to add the BURST indicator set XTPO_LPR_PRINT_BANNER value   01430000
+*/*        to XTPO_YES. Set XTPO_LPR_PRINT_BANNER_LEN to the length     01440000
+*/*        of XTPO_LPR_PRINT_BANNER to indicate there is a value in     01450000
+*/*        XTPO_LPR_PRINT_BANNER                                        01460000
+*/*                                                                     01470000
+*/*        to set text fields, like XTPO_LPR_BANNER_CLASS, set the      01480000
+*/*        length to the actual length of the string contained in the   01490000
+*/*        field.                                                       01500000
+*/*                                                                     01510000
+*/* Note: many of the fields have the constant values that can be       01520000
+*/*       assigned to the field declared following the field in the     01530000
+*/*       assembler mapping. There is no checking to determine          01540000
+*/*       if the value is in the correct range.                         01550000
+*/*                                                                     01560000
+*/* comments to the right of the fields indicates what the              01570000
+*/* corresponding version 1 Printway option string the field replaces.  01580000
+*/*                                                                     01590000
+*/*-------------------------------------------------------------------  01600000
+XTPOPTNS                       EQU   *                                  01610000
+XTPO_HEADER                    DS    CL4                                01620000
+XTPO_VERSION                   DS    CL2                                01630000
+XTPO_LENGTH                    DS    H                                  01640000
+XTPO_LPR_BANNER_CLASS_LEN      DS    F                                  01650000
+XTPO_LPR_BANNER_CLASS          DS    CL31    CLASS                      01660000
+                               DS    CL1     null termination           01670000
+XTPO_LPR_PRINT_BANNER_LEN      DS    F                                  01680000
+XTPO_LPR_PRINT_BANNER          DS    F       BURST                      01690000
+XTPO_COPIES_LEN                DS    CL8     reserved                   01700000
+*                                                                       01710000
+XTPO_DELETE_FORM_FEED_LEN      DS    F                                  01720000
+XTPO_DELETE_FORM_FEED          DS    F       DELFF                      01730000
+XTPO_DELETE_NONE               EQU   0                                  01740000
+XTPO_LEADING                   EQU   1       LEADING                    01750000
+XTPO_TRAILING                  EQU   2       TRAILING                   01760000
+XTPO_DELETE_BOTH               EQU   3       BOTH                       01770000
+*                                                                       01780000
+XTPO_DB_TRANSLATE_TABLE_LEN    DS    F                                  01790000
+XTPO_DB_TRANSLATE_TABLE        DS    F       double byte translate tbl  01800000
+XTPO_BIG5                      EQU   0                                  01810000
+XTPO_EUCKANJI                  EQU   1                                  01820000
+XTPO_HANGEUL                   EQU   2                                  01830000
+XTPO_IBMKANJI                  EQU   3                                  01840000
+XTPO_JIS78KJ_ASCII             EQU   4                                  01850000
+XTPO_JIS78KJ_JISROMAN          EQU   5                                  01860000
+XTPO_JIS83KJ_ASCII             EQU   6                                  01870000
+XTPO_JIS83KJ_JISROMAN          EQU   7                                  01880000
+XTPO_KSC5601                   EQU   8                                  01890000
+XTPO_SCHINESE                  EQU   9                                  01900000
+XTPO_SJISKANJI                 EQU   X'A'                               01910000
+XTPO_TCHINESE                  EQU   X'B'                               01920000
+*                                                                       01930000
+XTPO_LPR_PRINT_FUNCTION_LEN    DS    F                                  01940000
+XTPO_LPR_PRINT_FUNCTION        DS    CL1     FILTER                     01950000
+                               DS    CL3     alignment                  01960000
+*                                                                       01970000
+XTPO_CARRIAGE_CONTROL_LEN      DS    F                                  01980000
+XTPO_CARRIAGE_CONTROL_TYPE     DS    F                                  01990000
+XTPO_NO_CC                     EQU   0                                  02000000
+XTPO_MACHINE                   EQU   1                                  02010000
+XTPO_ANSI                      EQU   2                                  02020000
+*                                                                       02030000
+XTPO_PRINT_PAGE_HEADER_LEN     DS    F                                  02040000
+XTPO_PRINT_PAGE_HEADER         DS    F       HEADER                     02050000
+XTPO_DOCUMENT_CODE_PAGE_LEN    DS    F                                  02060000
+XTPO_DOCUMENT_CODE_PAGE        DS    CL16    ICONV code page the data   02070000
+*                                            set is encoded with        02080000
+                               DS    CL4     null termination           02090000
+XTPO_PRINTER_CODE_PAGE_LEN     DS    F                                  02100000
+XTPO_PRINTER_CODE_PAGE         DS    CL16    ICONV code page with which 02110000
+*                                            to encode the data set     02120000
+                               DS    CL4     null termination           02130000
+XTPO_INDENT_LEN                DS    F                                  02140000
+XTPO_INDENT                    DS    F       INDENT                     02150000
+XTPO_LPR_BANNER_JOB_NAME_LEN   DS    F                                  02160000
+XTPO_LPR_BANNER_JOB_NAME       DS    CL99    JOB                        02170000
+                               DS    CL1     null termination           02180000
+XTPO_PAGE_HEIGHT_LEN           DS    F                                  02190000
+XTPO_PAGE_HEIGHT               DS    F       LINE COUNT                 02200000
+XTPO_LINE_TERMINATION_LEN      DS    F                                  02210000
+XTPO_LINE_TERMINATION          DS    CL8     LINE TERMINATION           02220000
+*                                                                       02230000
+XTPO_LPR_MODE_LEN              DS    F                                  02240000
+XTPO_LPR_MODE                  DS    F       LPR mode                   02250000
+XTPO_CF_FIRST                  EQU   0       CFFIRST                    02260000
+XTPO_CF_LAST                   EQU   1                                  02270000
+XTPO_STREAMING                 EQU   2       STREAM                     02280000
+XTPO_TO_REMOTE_PSF             EQU   3       RECORD                     02290000
+*                                                                       02300000
+XTPO_MAXIMUM_DOCUMENT_SIZE_LEN DS    F                                  02310000
+XTPO_MAXIMUM_DOCUMENT_SIZE     DS    F       MAX SEND SIZE              02320000
+XTPO_LPR_FILE_NAME_LEN         DS    F                                  02330000
+XTPO_LPR_FILE_NAME             DS    CL31    NAME                       02340000
+                               DS    CL1     null termination           02350000
+XTPO_OMIT_LINE_TERMINATION_LEN DS    F                                  02360000
+XTPO_OMIT_LINE_TERMINATION     DS    F       NOEOFLF - NO END OF FILE   02370000
+*                                            LINE FEED                  02380000
+XTPO_SERVER_USER_OPTIONS_LEN   DS    F                                  02390000
+XTPO_SERVER_USER_OPTIONS       DS    CL255   pass thru (dash o values)  02400000
+                               DS    CL1     alignment                  02410000
+*                                                                       02420000
+XTPO_POSTSCRIPT_HEADER_LEN     DS    F                                  02430000
+XTPO_POSTSCRIPT_HEADER         DS    F                                  02440000
+XTPO_ADD_HEADER                EQU   1       POSTSCRIPT                 02450000
+XTPO_IGNORE_HEADER             EQU   2                                  02460000
+XTPO_LANDSCAPE                 EQU   3       LANDSCAPE                  02470000
+XTPO_ALWAYS_LANDSCAPE          EQU   4                                  02480000
+*                                                                       02490000
+XTPO_PRINTWAY_FORMATTING_LEN   DS    F                                  02500000
+XTPO_PRINTWAY_FORMATTING       DS    F                                  02510000
+XTPO_STANDARD_FORMATTING       EQU   0                                  02520000
+XTPO_TRANSLATE_ONLY            EQU   1                                  02530000
+XTPO_USE_FCB                   EQU   2       FCB                        02540000
+XTPO_FORMATTING_NONE           EQU   3       BINARY                     02550000
+*                                                                       02560000
+XTPO_SB_TRANSLATE_TABLE_LEN    DS    F                                  02570000
+XTPO_SB_TRANSLATE_TABLE        DS    CL31    XLATETABLE                 02580000
+                               DS    CL1                                02590000
+*                                                                       02600000
+XTPO_SHIFT_OUT_SHIFT_IN_LEN    DS    F                                  02610000
+XTPO_SHIFT_OUT_SHIFT_IN        DS    F       SOSIMODE                   02620000
+XTPO_SOSI_NONE                 EQU   0                                  02630000
+XTPO_SOSI_ASCII                EQU   1                                  02640000
+XTPO_SOSI_SPACE                EQU   2                                  02650000
+XTPO_SOSI_EBCDIC               EQU   3                                  02660000
+*                                                                       02670000
+XTPO_TRANSPARENT_DATA_CHAR_LEN DS    F                                  02680000
+XTPO_TRANSPARENT_DATA_CHAR     DS    CL1     TDCHAR                     02690000
+                               DS    CL3                                02700000
+XTPO_RESPONSE_TIMEOUT_LEN      DS    F                                  02710000
+XTPO_RESPONSE_TIMEOUT          DS    F       TIMEOUT                    02720000
+XTPO_LPR_TITLE_LEN             DS    F                                  02730000
+XTPO_LPR_TITLE                 DS    CL79    TITLE                      02740000
+                               DS    CL1     null termination           02750000
+XTPO_TOP_MARGIN_LEN            DS    F                                  02760000
+XTPO_TOP_MARGIN                DS    F       TOPMARGIN                  02770000
+XTPO_BOTTOM_MARGIN_LEN         DS    F                                  02780000
+XTPO_BOTTOM_MARGIN             DS    F       BOTTOMMARGIN               02790000
+XTPO_LPR_RESTRICT_PORTS_LEN    DS    F                                  02800000
+XTPO_LPR_RESTRICT_PORTS        DS    F       USERPORTS                  02810000
+XTPO_USER_LEN                  DS    F                                  02820000
+XTPO_USER                      DS    CL31    USER                       02830000
+                               DS    CL1     null termination           02840000
+XTPO_LPR_WIDTH_LEN             DS    F                                  02850000
+XTPO_LPR_WIDTH                 DS    F                                  02860000
+                               DS    CL64    RESERVED                   02870000
+XTPO_SCS_TOP_MARGIN_LEN        DS    F       COAX ATTACHMENT OPTIONS    02880000
+XTPO_SCS_TOP_MARGIN            DS    F                                  02890000
+XTPO_SCS_BOTTOM_MARGIN_LEN     DS    F                                  02900000
+XTPO_SCS_BOTTOM_MARGIN         DS    F                                  02910000
+XTPO_SCS_RIGHT_MARGIN_LEN      DS    F                                  02920000
+XTPO_SCS_RIGHT_MARGIN          DS    F                                  02930000
+XTPO_SCS_LEFT_MARGIN_LEN       DS    F                                  02940000
+XTPO_SCS_LEFT_MARGIN           DS    F                                  02950000
+XTPO_SCS_MAX_LINE_LENGTH_LEN   DS    F                                  02960000
+XTPO_SCS_MAX_LINE_LENGTH       DS    F                                  02970000
+XTPO_SCS_PAGE_LENGTH_LEN       DS    F                                  02980000
+XTPO_SCS_PAGE_LENGTH           DS    F                                  02990000
+XTPO_SCS_CHECKPOINT_PAGES_LEN  DS    F                                  03000000
+XTPO_SCS_CHECKPOINT_PAGES      DS    F                                  03010000
+XTPO_MAXIMUM_COPIES_LEN        DS    F                                  03020000
+XTPO_MAXIMUM_COPIES            DS    F                                  03030000
+XTPO_COPY_CONTROL_LEN          DS    F       OPTIMIZE COPIES for LPR    03040000
+XTPO_COPY_CONTROL              DS    F                                  03050000
+XTPO_VTAM_SEND_AS_TRANSPARENT_LEN DS F                     /* @50697A*/ 03062980
+XTPO_VTAM_SEND_AS_TRANSPARENT  DS    F                     /* @50697A*/ 03063970
+XTPO_CONNECTION_TIMEOUT_LEN    DS    F                     /* @53883A*/ 03064960
+XTPO_CONNECTION_TIMEOUT        DS    F                     /* @53883A*/ 03065950
+XTPO_RESERVED                  DS    CL32    RESERVED    /* @OA14034C*/ 03067430
+XTP_DOC_HEADER_PTR             DS    F                   /* @OA14034A*/ 03067920
+XTP_DOC_TRAILER_PTR            DS    F                   /* @OA14034A*/ 03068410
+XTP_DOC_HEADER_LENGTH          DS    H                   /* @OA14034A*/ 03068900
+XTP_DOC_TRAILER_LENGTH         DS    H                   /* @OA14034A*/ 03069390
+XTP_USE_DEST_CLASS_FORMS_EQU   EQU   0                     /*  @FSSDA*/ 03070000
+XTP_USE_PRINTER_NAME_EQU       EQU   1                     /*  @FSSDA*/ 03080000
+*/*------------------------------------------------------------------*/ 03090000
+*/* the following equates are now used by printway to show           */ 03100000
+*/* the attachment type and any related fields (like printqueue or   */ 03110000
+*/* port number).                                                    */ 03120000
+*/*------------------------------------------------------------------*/ 03130000
+XTP_IP_ADDR_EQU                EQU   0                      /* @FSSDA*/ 03140000
+XTP_URL_EQU                    EQU   1                      /* @FSSDA*/ 03150000
+XTP_DIRECT_SOCKET_EQU          EQU   2                     /* @45368A*/ 03160000
+XTP_SNA_EQU                    EQU   3                     /* @45368A*/ 03170000
+         POP   PRINT                                                    03180000
+         MEND  , -  */                                                  03190000
+*@SPACE;                                                                03200000
+*  %XTPDCL: ;                                                           03210000
+*DCL 1 ANFUEXTP BASED,              /*     EXIT PARAMETER AREA       */ 03220000
+*      3 XTPID    CHAR(4),          /* eye catcher - 'XTP '          */ 03230000
+*      3 XTPSAVE(18) FIXED(32),     /* save area for exit            */ 03240000
+*      3 XTPWORK1 PTR(31),          /* work area for exit            */ 03250000
+*      3 XTPWORK2 PTR(31),          /* work area for exit            */ 03260000
+*      3 XTPDSNAM CHAR(53),         /* data set name                 */ 03270000
+*      3 XTPVERS  FIXED(8),                              /* @OA07929A*/ 03282990
+*      3 *        CHAR(2),          /* reserved             @OA07929M*/ 03285980
+*      3 XTPUSRID CHAR(8),          /* user id of submitter          */ 03290000
+*      3 XTPSRCFL BIT(8),           /* flags showing where values       03300000
+*                                      came from.  If the bit is on     03310000
+*                                      the value came from JCL on       03320000
+*                                      OUTPUT.  otherwise it came       03330000
+*                                      from ROUTING or defaults      */ 03340000
+*        5 XTPSOPTS BIT(1),         /*   PRTOPTNS from JCL           */ 03350000
+*        5 XTPSIPAD BIT(1),         /*   IPADDR from JCL             */ 03360000
+*        5 XTPSPRTQ BIT(1),         /*   PRTQUEUE from JCL           */ 03370000
+*        5 XTPSRTNS BIT(1),         /*   RETAINS from JCL            */ 03380000
+*        5 XTPSRTNF BIT(1),         /*   RETAINF from JCL            */ 03390000
+*        5 XTPSRTYL BIT(1),         /*   RETRYL from JCL             */ 03400000
+*        5 XTPSRTYT BIT(1),         /*   RETRYT from JCL             */ 03410000
+*        5 XTPSPORT BIT(1),         /*   PORTNO from JCL      @27209A*/ 03420000
+*      3 XTPDSFLG BIT(8),           /* data set information flags    */ 03430000
+*        5 XTPDSCC  BIT(1),         /*   data set has carriage ctl   */ 03440000
+*        5 XTPDSHLD BIT(1),         /*   release dataset as unprtble */ 03450000
+*        5 XTPDSTRM BIT(1),         /*   release dataset             */ 03460000
+*        5 XTPDSRTG BIT(1),         /*   reselect routing            */ 03470000
+*        5 XTPDSJOB BIT(1),         /*   data set is first in job    */ 03480000
+*        5 XTPDSJNW BIT(1),         /*   data set is JES NEWS        */ 03490000
+*        5 XTPDSEJB BIT(1),         /*   data set is last in job     */ 03500000
+*        5 XTPDSCON BIT(1),         /*   data set in concat'n @27867A*/ 03510000
+*      3 XTPRCFLG BIT(8),           /* record flags                  */ 03520000
+*        5 XTPRCTRN BIT(1),         /*   translate record from exit  */ 03530000
+*        5 XTPRCCC  BIT(1),         /*   record from exit has           03540000
+*                                        carriage control            */ 03550000
+*        5 XTPRCORG BIT(1),         /*   print original record as is */ 03560000
+*        5 XTPRDFST BIT(1),         /*   first call for rec or ds    */ 03570000
+*        5 XTPRLAST BIT(1),         /*   last call                   */ 03580000
+*        5 XTPRCEXT BIT(1),         /*   print record from exit      */ 03590000
+*        5 XTPRCDBL BIT(1),         /*   record from exit is double     03600000
+*                                        byte                        */ 03610000
+*        5 XTPRCCCT BIT(1),         /*   record cc type,             */ 03625990
+*                                   /*    on = machine cc     @46331A*/ 03631980
+*      3 XTPMSGFL BIT(8),           /* flags for message processing  */ 03640000
+*        5 XTPM2CON BIT(1),         /*   issue message to console    */ 03650000
+*        5 XTPM2MDS BIT(1),         /*   issue message to message ds */ 03660000
+*      3 XTPERPTR PTR(31),          /* pointer to record from exit   */ 03670000
+*      3 XTPERLEN FIXED(32),        /* length of record from exit    */ 03680000
+*      3 XTPPRPTR PTR(31),          /* pointer to record from PW     */ 03690000
+*      3 XTPPRLEN FIXED(32),        /* length of record from PW      */ 03700000
+*      3 XTPOPTNM CHAR(16),         /* options entry name            */ 03710000
+*      3 XTPLOLEN FIXED(16),        /* LPR options length            */ 03720000
+*      3 XTPPQLEN FIXED(16),        /* PRTQUEUE length               */ 03730000
+*      3 XTPIALEN FIXED(16),        /* IPADDR length                 */ 03740000
+*      3 XTPMSGLN FIXED(16),        /* exit message length           */ 03750000
+*      3 XTPPRTQU CHAR(256),        /* print queue name              */ 03760000
+*      3 XTPIPADR CHAR(256),        /* IP address                    */ 03770000
+*      3 XTPRETNS FIXED(32),        /* successful retain time        */ 03780000
+*      3 XTPRETNF FIXED(32),        /* unsuccessful retain time      */ 03790000
+*      3 XTPRTRYL FIXED(32),        /* retry limit                   */ 03800000
+*      3 XTPRTRYT FIXED(32),        /* retry time                    */ 03810000
+*      3 XTPKEY,                    /* key for routing               */ 03820000
+*        5 XTPDEST  CHAR(8),        /*   DEST                        */ 03830000
+*        5 XTPCLASS CHAR(1),        /*   CLASS                       */ 03840000
+*        5 XTPFORMS CHAR(8),        /*   FORMS                       */ 03850000
+*      3 XTPRECFM CHAR(1),          /* record format from JFCB       */ 03860000
+*      3 XTPMRECL CHAR(2),          /* data set record length(LRECL) */ 03870000
+*      3 XTPSWBTP PTR(31),          /* pointer to SWBTU area         */ 03880000
+*      3 XTPSWBTL FIXED(32),        /* length of SWBTU area          */ 03890000
+*      3 XTPJSPAP PTR(31),          /* pointer to JSPA               */ 03900000
+*      3 XTPCOPYS FIXED(32),        /* copies                        */ 03910000
+*      3 XTPMSGP  PTR(31),          /* ptr to msg produced by exit   */ 03920000
+*      3 XTPIPORT FIXED(32),        /* PORTNO value           @27209A*/ 03930000
+*      3 XTP_MISC_FLAGS,            /* miscellaneous flags    @50068A*/ 03945990
+*        5 XTP_FIRST_REC BIT(1),    /* first record of a      @50068A*/ 03951980
+*                                   /* dataset                @50068A*/ 03957970
+*        5 XTP_MAIL_INCOM BIT(1),   /* addresses in XTPIPADR  @07929A*/ 03964950
+*                                   /* is incomplete.         @07929A*/ 03965940
+*        5 XTP_TRANS_DOC_HEADER  BIT(1), /* translate doc header     */ 03967420
+*                                   /*                      @OA14034A*/ 03967910
+*        5 XTP_TRANS_DOC_TRAILER BIT(1), /* translate doc trailer    */ 03968400
+*                                   /*                      @OA14034A*/ 03968890
+*        5 *        BIT(4),         /* reserved               @50068A*/ 03969380
+*      3 *        CHAR(1),          /* reserved              OA24246C*/ 03969950
+*      3 XTPMLINL CHAR(2),          /* 0 or max line len     OA24246A*/ 03969955
+*      3 XTPBIFLG BIT(8),           /* input flags for block routine */ 03980000
+*        5 XTPBSLNT BIT(1),         /*   slant the letters           */ 03990000
+*        5 XTPBPRFM BIT(1),         /*   performance (narrow) letters*/ 04000000
+*        5 XTPBLJST BIT(1),         /*   left justify letters        */ 04010000
+*        5 XTPBFRST BIT(1),         /* first call to blk for this       04020000
+*                                      string                        */ 04030000
+*        5 *        BIT(4),         /*   reserved                    */ 04040000
+*      3 XTPBOFLG BIT(8),           /* output flags from block rtn   */ 04050000
+*        5 XTPBLAST BIT(1),         /*   this is the last line       */ 04060000
+*        5 *        BIT(7),         /*   reserved                    */ 04070000
+*      3 XTPBLENG FIXED(8),         /* length of output record       */ 04080000
+*      3 *        CHAR(1),          /* reserved                      */ 04090000
+*      3 XTPBSTRG CHAR(8),          /* string to convert, blank pad  */ 04100000
+*      3 XTPBOUTP CHAR(150),        /* output string                 */ 04110000
+*      3 XTPBWRKA CHAR(16),         /* work area for block routine   */ 04120000
+*      3 *        CHAR(2),          /* allignment             @27049A*/ 04130000
+*      3 XTPRSPCD FIXED(31),                               /* @27049A*/ 04140000
+*      3 XTP_ADDR_TYPE                     FIXED(31),       /* @FSSDA*/ 04150000
+*      3 XTP_ROUTING_KEY_TYPE              FIXED(31),       /* @FSSDA*/ 04160000
+*      3 XTP_FILTERING                     FIXED(31),      /* @44216A*/ 04170000
+*      3 XTP_JCL_KEY,              /* key for routing from JCL@50068A*/ 04180990
+*        5 XTP_JCL_DEST  CHAR(8),   /*   DEST from JCL        @50068A*/ 04181980
+*        5 XTP_JCL_CLASS CHAR(1),   /*   CLASS from JCL       @50068A*/ 04182970
+*        5 XTP_JCL_FORMS CHAR(8),   /*   FORMS from JCL       @50068A*/ 04183960
+*      3 XTP_ORIGINATING_MVS_SYSTEM CHAR(8),             /* @OA07929A*/ 04185940
+*      3 XTP_ORIGINATING_JES2_SYSTEM CHAR(4),            /* @OA07929A*/ 04186930
+*      3 *        CHAR(7),                               /* @OA07929M*/ 04187920
+*      3 XTPOPTNS,                  /* new format for options  @FSSDA*/ 04190000
+*        5  XTPO_HEADER                    CHAR(4),                     04200000
+*        5  XTPO_VERSION                   CHAR(2),                     04210000
+*        5  XTPO_LENGTH                    FIXED(16),                   04220000
+*        5  XTPO_VALUES,                                                04230000
+*          7  XTPO_LPR_BANNER_CLASS_LEN      FIXED(31),                 04240000
+*          7  XTPO_LPR_BANNER_CLASS          CHAR(31),                  04250000
+*          7  *                              CHAR(1),                   04260000
+*          7  XTPO_LPR_PRINT_BANNER_LEN      FIXED(31),                 04270000
+*          7  XTPO_LPR_PRINT_BANNER          FIXED(31),                 04280000
+*          7  *                              CHAR(8),                   04290000
+*          7  XTPO_DELETE_FORM_FEED_LEN      FIXED(31),                 04300000
+*          7  XTPO_DELETE_FORM_FEED          FIXED(31),                 04310000
+*          7  XTPO_DB_TRANSLATE_TABLE_LEN    FIXED(31),                 04320000
+*          7  XTPO_DB_TRANSLATE_TABLE        FIXED(31),                 04330000
+*          7  XTPO_LPR_PRINT_FUNCTION_LEN    FIXED(31),                 04340000
+*          7  XTPO_LPR_PRINT_FUNCTION        CHAR(1),                   04350000
+*          7  *                              CHAR(1),  /* null term  */ 04360000
+*          7  *                              CHAR(2),  /* alignment  */ 04370000
+*          7  XTPO_CARRIAGE_CONTROL_LEN      FIXED(31),                 04380000
+*          7  XTPO_CARRIAGE_CONTROL_TYPE     FIXED(31),                 04390000
+*          7  XTPO_PRINT_PAGE_HEADER_LEN     FIXED(31),                 04400000
+*          7  XTPO_PRINT_PAGE_HEADER         FIXED(31),                 04410000
+*          7  XTPO_DOCUMENT_CODE_PAGE_LEN    FIXED(31),                 04420000
+*          7  XTPO_DOCUMENT_CODE_PAGE        CHAR(16),                  04430000
+*          7  *                              CHAR(1),  /* null term  */ 04440000
+*          7  *                              CHAR(3),  /* alignment  */ 04450000
+*          7  XTPO_PRINTER_CODE_PAGE_LEN     FIXED(31),                 04460000
+*          7  XTPO_PRINTER_CODE_PAGE         CHAR(16),                  04470000
+*          7  *                              CHAR(4),  /* null term  */ 04480000
+*          7  XTPO_INDENT_LEN                FIXED(31),                 04490000
+*          7  XTPO_INDENT                    FIXED(31),                 04500000
+*          7  XTPO_LPR_BANNER_JOB_NAME_LEN   FIXED(31),                 04510000
+*          7  XTPO_LPR_BANNER_JOB_NAME       CHAR(99),                  04520000
+*          7  *                              CHAR(1),  /* null term  */ 04530000
+*          7  XTPO_PAGE_HEIGHT_LEN           FIXED(31),                 04540000
+*          7  XTPO_PAGE_HEIGHT               FIXED(31),                 04550000
+*          7  XTPO_LINE_TERMINATION_LEN      FIXED(31),                 04560000
+*          7  XTPO_LINE_TERMINATION          CHAR(8),                   04570000
+*          7  XTPO_LPR_MODE_LEN              FIXED(31),                 04580000
+*          7  XTPO_LPR_MODE                  FIXED(31),                 04590000
+*          7  XTPO_MAXIMUM_DOCUMENT_SIZE_LEN FIXED(31),                 04600000
+*          7  XTPO_MAXIMUM_DOCUMENT_SIZE     FIXED(31),                 04610000
+*          7  XTPO_LPR_FILE_NAME_LEN         FIXED(31),                 04620000
+*          7  XTPO_LPR_FILE_NAME             CHAR(31),                  04630000
+*          7  *                              CHAR(1),  /* Null term   */04640000
+*          7  XTPO_OMIT_LINE_TERMINATION_LEN FIXED(31),                 04650000
+*          7  XTPO_OMIT_LINE_TERMINATION     FIXED(31),                 04660000
+*          7  XTPO_SERVER_USER_OPTIONS_LEN   FIXED(31),                 04670000
+*          7  XTPO_SERVER_USER_OPTIONS       CHAR(255),                 04680000
+*          7  *                              CHAR(1),                   04690000
+*          7  XTPO_POSTSCRIPT_HEADER_LEN     FIXED(31),                 04700000
+*          7  XTPO_POSTSCRIPT_HEADER         FIXED(31),                 04710000
+*          7  XTPO_PRINTWAY_FORMATTING_LEN   FIXED(31),                 04720000
+*          7  XTPO_PRINTWAY_FORMATTING       FIXED(31),                 04730000
+*          7  XTPO_SB_TRANSLATE_TABLE_LEN    FIXED(31),                 04740000
+*          7  XTPO_SB_TRANSLATE_TABLE        CHAR(31),                  04750000
+*          7  *                              CHAR(1),  /* null term  */ 04760000
+*          7  XTPO_SHIFT_OUT_SHIFT_IN_LEN    FIXED(31),                 04770000
+*          7  XTPO_SHIFT_OUT_SHIFT_IN        FIXED(31),                 04780000
+*          7  XTPO_TRANSPARENT_DATA_CHAR_LEN FIXED(31),                 04790000
+*          7  XTPO_TRANSPARENT_DATA_CHAR     CHAR(1),                   04800000
+*          7  *                              CHAR(1),  /* null term  */ 04810000
+*          7  *                              CHAR(2),  /* alignment  */ 04820000
+*          7  XTPO_RESPONSE_TIMEOUT_LEN      FIXED(31),                 04830000
+*          7  XTPO_RESPONSE_TIMEOUT          FIXED(31),                 04840000
+*          7  XTPO_LPR_TITLE_LEN             FIXED(31),                 04850000
+*          7  XTPO_LPR_TITLE                 CHAR(79),                  04860000
+*          7  *                              CHAR(1),  /* null term  */ 04870000
+*          7  XTPO_TOP_MARGIN_LEN            FIXED(31),                 04880000
+*          7  XTPO_TOP_MARGIN                FIXED(31),                 04890000
+*          7  XTPO_BOTTOM_MARGIN_LEN         FIXED(31),                 04900000
+*          7  XTPO_BOTTOM_MARGIN             FIXED(31),                 04910000
+*          7  XTPO_LPR_RESTRICT_PORTS_LEN    FIXED(31),                 04920000
+*          7  XTPO_LPR_RESTRICT_PORTS        FIXED(31),                 04930000
+*          7  XTPO_USER_LEN                  FIXED(31),                 04940000
+*          7  XTPO_USER                      CHAR(31),                  04950000
+*          7  *                              CHAR(1),  /* null term  */ 04960000
+*          7  XTPO_LPR_WIDTH_LEN             FIXED(31),                 04970000
+*          7  XTPO_LPR_WIDTH                 FIXED(31),                 04980000
+*          7  *                              CHAR(64), /* RESERVED   */ 04990000
+*          7  XTPO_SCS_TOP_MARGIN_LEN        FIXED(31),                 05000000
+*          7  XTPO_SCS_TOP_MARGIN            FIXED(31),                 05010000
+*          7  XTPO_SCS_BOTTOM_MARGIN_LEN     FIXED(31),                 05020000
+*          7  XTPO_SCS_BOTTOM_MARGIN         FIXED(31),                 05030000
+*          7  XTPO_SCS_RIGHT_MARGIN_LEN      FIXED(31),                 05040000
+*          7  XTPO_SCS_RIGHT_MARGIN          FIXED(31),                 05050000
+*          7  XTPO_SCS_LEFT_MARGIN_LEN       FIXED(31),                 05060000
+*          7  XTPO_SCS_LEFT_MARGIN           FIXED(31),                 05070000
+*          7  XTPO_SCS_MAX_LINE_LENGTH_LEN   FIXED(31),                 05080000
+*          7  XTPO_SCS_MAX_LINE_LENGTH       FIXED(31),                 05090000
+*          7  XTPO_SCS_PAGE_LENGTH_LEN       FIXED(31),                 05100000
+*          7  XTPO_SCS_PAGE_LENGTH           FIXED(31),                 05110000
+*          7  XTPO_SCS_CHECKPOINT_PAGES_LEN  FIXED(31),                 05120000
+*          7  XTPO_SCS_CHECKPOINT_PAGES      FIXED(31),                 05130000
+*          7  XTPO_MAXIMUM_COPIES_LEN        FIXED(31),                 05140000
+*          7  XTPO_MAXIMUM_COPIES            FIXED(31),                 05150000
+*          7  XTPO_COPY_CONTROL_LEN          FIXED(31),                 05160000
+*          7  XTPO_COPY_CONTROL              FIXED(31),                 05170000
+*          7  XTPO_VTAM_SEND_AS_TRANSPARENT_LEN FIXED(31), /* @50697A*/ 05181990
+*          7  XTPO_VTAM_SEND_AS_TRANSPARENT  FIXED(31),    /* @50697A*/ 05183980
+*          7  XTPO_CONNECTION_TIMEOUT_LEN    FIXED(31),    /* @53883A*/ 05186960
+*          7  XTPO_CONNECTION_TIMEOUT        FIXED(31),    /* @53883A*/ 05187950
+*          7  XTPO_RESERVED                  CHAR(32),   /* @OA14034C*/ 05189030
+*      3 XTP_DOC_HEADER_PTR                  FIXED(31),  /* @OA14034A*/ 05189120
+*      3 XTP_DOC_TRAILER_PTR                 FIXED(31),  /* @OA14034A*/ 05189210
+*      3 XTP_DOC_HEADER_LENGTH               FIXED(15),  /* @OA14034A*/ 05189300
+*      3 XTP_DOC_TRAILER_LENGTH              FIXED(15);  /* @OA14034A*/ 05189390
+*                                                                       05190000
+*DCL XTPIDC CHAR(4) CONSTANT('XTP '); /* eye catcher constant        */ 05200000
+*DCL XTP_USE_DEST_CLASS_FORMS_EQU CONSTANT(0);             /*  @FSSDA*/ 05210000
+*DCL XTP_USE_PRINTER_NAME_EQU     CONSTANT(1);             /*  @FSSDA*/ 05220000
+*DCL XTP_IP_ADDR_EQU              CONSTANT(0);              /* @FSSDA*/ 05230000
+*DCL XTP_URL_EQU                  CONSTANT(1);              /* @FSSDA*/ 05240000
+*DCL XTP_DIRECT_SOCKETS_EQU       CONSTANT(2);             /* @45368A*/ 05250000
+*DCL XTP_SNA_EQU                  CONSTANT(3);             /* @45368A*/ 05260000
+*DCL XTP_EMAIL_EQU                CONSTANT(4);             /* @48556A*/ 05261000

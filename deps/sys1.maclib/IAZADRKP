@@ -1,0 +1,837 @@
+*        %GOTO ADRKPPLX;          /* Bilingual Mapping Macro            00020000
+         MACRO -- IAZADRKP Address keep service Macro                   00030000
+&LABEL   IAZADRKP &FUNC=,          Function requested                  C00040000
+               &ADDRESS=,          Input address                       C00050000
+               &TOKEN=,            Input token                         C00060000
+               &TYPE=,             8 character data type               C00070000
+               &OWNER=,            Owner of storage for add            C00080000
+               &AUTH=,             1 byte PSW key/PROB indicator       C00090000
+               &MAXFSA=,           Max number of FSAs for BLDFSVT      C00100000
+               &FSVTLOC=           24!31 bit loc of FSVT for BLDFSVT    00110000
+         AGO   .SKIPPREF                                                00120000
+*          */                                                           00130000
+*  %ADRKPPLX: ;                                                   /* */ 00140000
+*/**** START OF SPECIFICATIONS *******************************          00150000
+.SKIPPREF ANOP                                                          00160000
+.****** START OF SPECIFICATIONS **************************************  00170000
+.****PROPRIETARY-STATEMENT********************************************  00180000
+.*01* PROPRIETARY STATEMENT:                                         *  00190000
+.*                                                                   *  00200000
+.*   LICENSED MATERIALS-PROPERTY OF IBM                              *  00210000
+.*   5650-ZOS Copyright IBM Corp. 2017, 2019                         *  00220000
+.*                                                                   *  00230000
+.*   STATUS:  HBB77C0                                                *  00240000
+.*                                                                   *  00250000
+.****END-OF-PROPRIETARY-STATEMENT*************************************  00260000
+.*                                                           *          00270000
+.*01* DESCRIPTIVE NAME: Invoke address keep service IAZAKSRV *          00280000
+.*                                                           *          00290000
+.*01* FUNCTION:                                              *          00300000
+.*                                                           *          00310000
+.*       The IAZADRKP macro sets up the parameters necessary *          00320000
+.*       to invoke the address keep service. The macro sets  *          00330000
+.*       up the calling sequence to invoke the service to    *          00340000
+.*       perform the function requested.                     *          00350000
+.*                                                           *          00360000
+.*       The following services are supported:               *          00370000
+.*       ADD -      Given an address, a type value, and an   *          00380000
+.*                  optional authorization flag, the address *          00390000
+.*                  is stored in the keep.  A token is       *          00400000
+.*                  returned that can later be used to       *          00410000
+.*                  retrieve or delete the address from the  *          00420000
+.*                  keep.  The address and type value are 8  *          00430000
+.*                  bytes long.  The authorization flag      *          00440000
+.*                  corresponds to the PSW PSWBYTE1 field.   *          00450000
+.*       RETRIEVE - Given a token value (4 byte) and a type  *          00460000
+.*                  value, retrieve the address stored in    *          00470000
+.*                  the keep.                                *          00480000
+.*                  The token is used to locate an entry in  *          00490000
+.*                  the keep.  If the type matches, then the *          00500000
+.*                  address from the entry is returned to    *          00510000
+.*                  the caller.                              *          00520000
+.*       DELETE -   Given a token value (4 byte), a type     *          00530000
+.*                  value and an optional authorization      *          00540000
+.*                  byte, remove the keep entry that is      *          00550000
+.*                  represented by the token.  The address   *          00560000
+.*                  associated with the entry is returned to *          00570000
+.*                  the caller.                              *          00580000
+.*                  The token is used to locate an entry in  *          00590000
+.*                  the keep.  The type value specified must *          00600000
+.*                  also match the value in the keep.  If a  *          00610000
+.*                  passed auth value indicates the caller   *          00620000
+.*                  is not authorized (PSWKEY8 or PSWPROB    *          00630000
+.*                  set) then the keep must indicate this is *          00640000
+.*                  an unauthorized caller.  If an           *          00650000
+.*                  appropriate entry is found, the address  *          00660000
+.*                  value is extracted and returned to the   *          00670000
+.*                  caller and the keep entry is marked as   *          00680000
+.*                  free.                                    *          00690000
+.*                                                           *          00700000
+.*       The following internal services are supported (to   *          00710000
+.*       only be used by JES code):                          *          00720000
+.*       BLDFSVT  - Build or expand the FSVT data area used  *          00730000
+.*                  to anchor the address keep.  The size    *          00740000
+.*                  required for the FSVT (in terms of the   *          00750000
+.*                  number of entries) is passed as input.   *          00760000
+.*       FREFSVT  - Free the FSVT data area.  The current    *          00770000
+.*                  FSVT is freed and it is replaced with    *          00780000
+.*                  a minimal FSVT (as required).            *          00790000
+.*                                                           *          00800000
+.*01* EXTERNAL CLASSIFICATION:  PSPI                         *          00810000
+.*01* END OF EXTERNAL CLASSIFICATION:                        *          00820000
+.*                                                           *          00830000
+.*01* COMPONENT ID:  JES Common (SC141)                      *          00840000
+.*                                                           *          00850000
+.*01* PARAMETERS:                                            *          00860000
+.*                                                           *          00870000
+.*       FUNC=     Function being requested.                 *          00880000
+.*                 Supported functions are:                  *          00890000
+.*                   ADD      - Add passed address to keep   *          00900000
+.*                   RETRIEVE - Retrieve an address          *          00910000
+.*                   DELETE   - Remove an address from keep  *          00920000
+.*                 Internal functions supported are:         *          00930000
+.*                   BLDFSVT  - Build/resize the FSVT        *          00940000
+.*                   FREFSVT  - Free the FSVT                *          00950000
+.*                 This is a required parameter.             *          00960000
+.*                                                           *          00970000
+.*       ADDRESS=  For the ADD function, the value           *          00980000
+.*                 to be stored in the keep.  The            *          00990000
+.*                 address is treated as an 8 byte           *          01000000
+.*                 value.                                    *          01010000
+.*                 This parameter is required for ADD        *          01020000
+.*                 requests.                                 *          01030000
+.*                                                           *          01040000
+.*       TOKEN=    For the RETRIEVE and DELETE functions,    *          01050000
+.*                 the token returned from an ADD request.   *          01060000
+.*                 This parameter is required for RETRIEVE   *          01070000
+.*                 and DELETE requests.                      *          01080000
+.*                                                           *          01090000
+.*       TYPE=     An 8 character value that identifies the  *          01100000
+.*                 address type.  The value specified on     *          01110000
+.*                 an ADD request must match the value       *          01120000
+.*                 passed on a subsequent RETRIEVE or DELETE *          01130000
+.*                 request.  This is a required parameter.   *          01140000
+.*                                                           *          01150000
+.*       OWNER=    TASK!STEP Is the storage associated with  *          01160000
+.*                 the request owned by the current TCB or   *          01170000
+.*                 the current job step task (TCB).  This    *          01180000
+.*                 keyword is only valid for FUNC=ADD.       *          01190000
+.*                 In cross memory mode, the owner is forced *          01200000
+.*                 to STEP (in the primary address space)    *          01210000
+.*                 Default is OWNER=TASK.                    *          01220000
+.*                                                           *          01230000
+.*       AUTH=     One byte indicator of PSW key and problem *          01240000
+.*                 program state (PSW field PSWBYTE1).  If   *          01250000
+.*                 not specified, then it is assumed to be   *          01260000
+.*                 an authorized caller.  Addresses added by *          01270000
+.*                 authorized requests can only be deleted   *          01280000
+.*                 by authorized callers.                    *          01290000
+.*                 AUTH can be specified as YES or 0 to      *          01300000
+.*                 indicate an authorized caller.  AUTH=NO   *          01310000
+.*                 will indicate a non-authorized caller     *          01320000
+.*                 (pass a value of FF).                     *          01330000
+.*                 This parameter is optional on ADD and     *          01340000
+.*                 DELETE requests.  If not specified, it    *          01350000
+.*                 defaults to zero (authorized).            *          01360000
+.*                                                           *          01370000
+.*       MAXFSA=   The maximum number of FSAs that a new     *          01380000
+.*                 FSVT must support.  Required for internal *          01390000
+.*                 function BLDFSVT.                         *          01400000
+.*                                                           *          01410000
+.*       FSVTLOC=  Where the FSVT should be obtained (24 or  *          01420000
+.*                 31 bit storage).  Can be specified as     *          01430000
+.*                 (field,bit).  If bit is on, then 31 is    *          01440000
+.*                 assumed.  If bit is off, then 24 is       *          01450000
+.*                 assumed.                                  *          01460000
+.*                 In PL/X, if a field name is specified,    *          01470000
+.*                 its value is checked and if 0 then 24 is  *          01480000
+.*                 assumed, otherwise 31 is assumed.         *          01490000
+.*                 Required for internal function BLDFSVT.   *          01500000
+.*                                                           *          01510000
+.*       RETCODE=  PL/X-only keyword indicating where        *          01520000
+.*                 to place the return code.                 *          01530000
+.*                 This is an optional parameter.            *          01540000
+.*                                                           *          01550000
+.*01* SYNTAX:                                                *          01560000
+.*                                                           *          01570000
+.*02*  ASM:                                                  *          01580000
+.*                                                           *          01590000
+.*         IAZADRKP FUNC=ADD,                                *          01600000
+.*               OWNER=TASK!STEP,                            *          01610000
+.*               ADDRESS=,                                   *          01620000
+.*               TYPE=,                                      *          01630000
+.*               AUTH=                                       *          01640000
+.*                                                           *          01650000
+.*         IAZADRKP FUNC=RETRIEVE or DELETE,                 *          01660000
+.*               TOKEN=,                                     *          01670000
+.*               TYPE=,                                      *          01680000
+.*               AUTH=                                       *          01690000
+.*                                                           *          01700000
+.*        Invocation return code is in register 15.          *          01710000
+.*                                                           *          01720000
+.*02*  PL/X:                                                 *          01730000
+.*                                                           *          01740000
+.*      DCL CVTPTR PTR.                                      *          01750000
+.*      %INCLUDE SYSLIB(CVT);                                *          01760000
+.*      %INCLUDE SYSLIB(IEFJESCT);                           *          01770000
+.*      %INCLUDE SYSLIB(IAZFSIB);                            *          01780000
+.*                                                           *          01790000
+.*      ?IAZADRKP FUNC(ADD)                                  *          01800000
+.*                OWNER()                                    *          01810000
+.*                ADDRESS()                                  *          01820000
+.*                TYPE()                                     *          01830000
+.*                AUTH()                                     *          01840000
+.*                RETCODE()                                  *          01850000
+.*                                                           *          01860000
+.*      ?IAZADRKP FUNC()  - RETRIEVE or DELETE               *          01870000
+.*                TOKEN()                                    *          01880000
+.*                TYPE()                                     *          01890000
+.*                AUTH()                                     *          01900000
+.*                RETCODE()                                  *          01910000
+.*                                                           *          01920000
+.*        Invocation return code is in register 15, and in   *          01930000
+.*          parameter RETCODE, if supplied.                  *          01940000
+.*                                                           *          01950000
+.*                                                           *          01960000
+.*01*  REGISTER USAGE (ENTRY/EXIT):                          *          01970000
+.*                                                           *          01980000
+.*     REG       VALUE ON ENTRY       VALUE ON EXIT          *          01990000
+.*               TO MACRO             FROM MACRO             *          02000000
+.*                                                           *          02010000
+.*     R0        n/a                  unchanged              *          02020000
+.*    AR0        n/a                  unchanged              *          02030000
+.*     R1        n/a                  Token - ADD            *          02040000
+.*                                    Address - RETRIEVE or  *          02050000
+.*                                              DELETE       *          02060000
+.*                                    FSVT address - BLDFSVT *          02070000
+.*    AR1        n/a                  destroyed              *          02080000
+.*     R2-R13    n/a                  unchanged              *          02090000
+.*     R14       n/a                  destroyed              *          02100000
+.*     R15       n/a                  return code            *          02110000
+.*    AR15       n/a                  destroyed              *          02120000
+.*                                                           *          02130000
+.*                                                           *          02140000
+.*01*  RETURN CODES (R15 ON EXIT):                           *          02150000
+.*                                                           *          02160000
+.*       0  - Function completed successfully                *          02170000
+.*       4  - Retrieve/Delete - Entry not found              *          02180000
+.*       8  - Retrieve/Delete - Type does not match          *          02190000
+.*       12 - Retrieve/Delete - Auth state error             *          02200000
+.*       16 - Retrieve/Delete - Owning task no longer exists *          02210000
+.*       20 - Add/BLDFSVT     - Unable to obtain storage     *          02220000
+.*       24 - Unknown function                               *          02230000
+.*                                                           *          02240000
+.*01*  ENVIRONMENT:                                          *          02250000
+.*                                                           *          02260000
+.*       User environment. Local lock used to serialize.     *          02270000
+.*                                                           *          02280000
+.*       IAZADRKP service should be called in any access     *          02290000
+.*       mode, in 31 or 64 bit addressing mode               *          02300000
+.*                                                           *          02310000
+.*       Minimum authorization:                              *          02320000
+.*                 Supervisor state or authorized key        *          02330000
+.*                                                           *          02340000
+.*       Dispatchable unit mode:                             *          02350000
+.*                 Task or SRB mode                          *          02360000
+.*                                                           *          02370000
+.*       Cross Memory Mode: Any (keep is in Primary space)   *          02380000
+.*                                                           *          02390000
+.*       AMODE:    31 or 64 bit.                             *          02400000
+.*                                                           *          02410000
+.*       ASC mode: Any                                       *          02420000
+.*                                                           *          02430000
+.*       Locks:    n/a (obtains local lock)                  *          02440000
+.*                                                           *          02450000
+.*01*  NOTE:                                                 *          02460000
+.*                                                           *          02470000
+.*     - If IAZADRKP is invoked while an EUT FRR is active   *          02480000
+.*       the request will be rejected                        *          02490000
+.*                                                           *          02500000
+.****** END OF SPECIFICATIONS ********************************          02510000
+.*                                                                      02520000
+.********************************************************************** 02530000
+.* CHANGE ACTIVITY:                                                   * 02540000
+.*                                                                    * 02550000
+.*                                                                    * 02560000
+.* A000000-999999    Created for z/OS APAR OA54595               @Z24BK 02570000
+.********************************************************************** 02580000
+.*                                                                      02590000
+.*----------------------------------------------------------*           02600000
+.*       Define global environment variables and set them   *           02610000
+.*----------------------------------------------------------*           02620000
+         GBLC  &SYSASCE,&SYSAM64                                        02630000
+         SYSSTATE TEST                                                  02640000
+&L       SETC  'L'                                                      02650000
+&LHI     SETC  'LHI'                                                    02660000
+         AIF   ('&SYSAM64' NE 'YES').NOT64B                             02670000
+&L       SETC  'LLGT'                                                   02680000
+&LHI     SETC  'LGHI'                                                   02690000
+.NOT64B  ANOP                                                           02700000
+.*                                                                      02710000
+.*----------------------------------------------------------*           02720000
+.*       Validate and process FUNC= parameter               *           02730000
+.*----------------------------------------------------------*           02740000
+.*                                                                      02750000
+         AIF   ('&FUNC' EQ 'ADD').FNCADD,                              C02760000
+               ('&FUNC' EQ 'RETRIEVE').FNCRET,                         C02770000
+               ('&FUNC' EQ 'DELETE').FNCDEL,                           C02780000
+               ('&FUNC' EQ 'BLDFSVT').FNCBLD,                          C02790000
+               ('&FUNC' EQ 'FREFSVT').FNCFRE                            02800000
+         MNOTE 8,'IAZADRKP - FUNC=&FUNC is not a valid function'        02810000
+         AGO   .FNCDONE                                                 02820000
+.*                                                                      02830000
+.FNCADD  AIF   ('&OWNER' EQ '').FNCADDT,                               C02840000
+               ('&OWNER' EQ 'TASK').FNCADDT,                           C02850000
+               ('&OWNER' EQ 'STEP').FNCADDS                             02860000
+         MNOTE 8,'IAZADRKP - OWNER=&OWNER is not a valid function'      02870000
+.FNCADDT ANOP                                                           02880000
+&LABEL   &LHI  15,1                Indicate add task function           02890000
+         AGO   .FNCDONE                                                 02900000
+.FNCADDS ANOP                                                           02910000
+&LABEL   &LHI  15,2                Indicate add step function           02920000
+         AGO   .FNCDONE                                                 02930000
+.*                                                                      02940000
+.FNCRET  ANOP                                                           02950000
+&LABEL   &LHI  15,3                Indicate retrieve function           02960000
+         AGO   .CHKOWNR                                                 02970000
+.FNCDEL  ANOP                                                           02980000
+&LABEL   &LHI  15,4                Indicate delete function             02990000
+         AGO   .CHKOWNR                                                 03000000
+.FNCBLD  ANOP                                                           03010000
+&LABEL   &LHI  15,16               Indicate BLDFSVT function            03020000
+         AGO   .CHKOWNR                                                 03030000
+.FNCFRE  ANOP                                                           03040000
+&LABEL   &LHI  15,17               Indicate FREFSVT function            03050000
+.*                                                                      03060000
+.CHKOWNR AIF   ('&OWNER' EQ '').FNCDONE                                 03070000
+         MNOTE 8,'IAZADRKP - OWNER=&OWNER is not valid for FUNC=&FUNC'  03080000
+.FNCDONE ANOP                                                           03090000
+.*                                                                      03100000
+.*----------------------------------------------------------*           03110000
+.*       Validate and process ADDRESS= parameter            *           03120000
+.*----------------------------------------------------------*           03130000
+.*                                                                      03140000
+         AIF   ('&FUNC' NE 'ADD').NOTADD,                              C03150000
+               ('&ADDRESS' NE '').GETADDR                               03160000
+         MNOTE 8,'IAZADRKP - ADDRESS= required for FUNC=&FUNC'          03170000
+         AGO   .ADRDONE                                                 03180000
+.*                                                                      03190000
+.GETADDR AIF   ('&ADDRESS'(1,1) NE '(').NADRREG,                       C03200000
+               ('&ADDRESS(1)'(1,1) NE '(').ADRREG                       03210000
+.*                                                                      03220000
+.NADRREG AIF   (T'&ADDRESS EQ 'J').ADRLA                                03230000
+         AIF   (L'&ADDRESS EQ 4).ADRSML                                 03240000
+         LG    1,&ADDRESS          Pass address in register 1           03250000
+         AGO   .ADRDONE                                                 03260000
+.ADRSML  LLGF  1,&ADDRESS          Pass address in register 1           03270000
+         AGO   .ADRDONE                                                 03280000
+.*                                                                      03290000
+.ADRLA   LA    1,&ADDRESS          Pass address in register 1           03300000
+         AGO   .ADRDONE                                                 03310000
+.*                                                                      03320000
+.ADRREG  AIF   ('&ADDRESS(1)' EQ '1').ADRDONE,                         C03330000
+               ('&ADDRESS(1)' EQ 'R1').ADRDONE                          03340000
+         LGR   1,&ADDRESS(1)       Pass address in register 1           03350000
+         AGO   .ADRDONE                                                 03360000
+.*                                                                      03370000
+.NOTADD  AIF  ('&ADDRESS' EQ '').ADRDONE                                03380000
+         MNOTE 8,'IAZADRKP - ADDRESS= not valid with FUNC=&FUNC'        03390000
+.ADRDONE ANOP                                                           03400000
+.*                                                                      03410000
+.*----------------------------------------------------------*           03420000
+.*       Validate and process TOKEN= parameter              *           03430000
+.*----------------------------------------------------------*           03440000
+.*                                                                      03450000
+         AIF   ('&FUNC' EQ 'RETRIEVE').CHKTKN,                         C03460000
+               ('&FUNC' NE 'DELETE').NOTTKN                             03470000
+.CHKTKN  AIF   ('&TOKEN' NE '').GETTKN                                  03480000
+         MNOTE 8,'IAZADRKP - TOKEN= required for FUNC=&FUNC'            03490000
+         AGO   .TKNDONE                                                 03500000
+.*                                                                      03510000
+.GETTKN  AIF   ('&TOKEN'(1,1) NE '(').NTKNREG,                         C03520000
+               ('&TOKEN(1)'(1,1) NE '(').TKNREG                         03530000
+.*                                                                      03540000
+.NTKNREG AIF   (T'&TOKEN EQ 'J').TKNLA                                  03550000
+         LLGF  1,&TOKEN            Pass token in register 1             03560000
+         AGO   .TKNDONE                                                 03570000
+.*                                                                      03580000
+.TKNLA   LA    1,&TOKEN            Pass token in register 1             03590000
+         AGO   .TKNDONE                                                 03600000
+.*                                                                      03610000
+.TKNREG  AIF   ('&TOKEN(1)' EQ '1').TKNDONE,                           C03620000
+               ('&TOKEN(1)' EQ 'R1').TKNDONE                            03630000
+         LGR   1,&TOKEN(1)         Pass token in register 1             03640000
+         AGO   .TKNDONE                                                 03650000
+.*                                                                      03660000
+.NOTTKN  AIF  ('&TOKEN' EQ '').TKNDONE                                  03670000
+         MNOTE 8,'IAZADRKP - TOKEN= not valid with FUNC=&FUNC'          03680000
+.TKNDONE ANOP                                                           03690000
+.*                                                                      03700000
+.*----------------------------------------------------------*           03710000
+.*       Process TYPE parameter                             *           03720000
+.*----------------------------------------------------------*           03730000
+.*                                                                      03740000
+         AIF   ('&FUNC' EQ 'BLDFSVT').CHKTYP,                          C03750000
+               ('&FUNC' EQ 'FREFSVT').CHKTYP,                          C03760000
+               ('&TYPE' NE '').GETTYP                                   03770000
+         MNOTE 8,'IAZADRKP - TYPE= required parameter'                  03780000
+         AGO   .TYPDONE                                                 03790000
+.*                                                                      03800000
+.GETTYP  AIF   ('&TYPE'(1,1) NE '(').NTYPREG,                          C03810000
+               ('&TTPE(1)'(1,1) NE '(').TYPREG                          03820000
+.*                                                                      03830000
+.NTYPREG AIF   ('&TYPE'(1,1) EQ '''').TYPSTR                            03840000
+         LG    0,&TYPE             Pass type in register 0              03850000
+         AGO   .TYPDONE                                                 03860000
+.TYPSTR  LARL  14,=CL8&TYPE        Point to type string                 03870000
+         LG    0,0(14)             Pass type in register 0              03880000
+         AGO   .TYPDONE                                                 03890000
+.*                                                                      03900000
+.TYPLA   LA    0,&TYPE             Pass type in register 0              03910000
+         AGO   .TYPDONE                                                 03920000
+.*                                                                      03930000
+.TYPREG  LGR   0,&TYPE(1)          Pass type in register 0              03940000
+         AGO   .TYPDONE                                                 03950000
+.*                                                                      03960000
+.CHKTYP  AIF   ('&TYPE' EQ '').TYPDONE                                  03970000
+         MNOTE 8,'IAZADRKP - TYPE=&TYPE not valid with FUNC=&FUNC'      03980000
+.*                                                                      03990000
+.TYPDONE ANOP                                                           04000000
+.*                                                                      04010000
+.*----------------------------------------------------------*           04020000
+.*       Process AUTH parameter                             *           04030000
+.*----------------------------------------------------------*           04040000
+.*                                                                      04050000
+         AIF   ('&FUNC' EQ 'BLDFSVT').CHKATH,                          C04060000
+               ('&FUNC' EQ 'FREFSVT').CHKATH,                          C04070000
+               ('&AUTH' EQ '').AUTHDON,                                C04080000
+               ('&AUTH' EQ '0').AUTHDON,                               C04090000
+               ('&AUTH' EQ 'YES').AUTHDON,                             C04100000
+               ('&AUTH' EQ 'NO').NOTAUTH,                              C04110000
+               ('&AUTH'(1,1) NE '(').NATHREG,                          C04120000
+               ('&AUTH(1)'(1,1) NE '(').ATHREG                          04130000
+.*                                                                      04140000
+.NATHREG ICM   15,B'0010',&AUTH    Set auth byte in register 15         04150000
+         AGO   .AUTHDON                                                 04160000
+.*                                                                      04170000
+.NOTAUTH OILL  15,X'FF00'          Set not authorized indicator         04180000
+         AGO   .AUTHDON                                                 04190000
+.*                                                                      04200000
+.ATHREG  LLGFR 14,&AUTH(1)         Copy input auth flags                04210000
+         NILF  14,X'000000FF'        and purify                         04220000
+         SLL   14,8                Shift to correct bits                04230000
+         OR    15,14                 and set in parm reg 15             04240000
+         AGO   .AUTHDON                                                 04250000
+.*                                                                      04260000
+.CHKATH  AIF   ('&AUTH' EQ '').AUTHDON                                  04270000
+         MNOTE 8,'IAZADRKP - AUTH=&AUTH not valid with FUNC=&FUNC'      04280000
+.*                                                                      04290000
+.AUTHDON ANOP                                                           04300000
+.*                                                                      04310000
+.*----------------------------------------------------------*           04320000
+.*       Process MAXFSA Parameter                           *           04330000
+.*----------------------------------------------------------*           04340000
+.*                                                                      04350000
+         AIF   ('&FUNC' NE 'BLDFSVT').CHKMAX,                          C04360000
+               ('&MAXFSA' EQ '').MAXREQ,                               C04370000
+               ('&MAXFSA'(1,1) NE '(').NMAXREG,                        C04380000
+               ('&MAXFSA(1)'(1,1) NE '(').MAXREG                        04390000
+.*                                                                      04400000
+.NMAXREG LLGH  1,&MAXFSA           Set max FSA in register 1            04410000
+         AGO   .MAXDONE                                                 04420000
+.*                                                                      04430000
+.MAXREG  AIF   ('&MAXFSA(1)' EQ '1').MAXDONE,                          C04440000
+               ('&MAXFSA(1)' EQ 'R1').MAXDONE                           04450000
+         LLGFR 1,&MAXFSA(1)        Set max FSA in register 1            04460000
+         AGO   .MAXDONE                                                 04470000
+.*                                                                      04480000
+.MAXREQ  MNOTE 8,'IAZADRKP - MAXFSA= required parameter for FUNC=&FUNC' 04490000
+         AGO   .MAXDONE                                                 04500000
+.*                                                                      04510000
+.CHKMAX  AIF   ('&MAXFSA' EQ '').MAXDONE                                04520000
+         MNOTE 8,'IAZADRKP - MAXFSA=&MAXFSA not valid with FUNC=&FUNC'  04530000
+.*                                                                      04540000
+.MAXDONE ANOP                                                           04550000
+.*                                                                      04560000
+.*----------------------------------------------------------*           04570000
+.*       Process FSVTLOC Parameter                          *           04580000
+.*----------------------------------------------------------*           04590000
+.*                                                                      04600000
+         AIF   ('&FUNC' NE 'BLDFSVT').CHKLOC,                          C04610000
+               ('&FSVTLOC' EQ '').LOCREQ,                              C04620000
+               ('&FSVTLOC' EQ '24').LOCDONE,                           C04630000
+               ('&FSVTLOC' EQ '31').LOCANY                              04640000
+.*                                                                      04650000
+         TM    &FSVTLOC(1),&FSVTLOC(2)  Test FSVT LOC bit               04660000
+         IPM   14                  Get condition code                   04670000
+         NILH  14,X'3000'          Isolate CC                           04680000
+         SRL   14,32-8-4           Shift to bits 54-55 of register      04690000
+         OR    15,14               Add to R15                           04700000
+         AGO   .LOCDONE                                                 04710000
+.*                                                                      04720000
+.LOCANY  OILL  15,X'0100'          Set FSVTLOC=31                       04730000
+         AGO   .LOCDONE                                                 04740000
+.*                                                                      04750000
+.LOCREQ  MNOTE 8,'IAZADRKP - FSVTLOC= is required parameter for FUNC=&FC04760000
+               UNC'                                                     04770000
+         AGO   .LOCDONE                                                 04780000
+.*                                                                      04790000
+.CHKLOC  AIF   ('&FSVTLOC' EQ '').LOCDONE                               04800000
+         MNOTE 8,'IAZADRKP - FSVTLOC=&FSVTLOC is not valid with FUNC=&FC04810000
+               UNC'                                                     04820000
+.*                                                                      04830000
+.LOCDONE ANOP                                                           04840000
+.*                                                                      04850000
+.*----------------------------------------------------------*           04860000
+.*       Set up branch to IAZAKSRV service. Locate its      *           04870000
+.*       address going from the CVT to the JESCT, to the    *           04880000
+.*       FSIB and pull the entry point address from field   *           04890000
+.*       FSIBAKSR.                                          *           04900000
+.*----------------------------------------------------------*           04910000
+.*                                                                      04920000
+         &L    14,16(,0)           Get CVT address                      04930000
+         &L    14,296(14)          Get JESCT address                    04940000
+         &L    14,100(14)          Get JESCT extension addr             04950000
+         &L    14,100(14)          Get IAZBASE cb addr (FSIB)           04960000
+         &L    14,28(14)           Get IAZAKSRV addr from FSIB          04970000
+         BASR  14,14               Call address keep service            04980000
+         MEND                                                           04990000
+.*                                                                      05000000
+**/                                                                     05010000
+* %IAZADRKP: /* PL/S VERSION OF IAZADRKP MACRO                       */ 05020000
+*/********************************************************************/ 05030000
+*  MACRO                                                                05040000
+*    KEYS(FUNC,                    /* Function requested             */ 05050000
+*        ADDRESS,                  /* Input/output address value     */ 05060000
+*        TOKEN,                    /* Input/output token value       */ 05070000
+*        TYPE,                     /* 8 character data type          */ 05080000
+*        OWNER,                    /* Owner for FUNC=ADD             */ 05090000
+*        AUTH,                     /* 1 byte PSW key/PROB indicator  */ 05100000
+*        MAXFSA,                   /* Max number of FSAs for BLDFSVT */ 05110000
+*        FSVTLOC,                  /* 24!31 bit loc of FSVT BLDFSVT  */ 05120000
+*        RETCODE);                 /* Return code                    */ 05130000
+*  DCL MAC$RET FIXED;          /* macro return code                  */ 05140000
+*  DCL IDENT CHAR;             /* macro invocation                   */ 05150000
+*  DCL CMT CHAR;               /* field used to build comments       */ 05160000
+*  DCL INDENT FIXED;           /* indentation column                 */ 05170000
+*  DCL EHAREGS CHAR EXTERNAL;  /* Registers used                     */ 05180000
+*  DCL SYSASCE CHAR EXTERNAL; DEACT SYSASCE;  /* STATE ANY P AR         05190000
+*                                                                    */ 05200000
+*  DCL SYSAM64 CHAR EXTERNAL; DEACT SYSAM64;  /* AMOD64 YES or NO       05210000
+*                                                                    */ 05220000
+*  DCL FUNCODE CHAR;           /* Requested function code            */ 05230000
+*/********************************************************************/ 05240000
+*/*                                                                  */ 05250000
+*/*      Initialize variables                                        */ 05260000
+*/*                                                                  */ 05270000
+*/********************************************************************/ 05280000
+*  MAC$RET = 0;              /* start off assuming no compile errors */ 05290000
+*  INDENT = MACCOL;          /* start where macro coded              */ 05300000
+*  IDENT = MACLABEL!!MACNAME!!MACLIST!!' '!!MACKEYS;  /* macro          05310000
+*                                                         invocation */ 05320000
+*/********************************************************************/ 05330000
+*/*                                                                  */ 05340000
+*/*      Make sure there are 7 or less positional parameters         */ 05350000
+*/*                                                                  */ 05360000
+*/********************************************************************/ 05370000
+*  IF NUMBER(MACLIST) > 7 THEN                                          05380000
+*    DO;                                                                05390000
+*      ANS MSG('IAZADRKP - Too many positional parameters '!!           05400000
+*                    'are specified');                                  05410000
+*      MAC$RET = 8;                                                     05420000
+*    END;                                                               05430000
+*/********************************************************************/ 05440000
+*/*                                                                  */ 05450000
+*/*      Code Execution                                              */ 05460000
+*/*                                                                  */ 05470000
+*/********************************************************************/ 05480000
+*  ANS(MACLABEL) COL(MACLMAR);   /* label the answered code          */ 05490000
+*  INDENT = INDENT + 2;                                                 05500000
+*  ANS('DO; '!!COMMENT(IDENT)) COL(INDENT); /* bracket the answered     05510000
+*                               code with DO/END and echo the           05520000
+*                               invocation as a comment              */ 05530000
+*  INDENT = INDENT + 2;                                                 05540000
+*  ANS('?SYSSTATE (TEST);') COL(MACLMAR);   /* Determine environment    05550000
+*                                                                    */ 05560000
+*/********************************************************************/ 05570000
+*/*                                                                  */ 05580000
+*/*      Restrict registers used by the service and make sure        */ 05590000
+*/*      that they are declared by the EPILOG macro.                 */ 05600000
+*/*                                                                  */ 05610000
+*/********************************************************************/ 05620000
+*  ANS('?ASAXMAC SetEhaRegs(00F,00P,01F,01P,14F,14P,15F,15P)            05630000
+*    GprLen(8);')                                                       05640000
+*    COL(MACLMAR);                                                      05650000
+*  CMT = 'Restrict registers';                                          05660000
+*  ANS('RFY (G64R00F,G64R01F,G64R15F) RSTD; ' !!COMMENT(CMT))           05670000
+*    COL(INDENT) NORESCAN;                                              05680000
+*/********************************************************************/ 05690000
+*/*                                                                  */ 05700000
+*/*      Validate FUNC parameter                                     */ 05710000
+*/*                                                                  */ 05720000
+*/********************************************************************/ 05730000
+*                                                                       05740000
+*  SELECT;                                                              05750000
+*    WHEN ((FUNC(1) = 'ADD') & (OWNER(1)='TASK'))    FUNCODE = '1';     05760000
+*    WHEN ((FUNC(1) = 'ADD') & (OWNER(1)=''))        FUNCODE = '1';     05770000
+*    WHEN ((FUNC(1) = 'ADD') & (OWNER(1)='STEP'))    FUNCODE = '2';     05780000
+*    WHEN ((FUNC(1) = 'RETRIEVE') & (OWNER(1)=''))   FUNCODE = '3';     05790000
+*    WHEN ((FUNC(1) = 'DELETE') & (OWNER(1)=''))     FUNCODE = '4';     05800000
+*    WHEN ((FUNC(1) = 'BLDFSVT') & (OWNER(1)=''))    FUNCODE = '16';    05810000
+*    WHEN ((FUNC(1) = 'FREFSVT') & (OWNER(1)=''))    FUNCODE = '17';    05820000
+*    WHEN (FUNC(1)  = '')                                               05830000
+*      DO;                                                              05840000
+*        FUNCODE = '0';                                                 05850000
+*        ANS MSG('IAZADRKP - FUNC() is a required parameter');          05860000
+*        MAC$RET = 8;                                                   05870000
+*      END;                                                             05880000
+*    OTHERWISE                                                          05890000
+*      DO;                                                              05900000
+*        FUNCODE = '0';                                                 05910000
+*        IF (OWNER(1) <> '') THEN                                       05920000
+*          ANS MSG('IAZADRKP - FUNC'!!FUNC!!' is not supported' !!      05930000
+*                  'with OWNER'!!OWNER );                               05940000
+*        Else                                                           05950000
+*          ANS MSG('IAZADRKP - FUNC'!!FUNC!!' is not supported');       05960000
+*        MAC$RET = 8;                                                   05970000
+*      END;                                                             05980000
+*  END;                                                                 05990000
+*/********************************************************************/ 06000000
+*/*                                                                  */ 06010000
+*/*      Set ADDRESS parameter                                       */ 06020000
+*/*                                                                  */ 06030000
+*/********************************************************************/ 06040000
+*  SELECT;                                                              06050000
+*    WHEN ((FUNC(1) = 'ADD') & (ADDRESS <> ''))                         06060000
+*      DO;                                                              06070000
+*        CMT = 'Pass address in R1';                                    06080000
+*        ANS('G64R01P = ' !! ADDRESS(1) !! ';' !!COMMENT(CMT))          06090000
+*        COL(INDENT) NORESCAN;                                          06100000
+*      END;                                                             06110000
+*    WHEN ((FUNC(1) = 'ADD') & (ADDRESS = ''))                          06120000
+*      DO;                                                              06130000
+*        ANS MSG('IAZADRKP - ADDRESS() required when FUNC('!!           06140000
+*                FUNC !!')');                                           06150000
+*        MAC$RET = 8;                                                   06160000
+*      END;                                                             06170000
+*    WHEN ((FUNC(1) = 'BLDFSVT' ! FUNC(1) = 'FREFSVT') & ADDRESS <> '') 06180000
+*      DO;                                                              06190000
+*        ANS MSG('IAZADRKP - FUNC'!!FUNC!!' is not supported' !!        06200000
+*                'with ADDRESS'!!ADDRESS );                             06210000
+*        MAC$RET = 8;                                                   06220000
+*      END;                                                             06230000
+*    OTHERWISE;                                                         06240000
+*  END;                                                                 06250000
+*/********************************************************************/ 06260000
+*/*                                                                  */ 06270000
+*/*      Set TOKEN parameter                                         */ 06280000
+*/*                                                                  */ 06290000
+*/********************************************************************/ 06300000
+*  SELECT;                                                              06310000
+*    WHEN ((FUNC(1) = 'RETRIEVE' ! FUNC(1) = 'DELETE') & TOKEN <> '')   06320000
+*      DO;                                                              06330000
+*        CMT = 'Pass token in R1';                                      06340000
+*        ANS('G64R01F = ' !! TOKEN !! ';' !!COMMENT(CMT))               06350000
+*        COL(INDENT) NORESCAN;                                          06360000
+*      END;                                                             06370000
+*    WHEN ((FUNC(1) = 'RETRIEVE' ! FUNC(1) = 'DELETE') & TOKEN = '')    06380000
+*      DO;                                                              06390000
+*        ANS MSG('IAZADRKP - TOKEN() required when FUNC'!!              06400000
+*                FUNC );                                                06410000
+*        MAC$RET = 8;                                                   06420000
+*      END;                                                             06430000
+*    WHEN ((FUNC(1) = 'BLDFSVT' ! FUNC(1) = 'FREFSVT') & TOKEN <> '')   06440000
+*      DO;                                                              06450000
+*        ANS MSG('IAZADRKP - FUNC'!!FUNC!!' is not supported' !!        06460000
+*                'with TOKEN'!!TOKEN );                                 06470000
+*        MAC$RET = 8;                                                   06480000
+*      END;                                                             06490000
+*    OTHERWISE;                                                         06500000
+*  END;                                                                 06510000
+*/********************************************************************/ 06520000
+*/*                                                                  */ 06530000
+*/*      Validate TYPE parameter                                     */ 06540000
+*/*                                                                  */ 06550000
+*/********************************************************************/ 06560000
+*  SELECT;                                                              06570000
+*    WHEN ((FUNC(1) = 'BLDFSVT' ! FUNC(1) = 'FREFSVT') & TYPE <> '')    06580000
+*      DO;                                                              06590000
+*        ANS MSG('IAZADRKP - FUNC'!!FUNC!!' is not supported' !!        06600000
+*                'with TYPE'!!TYPE );                                   06610000
+*        MAC$RET = 8;                                                   06620000
+*      END;                                                             06630000
+*    WHEN (TYPE <> '') THEN                                             06640000
+*      DO;                                                              06650000
+*        CMT = 'Pass type in R0';                                       06660000
+*        ANS('G64R00F = ' !! TYPE(1) !! ';' !!COMMENT(CMT))             06670000
+*        COL(INDENT) NORESCAN;                                          06680000
+*      END;                                                             06690000
+*    WHEN ((FUNC(1) = 'BLDFSVT' ! FUNC(1) = 'FREFSVT') & TYPE = '')     06700000
+*      DO;                                                              06710000
+*      END;                                                             06720000
+*    OTHERWISE                                                          06730000
+*      DO;                                                              06740000
+*        ANS MSG('IAZADRKP - TYPE() parameter is required');            06750000
+*        MAC$RET = 8;                                                   06760000
+*      END;                                                             06770000
+*  END;                                                                 06780000
+*/********************************************************************/ 06790000
+*/*                                                                  */ 06800000
+*/*      Validate AUTH parameter                                     */ 06810000
+*/*                                                                  */ 06820000
+*/********************************************************************/ 06830000
+*  SELECT;                                                              06840000
+*    WHEN ((FUNC(1) = 'BLDFSVT' ! FUNC(1) = 'FREFSVT') & AUTH <> '')    06850000
+*      DO;                                                              06860000
+*        ANS MSG('IAZADRKP - FUNC'!!FUNC!!' is not supported' !!        06870000
+*                'with AUTH'!!AUTH );                                   06880000
+*        MAC$RET = 8;                                                   06890000
+*      END;                                                             06900000
+*    WHEN (AUTH(1) = 'YES' ! AUTH(1) = '0' ! AUTH(1) = '')              06910000
+*      DO;                                                              06920000
+*        CMT = 'Pass function in R15';                                  06930000
+*        ANS('G64R15F = ' !! FUNCODE !! ';' !!COMMENT(CMT))             06940000
+*        COL(INDENT) NORESCAN;                                          06950000
+*      END;                                                             06960000
+*    WHEN (AUTH(1) = 'NO')                                              06970000
+*      DO;                                                              06980000
+*        CMT = 'Pass auth and function in R15';                         06990000
+*        ANS('G64R15F = ''FF00''x + ' !! FUNCODE !! ';' !!COMMENT(CMT)) 07000000
+*        COL(INDENT) NORESCAN;                                          07010000
+*      END;                                                             07020000
+*    OTHERWISE                                                          07030000
+*      DO;                                                              07040000
+*        CMT = 'Pass auth and function in R15';                         07050000
+*        ANS('G64R15F = ' !! AUTH(1) !!' * ''100''x + ' !! FUNCODE !!   07060000
+*            ';' !!COMMENT(CMT))  COL(INDENT) NORESCAN;                 07070000
+*      END;                                                             07080000
+*  END;                                                                 07090000
+*/********************************************************************/ 07100000
+*/*                                                                  */ 07110000
+*/*      Validate MAXFSA parameter                                   */ 07120000
+*/*                                                                  */ 07130000
+*/********************************************************************/ 07140000
+*  SELECT;                                                              07150000
+*    WHEN (FUNC(1) = 'BLDFSVT' & MAXFSA(1) <> '')                       07160000
+*      DO;                                                              07170000
+*        CMT = 'Pass max FSA in R1';                                    07180000
+*        ANS('G64R01F = ' !! MAXFSA(1) !! ';' !!COMMENT(CMT))           07190000
+*        COL(INDENT) NORESCAN;                                          07200000
+*      END;                                                             07210000
+*    WHEN (FUNC(1) = 'BLDFSVT' & MAXFSA(1) = '')                        07220000
+*      DO;                                                              07230000
+*        ANS MSG('IAZADRKP - MAXFSA() required when FUNC'!!             07240000
+*                FUNC );                                                07250000
+*        MAC$RET = 8;                                                   07260000
+*      END;                                                             07270000
+*    WHEN (MAXFSA <> '')                                                07280000
+*      DO;                                                              07290000
+*        ANS MSG('IAZADRKP - FUNC'!!FUNC!!' is not supported ' !!       07300000
+*                'with MAXFSA'!!MAXFSA );                               07310000
+*        MAC$RET = 8;                                                   07320000
+*      END;                                                             07330000
+*    OTHERWISE;                                                         07340000
+*  END;                                                                 07350000
+*/********************************************************************/ 07360000
+*/*                                                                  */ 07370000
+*/*      Validate FSVTLOC parameter                                  */ 07380000
+*/*                                                                  */ 07390000
+*/********************************************************************/ 07400000
+*  SELECT;                                                              07410000
+*    WHEN (FUNC(1) = 'BLDFSVT' & FSVTLOC(1) = '24')                     07420000
+*      DO;                                                              07430000
+*        CMT = 'Pass function in R15';                                  07440000
+*        ANS('G64R15F = ' !! FUNCODE !! ';' !!COMMENT(CMT))             07450000
+*        COL(INDENT) NORESCAN;                                          07460000
+*      END;                                                             07470000
+*    WHEN (FUNC(1) = 'BLDFSVT' & FSVTLOC(1) = '31')                     07480000
+*      DO;                                                              07490000
+*        CMT = 'Pass loc/function in R15';                              07500000
+*        ANS('G64R15F = ''0100''x + ' !! FUNCODE !! ';' !!COMMENT(CMT)) 07510000
+*        COL(INDENT) NORESCAN;                                          07520000
+*      END;                                                             07530000
+*    WHEN (FUNC(1) = 'BLDFSVT' & FSVTLOC(1) <> '')                      07540000
+*      DO;                                                              07550000
+*        CMT = 'Pass loc/function in R15';                              07560000
+*        ANS('G64R15F = (''0100''x * ' !! FSVTLOC(1) !! ') +' !!        07570000
+*        FUNCODE !! ';' !! COMMENT(CMT)) COL(INDENT) NORESCAN;          07580000
+*      END;                                                             07590000
+*    WHEN (FUNC(1) = 'BLDFSVT' & FSVTLOC(1) = '')                       07600000
+*      DO;                                                              07610000
+*        ANS MSG('IAZADRKP - FSVTLOC() required when FUNC'!!            07620000
+*                FUNC );                                                07630000
+*        MAC$RET = 8;                                                   07640000
+*      END;                                                             07650000
+*    WHEN (FSVTLOC <> '')                                               07660000
+*      DO;                                                              07670000
+*        ANS MSG('IAZADRKP - FUNC'!!FUNC!!' is not supported' !!        07680000
+*                'with FSVTLOC'!!FSVTLOC );                             07690000
+*        MAC$RET = 8;                                                   07700000
+*      END;                                                             07710000
+*    OTHERWISE;                                                         07720000
+*  END;                                                                 07730000
+*/********************************************************************/ 07740000
+*/*                                                                  */ 07750000
+*/*      Generate invocation sequence.                               */ 07760000
+*/*                                                                  */ 07770000
+*/********************************************************************/ 07780000
+*  CMT = 'Get pointer to the IAZAKSRV service';                         07790000
+*  ANS('DCL IAZAKSRV_' !! MACINDEX !!' ENTRY                            07800000
+*           OPTIONS(ENTREG(14),CALLASSIST(''BASR     @14,@14''),        07810000
+*           NORETREG,SETS(1))                                           07820000
+*    BASED(CS$CVT->CVTMAP.CVTJESCT->JESCT.JESCTEXT->                    07830000
+*    JESPEXT.JESFSICB->IAZFSIB.FSIBAKSR) VALRG(*); '                    07840000
+*    !!COMMENT(CMT)) COL(INDENT) NORESCAN;                              07850000
+*  CMT = 'Call the service';                                            07860000
+*  ANS('Call IAZAKSRV_' !! MACINDEX !! '; ' !!COMMENT(CMT))             07870000
+*    COL(INDENT) NORESCAN;                                              07880000
+*/********************************************************************/ 07890000
+*/*                                                                  */ 07900000
+*/*      If RETCODE was specified, pass back the return code in it.  */ 07910000
+*/*                                                                  */ 07920000
+*/********************************************************************/ 07930000
+*  IF RETCODE ^= '' THEN                                                07940000
+*  DO;                                                                  07950000
+*    CMT = 'Set return code';                                           07960000
+*    ANS(RETCODE(1) !! ' = G64R15F; ' !!COMMENT(CMT))                   07970000
+*      COL(INDENT) NORESCAN;                                            07980000
+*  END;                                                                 07990000
+*/********************************************************************/ 08000000
+*/*                                                                  */ 08010000
+*/*      If TOKEN was specified for FUNC(ADD) then return it.        */ 08020000
+*/*                                                                  */ 08030000
+*/********************************************************************/ 08040000
+*  IF (TOKEN ^= '' & FUNC(1) = 'ADD') THEN                              08050000
+*  DO;                                                                  08060000
+*    CMT = 'Set returned token';                                        08070000
+*    ANS(TOKEN(1) !! ' = G64R01F; ' !!COMMENT(CMT))                     08080000
+*      COL(INDENT) NORESCAN;                                            08090000
+*  END;                                                                 08100000
+*/********************************************************************/ 08110000
+*/*                                                                  */ 08120000
+*/*      If ADDRESS was specified for FUNC(RETRIEVE) or FUNC(DELETE) */ 08130000
+*/*      then return it.                                             */ 08140000
+*/*                                                                  */ 08150000
+*/********************************************************************/ 08160000
+*  IF (ADDRESS ^= '' &                                                  08170000
+*     (FUNC(1) = 'RETRIEVE' ! FUNC(1) = 'DELETE')) THEN                 08180000
+*  DO;                                                                  08190000
+*    CMT = 'Set returned address';                                      08200000
+*    ANS(ADDRESS(1) !! ' = G64R01F; ' !!COMMENT(CMT))                   08210000
+*      COL(INDENT) NORESCAN;                                            08220000
+*  END;                                                                 08230000
+*/********************************************************************/ 08240000
+*/*                                                                  */ 08250000
+*/*      Unrestrict registers.                                       */ 08260000
+*/*                                                                  */ 08270000
+*/********************************************************************/ 08280000
+*  CMT = 'Unrestrict registers';                                        08290000
+*  ANS('RFY (G64R00F,G64R01F,G64R15F)  UNRSTD; ' !!COMMENT(CMT))        08300000
+*    COL(INDENT) NORESCAN;                                              08310000
+*  INDENT = INDENT - 2;                                                 08320000
+*  ANS('END;'!!COMMENT(IDENT)) COL(INDENT); /* bracket answered         08330000
+*                               code with DO-END and echo the           08340000
+*                               invocation as a comment              */ 08350000
+*LGDMACEN:                                                              08360000
+*  RETURN CODE(MAC$RET);                                                08370000
+*% END;                                                                 99999999

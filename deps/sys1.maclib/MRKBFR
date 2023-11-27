@@ -1,0 +1,83 @@
+         MACRO                                                          00050000
+&NAME    MRKBFR &RPL=,&MARK=                                            00100000
+.*                                                                      00105000
+.*  $MAC(MRKBFR):                                                       00110000
+.*                                                                      00112000
+.*PROPRIETARY V3 STATEMENT                                     @WA04075 00118000
+.*LICENSED MATERIALS - PROPERTY OF IBM                         @WA04075 00120000
+.*"RESTRICTED MATERIALS OF IBM"                                @WA04075 00122000
+.*5695-DF1                                                     @WA04075 00124000
+.*COPYRIGHT 1992, 2011 IBM CORP.                               @WA04075 00126500
+.*END PROPRIETARY V3 STATEMENT                                 @WA04075 00129000
+.*                                                                      00132000
+.*                                                                      00133300
+.* STATUS = z/OS 1.13 DFSMS                                        @L1C 00134600
+.*                                                                      00136000
+.* CHANGE ACTIVITY:                                                     00139000
+.*  PREVENT COPYRIGHT FROM SHOWING WHEN MACRO IS INVOKED       @WA04075 00142000
+.* $L1=64BIT,JDZ1D10,20100303,SVLWER: 64 bit message               @L1A 00143500
+.*                                                                      00145000
+         GBLC  &SYSAM64    AMODE64=YES set by SYSSTATE macro       @L1A 00146600
+         GBLC  &SYSASCE    ASCENV=AR or ANY set by SYSSTATE macro  @L1A 00148200
+         LCLA  &CODE                    CODE ACCUMULATOR                00150000
+         LCLA  &I                       WORK VARIABLE                   00160000
+         LCLB  &ERR                     ERROR INDICATOR                 00200000
+         SYSSTATE TEST              Test how macros are to expand  @L1A 00206600
+         AIF   ('&SYSAM64' NE 'YES').ChkAR   Go if not AMODE64     @L1A 00213200
+.E0      IGGERMAC 203,MRKBFR        MRKBFR doesn't support AMODE64 @L1A 00219800
+&ERR     SETB  1                        Indicate error             @L1A 00226400
+.ChkAR   AIF   (('&SYSASCE' EQ '') OR ('&SYSASCE' EQ 'P')).ChkPos  @L1A 00233000
+         IGGERMAC 204,MRKBFR        MRKBFR doesn't support AR, ANY @L1A 00239600
+&ERR     SETB  1                        Indicate error             @L1A 00246200
+.ChkPos  AIF   (N'&SYSLIST EQ 0).NOPOS GO IF NO POSITIONAL OPERANDS@L1C 00252800
+.POSLOOP ANOP                                                           00260000
+&I       SETA  &I+1                     POINT TO NEXT POS OPERAND       00270000
+         IDAERMAC 1,&SYSLIST(&I)        ISSUE WARNING MNOTE             00300000
+         AIF   (&I LT N'&SYSLIST).POSLOOP  GO IF MORE OPERANDS          00310000
+.NOPOS   ANOP                                                           00350000
+         AIF   ('&RPL' NE '').ROKY      GO IF RPL SPECIFIED             00400000
+         IDAERMAC 2,RPL                 ISSUE ERROR MNOTE               00450000
+&ERR     SETB  1                        INDICATE ERROR                  00500000
+.ROKY    ANOP                                                           00550000
+         AIF   ('&MARK' NE '').MOKY     GO IF MARK SPECIFIED            00600000
+         IDAERMAC 2,MARK                ISSUE ERROR MNOTE               00650000
+&ERR     SETB  1                        INDICATE ERROR                  00700000
+         AGO   .MARKB                   GO AROUND MARK ANALYSIS         00750000
+.MOKY    ANOP                                                           00800000
+         AIF   ('&MARK' NE 'OUT').MOUTB  GO IF NOT MARKING FOR OUTPUT   00850000
+&CODE    SETA  0*256                    INDICATE MARK FOR OUTPUT        00900000
+         AGO   .MARKB                   GO AROUND MARK ANALYSIS         00950000
+.MOUTB   ANOP                                                           01000000
+         AIF   ('&MARK' NE 'RLS').MDATC GO IF NOT MARKING FOR RELEASE   01050000
+&CODE    SETA  4*256                    INDICATE MARK FOR RELEASE       01100000
+         AGO   .MARKB                   GO AROUND MARK ANALYSIS         01150000
+.MDATC   ANOP                                                           01155500
+         AIF   ('&MARK' NE 'DINVALID').MINDC   NEXT IF NOT DINVALID     01161000
+&CODE    SETA  8*256                    INDICATE MARK FOR DINVALID      01166500
+         AGO   .MARKB                   GO AROUND MARK ANALYSIS         01172000
+.MINDC   ANOP                                                           01177500
+         AIF   ('&MARK' NE 'XINVALID').MRLSB   ERROR IF NOT XINVALID    01183000
+&CODE    SETA  12*256                   INDICATE MARK FOR XINVALID      01188500
+         AGO   .MARKB                   GO AROUND MARK ANALYSIS         01194000
+.MRLSB   ANOP                                                           01200000
+         IDAERMAC 3,MARK,&MARK          ISSUE ERROR MNOTE               01250000
+&ERR     SETB  1                        INDICATE ERROR                  01300000
+.MARKB   ANOP                                                           01350000
+         AIF   (&ERR).END               GO IF ANY ERRORS                01400000
+         AIF   ('&RPL'(1,1) EQ '(').RPLR  GO IF RPL SPECIFIED AS REG    01500000
+&NAME    LA    1,&RPL                   LOAD RPL ADDRESS                01550000
+         AGO   .AREG                    GO AROUND REG CODE              01600000
+.RPLR    ANOP                                                           01650000
+         AIF   ('&RPL' EQ '(1)').ChkNam GO IF RPL ADDRESS ALREADY IN 1  01675000
+&NAME    LR    1,&RPL(1)                LOAD RPL ADDRESS                01700000
+         AGO   .AREG                    GO AROUND REG CODE         @L1A 01725000
+.ChkNam  AIF   ('&NAME' EQ '').AREG     GO IF NO NAME              @L1A 01750000
+&NAME    DS    0H                                                  @L1M 01775000
+.AREG    ANOP                                                           01800000
+&CODE    SETA  &CODE+14                 INDICATE MARK BUFFER            01850000
+         LA    0,&CODE                  LOAD CODES                      01900000
+         L     15,24(,1)                LOAD ACB ADDRESS FROM RPL       01950000
+         L     15,8(,15)                LOAD VSAM INTERFACE RTN ADDR    02000000
+         BASR  14,15                    LINK TO INTERFACE ROUTINE  @L1C 02050000
+.END     ANOP                                                           02100000
+         MEND                                                           02150000

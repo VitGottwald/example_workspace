@@ -1,0 +1,888 @@
+*/**** START OF SPECIFICATIONS **************************************** 00000100
+*                                                                     * 00000200
+*                                                                     * 00000300
+*01* MACRO NAME:  CSRCMPSC                              -11/15/17-<0> * 00000400
+*                                                                     * 00000500
+*                                                                     * 00000600
+*01* DESCRIPTIVE NAME:  Compression/Expansion service                 * 00000700
+*                                                                     * 00000800
+*01* PROPRIETARY STATEMENT:                                           * 00000900
+*                                                                     * 00001000
+*     LICENSED MATERIALS - PROPERTY OF IBM                            * 00001100
+*     5650-ZOS COPYRIGHT IBM CORP. 1992, 2013                         * 00001200
+*                                                                     * 00001300
+* STATUS= HBB7790                                                     * 00001400
+*                                                                     * 00001500
+*                                                                     * 00001600
+*                                                                     * 00001700
+*01* FUNCTION:                                                        * 00001800
+*                                                                     * 00001900
+*                                                                     * 00002000
+*      The following services are provided:                           * 00002100
+*                                                                     * 00002200
+*                                                                     * 00002300
+*      o   Compress/Expand using the Ziv-Lempel algorithm.            * 00002400
+*                                                                     * 00002500
+*      o   Simulate expansion of data that was compressed using       * 00002600
+*          entropy encoding, for use when expanding on a machine that * 00002700
+*          does not have the supporting hardware (on such a machine,  * 00002800
+*          IHAFACL bit FACL_EntropyEncoding will be off) but that     * 00002900
+*          does have the simulation support (bit CVT bit CVTEEC is    * 00003000
+*          on).                                                       * 00003100
+*                                                                     * 00003200
+*                                                                     * 00003300
+*                                                                     * 00003400
+*      Compression of data using entropy encoding is not supported by * 00003500
+*      CSRCMPSC.  Expansion of data using entropy encoding without    * 00003600
+*      simulation (using the CMPSC instruction) is not supported by   * 00003700
+*      CSRCMPSC.                                                      * 00003800
+*                                                                     * 00003900
+*01* EXTERNAL CLASSIFICATION:  GUPI                                   * 00004000
+*                                                                     * 00004100
+*01* END OF EXTERNAL CLASSIFICATION:                                  * 00004200
+*                                                                     * 00004300
+*01* ENVIRONMENT:                                                     * 00004400
+*                                                                     * 00004500
+*                                                                     * 00004600
+*      Minimum authorization: Problem state. PSW key 8-15.            * 00004700
+*                                                                     * 00004800
+*      Dispatchable unit mode: Task or SRB mode.                      * 00004900
+*                                                                     * 00005000
+*      Cross Memory Mode: Any PASN, any HASN, any SASN.               * 00005100
+*                                                                     * 00005200
+*      AMODE:                                                         * 00005300
+*                                                                     * 00005400
+*                                                                     * 00005500
+*                        o   AMODE 31 is supported for all options    * 00005600
+*                                                                     * 00005700
+*                        o   AMODE 64 is supported for expanding of   * 00005800
+*                            data that was compressed using entropy   * 00005900
+*                            encoding (Huffman compression).          * 00006000
+*                                                                     * 00006100
+*                                                                     * 00006200
+*                                                                     * 00006300
+*      ASC mode:         Primary or Access Register.                  * 00006400
+*                                                                     * 00006500
+*      Interrupt status: Enabled for I/O and external interrupts.     * 00006600
+*                                                                     * 00006700
+*      Locks:                                                         * 00006800
+*                                                                     * 00006900
+*                        The caller may hold the local lock of the    * 00007000
+*                        primary address space and may additionally   * 00007100
+*                        hold the CMS lock.  No locks are required.   * 00007200
+*                                                                     * 00007300
+*      Control parameters:                                            * 00007400
+*                                                                     * 00007500
+*                        The CBLOCK area, and the dictionary, source, * 00007600
+*                        and target areas pointed to by the CBLOCK    * 00007700
+*                        area can all be in the primary address space * 00007800
+*                        or, for AR-mode callers, in an address/data  * 00007900
+*                        space addressable through a provided ALET.   * 00008000
+*                        The dictionary and source areas are assumed  * 00008100
+*                        to be in the same space.  The fields in the  * 00008200
+*                        CBLOCK area that designate the ALETs of the  * 00008300
+*                        dictionary/source and target areas should be * 00008400
+*                        set to zero by primary mode callers.         * 00008500
+*                                                                     * 00008600
+*                        The control parameters and the target and    * 00008700
+*                        source areas can be above 2G when the caller * 00008800
+*                        is AMODE 64 and expansion of data compressed * 00008900
+*                        using entropy encoding is requested.         * 00009000
+*                                                                     * 00009100
+*                                                                     * 00009200
+*                                                                     * 00009300
+*01* PROGRAMMING REQUIREMENTS:                                        * 00009400
+*                                                                     * 00009500
+*    Include mapping macro CSRYCMPS to get a mapping of the           * 00009600
+*    compression block area to be passed via the CBLOCK parameter.    * 00009700
+*    That macro also provides equates for the return codes from the   * 00009800
+*    CSRCMPSC service.                                                * 00009900
+*                                                                     * 00010000
+*    Request entropy encoding simulation only when CVT bit CVTEEC is  * 00010100
+*    on.                                                              * 00010200
+*                                                                     * 00010300
+*01* RESTRICTIONS:                                                    * 00010400
+*                                                                     * 00010500
+*    None.                                                            * 00010600
+*                                                                     * 00010700
+*01* INPUT REGISTER INFORMATION:                                      * 00010800
+*                                                                     * 00010900
+*    Before issuing the CSRCMPSC macro, the caller must ensure that   * 00011000
+*    the following general purpose registers (GPRs) contain the       * 00011100
+*    specified information.                                           * 00011200
+*                                                                     * 00011300
+*                                                                     * 00011400
+*    REGISTER  CONTENTS                                               * 00011500
+*                                                                     * 00011600
+*    13        The address of a 72-byte standard save area in the     * 00011700
+*              primary address space unless requesting expansion of   * 00011800
+*              an area compressed using entropy encoding, in which    * 00011900
+*              case this register need not be set.                    * 00012000
+*                                                                     * 00012100
+*                                                                     * 00012200
+*                                                                     * 00012300
+*    Before issuing the CSRCMPSC macro, the caller does not have to   * 00012400
+*    place any information into any access register (AR) unless       * 00012500
+*    running in AR ASC mode in which case the caller must ensure that * 00012600
+*    the following ARs contain the specified information:             * 00012700
+*                                                                     * 00012800
+*                                                                     * 00012900
+*    REGISTER  CONTENTS                                               * 00013000
+*                                                                     * 00013100
+*    13        0 which designates the primary address space unless    * 00013200
+*              requesting expansion of an area compressed using       * 00013300
+*              entropy encoding, in which case this register need not * 00013400
+*              be set.                                                * 00013500
+*                                                                     * 00013600
+*                                                                     * 00013700
+*                                                                     * 00013800
+*01* OUTPUT REGISTER INFORMATION:                                     * 00013900
+*                                                                     * 00014000
+*    When control returns to the caller, the GPRs contain:            * 00014100
+*                                                                     * 00014200
+*                                                                     * 00014300
+*    REGISTER  CONTENTS                                               * 00014400
+*                                                                     * 00014500
+*    0-1       Used as work registers by the system                   * 00014600
+*                                                                     * 00014700
+*    2-13      Unchanged                                              * 00014800
+*                                                                     * 00014900
+*    14        Used as a work register by the system                  * 00015000
+*                                                                     * 00015100
+*    15        Return code                                            * 00015200
+*                                                                     * 00015300
+*                                                                     * 00015400
+*                                                                     * 00015500
+*    When control returns to the caller, the ARs contain:             * 00015600
+*                                                                     * 00015700
+*                                                                     * 00015800
+*    REGISTER  CONTENTS                                               * 00015900
+*                                                                     * 00016000
+*    0-1       Used as work registers by the system                   * 00016100
+*                                                                     * 00016200
+*    2-13      Unchanged                                              * 00016300
+*                                                                     * 00016400
+*    14-15     Used as work registers by the system                   * 00016500
+*                                                                     * 00016600
+*                                                                     * 00016700
+*                                                                     * 00016800
+*01* PERFORMANCE IMPLICATIONS:                                        * 00016900
+*                                                                     * 00017000
+*    None.                                                            * 00017100
+*                                                                     * 00017200
+*01* SYNTAX:                                                          * 00017300
+*                                                                     * 00017400
+*Ýxlabel¨  CSRCMPSC     CBLOCK=xcblock                                * 00017500
+*                     Ý,RETCODE=xretcode¨                             * 00017600
+*                                                                     * 00017700
+*                                                                     * 00017800
+*      Where:                                                         * 00017900
+*                                                                     * 00018000
+*                                                                     * 00018100
+*      Ýxlabel¨                                                       * 00018200
+*          is an optional symbol, starting in column 1, that is the   * 00018300
+*          name on the CSRCMPSC macro invocation.  The name must      * 00018400
+*          conform to the rules for an ordinary assembler language    * 00018500
+*          symbol.                                                    * 00018600
+*          DEFAULT: No name.                                          * 00018700
+*                                                                     * 00018800
+*                                                                     * 00018900
+*                                                                     * 00019000
+*                                                                     * 00019100
+*      CBLOCK=xcblock                                                 * 00019200
+*          is the name (RS-type), or address in register (1)-(12), of * 00019300
+*          a required character input/output area that is mapped by   * 00019400
+*          DSECT CMPSC in macro CSRYCMPS or DSECT CMPSCEE in macro    * 00019500
+*          CSRYCMPS. Use CMPSCEE only when requesting expansion of an * 00019600
+*          area compressed using entropy encoding, for which both     * 00019700
+*          bits CMPSCEE_EntropyEncoding and CMPSCEE_Expand must be    * 00019800
+*          on.  The CBLOCK area provides the information needed by,   * 00019900
+*          and provided on return by, the CSRCMPSC service.  It       * 00020000
+*          should begin on a fullword boundary when using DSECT CMPSC * 00020100
+*          or on a doubleword boundary when using DSECT CMPSCEE.      * 00020200
+*                                                                     * 00020300
+*                                                                     * 00020400
+*                                                                     * 00020500
+*                                                                     * 00020600
+*      ÝRETCODE=xretcode¨                                             * 00020700
+*          is the name (RS-type) of an optional fullword output       * 00020800
+*          variable, or register (2)-(12) or (15), into which the     * 00020900
+*          return code is to be copied from GPR 15.  If you specify   * 00021000
+*          15, GPR15, REG15, or R15 (within or without parentheses),  * 00021100
+*          the value will be left in GPR 15.                          * 00021200
+*                                                                     * 00021300
+*                                                                     * 00021400
+*                                                                     * 00021500
+*01* ABEND CODES:                                                     * 00021600
+*                                                                     * 00021700
+*                                                                     * 00021800
+*       0C4                                                           * 00021900
+*                                                                     * 00022000
+*                 The user may get this completion code if a          * 00022100
+*                 user-provided data area is not accessible.          * 00022200
+*                                                                     * 00022300
+*       0C6                                                           * 00022400
+*                                                                     * 00022500
+*                 The user may get this completion code if the symbol * 00022600
+*                 size value within the CBLOCK area is not 1-5.       * 00022700
+*                                                                     * 00022800
+*       0C7                                                           * 00022900
+*                                                                     * 00023000
+*                 The user may get this completion code in the        * 00023100
+*                 following circumstances when the dictionary is      * 00023200
+*                 built incorrectly:                                  * 00023300
+*                                                                     * 00023400
+*                                                                     * 00023500
+*                 o   If the length of a string to be represented by  * 00023600
+*                     a single compression symbol, encountered during * 00023700
+*                     a compression operation, exceeds 260            * 00023800
+*                     characters.                                     * 00023900
+*                                                                     * 00024000
+*                 o   If a dictionary entry has more than 260 total   * 00024100
+*                     children.                                       * 00024200
+*                                                                     * 00024300
+*                 o   If the "child count" in a dictionary entry      * 00024400
+*                     indicates more than 6 children.                 * 00024500
+*                                                                     * 00024600
+*                 o   If the number of extension characters for a     * 00024700
+*                     dictionary entry with 0 or 1 children exceeds   * 00024800
+*                     4.                                              * 00024900
+*                                                                     * 00025000
+*                 o   If a sibling descriptor dictionary entry has a  * 00025100
+*                     sibling count of 0.                             * 00025200
+*                                                                     * 00025300
+*                 o   If expansion of a compression symbol uses more  * 00025400
+*                     than 260 characters.                            * 00025500
+*                                                                     * 00025600
+*                 o   If expansion of a compression symbol uses more  * 00025700
+*                     than 127 dictionary entries.                    * 00025800
+*                                                                     * 00025900
+*                                                                     * 00026000
+*                                                                     * 00026100
+*                 In all these cases, the user must fix the           * 00026200
+*                 dictionary.                                         * 00026300
+*                                                                     * 00026400
+*                                                                     * 00026500
+*                                                                     * 00026600
+*01* RETURN CODES:                                                    * 00026700
+*                                                                     * 00026800
+*                                                                     * 00026900
+*                 Return code constants are defined in macro          * 00027000
+*                 CSRYCMPS.                                           * 00027100
+*                                                                     * 00027200
+*       0         Meaning: Successful completion. Source operand was  * 00027300
+*                 completely processed.                               * 00027400
+*                                                                     * 00027500
+*                 Action: None required.                              * 00027600
+*                                                                     * 00027700
+*       4         Meaning: Warning. Source operand was not completely * 00027800
+*                 processed.  No room left in target operand.         * 00027900
+*                                                                     * 00028000
+*                 Action: Specify a larger target operand. Or provide * 00028100
+*                 another area for the target operand. Call the       * 00028200
+*                 service again to resume processing of the           * 00028300
+*                 operation.                                          * 00028400
+*                                                                     * 00028500
+*       16        Meaning: Program Error. Operand not provided.       * 00028600
+*                                                                     * 00028700
+*                 Action: Provide values in the CMPSC_DictAddr,       * 00028800
+*                 CMPSC_TargetAddr, and CMPSC_SourceAddr fields.      * 00028900
+*                                                                     * 00029000
+*       20        Meaning: Program Error. Value in CMPSC_SYMSIZE is   * 00029100
+*                 not supported.                                      * 00029200
+*                                                                     * 00029300
+*                 Action: Provide a value from 1 to 5 in this 3-bit   * 00029400
+*                 field.                                              * 00029500
+*                                                                     * 00029600
+*       24        Meaning: Warning. No work to do.  The compression   * 00029700
+*                 area length (the target for compress, the source    * 00029800
+*                 for expand) is not large enough to hold even one    * 00029900
+*                 compression symbol.                                 * 00030000
+*                                                                     * 00030100
+*                 Action: If this result is expected, no action is    * 00030200
+*                 required.  Otherwise, provide a larger value in the * 00030300
+*                 CMPSC_TargetLen (for compression) or the            * 00030400
+*                 CMPSC_SourceLen (for expansion) field.              * 00030500
+*                                                                     * 00030600
+*       28        Meaning: Program error. Compression dictionary      * 00030700
+*                 processing exceeded the limit of 260 for the length * 00030800
+*                 of a compressed symbol                              * 00030900
+*                                                                     * 00031000
+*                 Action: Fix the dictionary.                         * 00031100
+*                                                                     * 00031200
+*       32        Meaning: Program error. Compression dictionary      * 00031300
+*                 processing exceeded the limit of 260 children for   * 00031400
+*                 an entry.                                           * 00031500
+*                                                                     * 00031600
+*                 Action: Fix the dictionary.                         * 00031700
+*                                                                     * 00031800
+*       36        Meaning: Program error. A compression dictionary    * 00031900
+*                 entry indicates that it contains more than 6        * 00032000
+*                 children (not including siblings).                  * 00032100
+*                                                                     * 00032200
+*                 Action: Fix the dictionary.                         * 00032300
+*                                                                     * 00032400
+*       40        Meaning: Program error. The number of extension     * 00032500
+*                 characters for a compression dictionary entry with  * 00032600
+*                 0 or 1 children exceeds 4.                          * 00032700
+*                                                                     * 00032800
+*                 Action: Fix the dictionary.                         * 00032900
+*                                                                     * 00033000
+*       44        Meaning: Program error. A sibling descriptor        * 00033100
+*                 compression dictionary entry has a count of 0.      * 00033200
+*                                                                     * 00033300
+*                 Action: Fix the dictionary.                         * 00033400
+*                                                                     * 00033500
+*       48        Meaning: Program error. Expansion of a compression  * 00033600
+*                 symbol used more than 127 dictionary entries.       * 00033700
+*                                                                     * 00033800
+*                 Action: Fix the dictionary.                         * 00033900
+*                                                                     * 00034000
+*       52        Meaning: Program error. Entropy descriptors for     * 00034100
+*                 Entropy Encoding are not valid.                     * 00034200
+*                                                                     * 00034300
+*                 Action: Fix the entropy descriptors.                * 00034400
+*                                                                     * 00034500
+*       56        Meaning: Program Error. The input block indicates   * 00034600
+*                 compression and Entropy Encoding. That is not       * 00034700
+*                 supported.                                          * 00034800
+*                                                                     * 00034900
+*                 Action: Avoid requesting compression for Entropy    * 00035000
+*                 Encoding.                                           * 00035100
+*                                                                     * 00035200
+*       60        Meaning: Program error. The dictionary, as          * 00035300
+*                 indicated by the offset to the entropy descriptors, * 00035400
+*                 is not a valid size.                                * 00035500
+*                                                                     * 00035600
+*                 Action: Fix the dictionary or the offset.           * 00035700
+*                                                                     * 00035800
+*                                                                     * 00035900
+*                                                                     * 00036000
+*01* REASON CODES:  None.                                             * 00036100
+*                                                                     * 00036200
+*01* MODULE TYPE:  ASSEM MACRO                                        * 00036300
+*                                                                     * 00036400
+*02*   PROCESSOR:  ASSEM                                              * 00036500
+*                                                                     * 00036600
+*01* COMPONENT:  SCCSR                                                * 00036700
+*                                                                     * 00036800
+*01* DISTRIBUTION LIBRARY: AMACLIB                                    * 00036900
+*                                                                     * 00037000
+*01* EXAMPLES:                                                        * 00037100
+*                                                                     * 00037200
+*    An example of compression                                        * 00037300
+*                                                                     * 00037400
+*             LA    2,MYCBLOCK               Get address of parm      * 00037500
+*             USING CMPSC,2                                           * 00037600
+*             XC    CMPSC(CMPSC_LEN),CMPSC   Clear block              * 00037700
+*             OI    CMPSC_FLAGS_BYTE2,CMPSC_SYMSIZE_5 Set size        * 00037800
+*    *                        Symbol size is 5+8. Dictionary has      * 00037900
+*    *                        2**(5+8) entries                        * 00038000
+*             L     3,DICTADDR                                        * 00038100
+*             ST    3,CMPSC_DICTADDR         Set dictionary address   * 00038200
+*             L     3,COMPADDR                                        * 00038300
+*             ST    3,CMPSC_TARGETADDR       Set compression area     * 00038400
+*             L     3,COMPLEN                                         * 00038500
+*             ST    3,CMPSC_TARGETLEN        Set compression length   * 00038600
+*             L     3,EXPADDR                                         * 00038700
+*             ST    3,CMPSC_SOURCEADDR       Set expansion area       * 00038800
+*             L     3,EXPLEN                                          * 00038900
+*             ST    3,CMPSC_SOURCELEN        Set expansion length     * 00039000
+*             LA    3,WORKAREA                                        * 00039100
+*             ST    3,CMPSC_WORKAREAADDR     Set workarea address     * 00039200
+*             CSRCMPSC CBLOCK=CMPSC                                   * 00039300
+*             DROP  2                                                 * 00039400
+*     .                                                               * 00039500
+*     .                                                               * 00039600
+*             DS    0F        Align parameter on word boundary        * 00039700
+*    MYCBLOCK DS    (CMPSC_LEN)CL1    CBLOCK parameter                * 00039800
+*    COMPADDR DS    A         Output "To" (compression) area          * 00039900
+*    COMPLEN  DS    F         Length of "To" area                     * 00040000
+*    EXPADDR  DS    A         Input "From" (expansion) area           * 00040100
+*    EXPLEN   DS    F         Length of "From" area                   * 00040200
+*    DICTADDR DS    A         Address of compression dictionary       * 00040300
+*             DS    0D        Doubleword align workarea               * 00040400
+*    WORKAREA DS    CL192     Work area                               * 00040500
+*             CSRYCMPS ,                                              * 00040600
+*                                                                     * 00040700
+*                                                                     * 00040800
+*    Note that the expansion dictionary must immediately follow the   * 00040900
+*    compression dictionary and both must be aligned on page          * 00041000
+*    boundaries.                                                      * 00041100
+*                                                                     * 00041200
+*    An example of expansion                                          * 00041300
+*                                                                     * 00041400
+*             LA    2,MYCBLOCK               Get address of parm      * 00041500
+*             USING CMPSC,2                                           * 00041600
+*             XC    CMPSC(CMPSC_LEN),CMPSC   Clear block              * 00041700
+*             OI    CMPSC_FLAGS_BYTE2,CMPSC_SYMSIZE_5 Set size        * 00041800
+*    *                        Symbol size is 5+8. Dictionary has      * 00041900
+*    *                        2**(5+8) entries                        * 00042000
+*             OI    CMPSC_FLAGS_BYTE2,CMPSC_EXPAND  Do expansion      * 00042100
+*             L     3,EDICTADDR                                       * 00042200
+*             ST    3,CMPSC_DICTADDR         Set dictionary address   * 00042300
+*             L     3,EXPADDR                                         * 00042400
+*             ST    3,CMPSC_TARGETADDR       Set expansion area       * 00042500
+*             L     3,EXPLEN                                          * 00042600
+*             ST    3,CMPSC_TARGETLEN        Set expansion length     * 00042700
+*             L     3,COMPADDR                                        * 00042800
+*             ST    3,CMPSC_SOURCEADDR       Set compression area     * 00042900
+*             L     3,COMPLEN                                         * 00043000
+*             ST    3,CMPSC_SOURCELEN        Set compression length   * 00043100
+*             LA    3,WORKAREA                                        * 00043200
+*             ST    3,CMPSC_WORKAREAADDR     Set workarea address     * 00043300
+*             CSRCMPSC CBLOCK=CMPSC                                   * 00043400
+*             DROP  2                                                 * 00043500
+*     .                                                               * 00043600
+*     .                                                               * 00043700
+*             DS    0F        Align parameter on word boundary        * 00043800
+*    MYCBLOCK DS    (CMPSC_LEN)CL1    CBLOCK Parameter                * 00043900
+*    EXPADDR  DS    A         Output "To" (expansion) area            * 00044000
+*    EXPLEN   DS    F         Length of "To" area                     * 00044100
+*    COMPADDR DS    A         Input "From" (compression) area         * 00044200
+*    COMPLEN  DS    F         Length of "From" area                   * 00044300
+*    EDICTADDR DS   A         Address of expansion dictionary         * 00044400
+*             DS    0D        Doubleword align workarea               * 00044500
+*    WORKAREA DS    CL192     Work area                               * 00044600
+*             CSRYCMPS ,                                              * 00044700
+*                                                                     * 00044800
+*                                                                     * 00044900
+*    Note that the expansion dictionary must be aligned on a page     * 00045000
+*    boundary.                                                        * 00045100
+*                                                                     * 00045200
+*    An example of expansion for entropy encoding                     * 00045300
+*                                                                     * 00045400
+*             L     15,X'10'                 Get address of CVT       * 00045500
+*             TM    CVTFLAG5-CVT(15),CVTEEC  Is EE simulation avail?  * 00045600
+*             JZ    Cannot_Simulate          Not available            * 00045700
+*             LA    2,MYCBLOCK               Get address of parm      * 00045800
+*             USING CMPSCEE,2                                         * 00045900
+*             XC    CMPSCEE(CMPSCEE_LEN),CMPSCEE Clear block          * 00046000
+*             OI    CMPSCEE_FLAGS_BYTE1,CMPSCEE_EntropyEncoding       * 00046100
+*             OI    CMPSCEE_FLAGS_BYTE2,CMPSCEE_Expand Do expansion   * 00046200
+*             LG    3,EDICTADDR                                       * 00046300
+*             STG   3,CMPSCEE_DICTADDR       Set dictionary address   * 00046400
+*             LG    3,EXPADDR                                         * 00046500
+*             STG   3,CMPSCEE_TARGETADDR     Set expansion area       * 00046600
+*             LG    3,EXPLEN                                          * 00046700
+*             STG   3,CMPSCEE_TARGETLEN      Set expansion length     * 00046800
+*             LG    3,COMPADDR                                        * 00046900
+*             STG   3,CMPSCEE_SOURCEADDR     Set compression area     * 00047000
+*             LG    3,COMPLEN                                         * 00047100
+*             STG   3,CMPSCEE_SOURCELEN      Set compression length   * 00047200
+*             LA    3,WORKAREA                                        * 00047300
+*             STG   3,CMPSCEE_WORKAREAADDR   Set workarea address     * 00047400
+*             CSRCMPSC CBLOCK=CMPSCEE                                 * 00047500
+*             DROP  2                                                 * 00047600
+*     .                                                               * 00047700
+*     .                                                               * 00047800
+*             DS    0D        Align parameter on word boundary        * 00047900
+*    MYCBLOCK DS    (CMPSCEE_LEN)CL1  CBLOCK Parameter                * 00048000
+*    EXPADDR  DS    AD        Output "To" (expansion) area            * 00048100
+*    EXPLEN   DS    D         Length of "To" area                     * 00048200
+*    COMPADDR DS    AD        Input "From" (compression) area         * 00048300
+*    COMPLEN  DS    D         Length of "From" area                   * 00048400
+*    EDICTADDR DS   AD        Address of expansion dictionary         * 00048500
+*    *                        with offset of entropy descriptors      * 00048600
+*    *                        divided by 128 in bits 52-60            * 00048700
+*             DS    0D        Doubleword align workarea               * 00048800
+*    WORKAREA DS    CL256     Work area                               * 00048900
+*             CSRYCMPS ,                                              * 00049000
+*             CVT   DSECT=YES                                         * 00049100
+*                                                                     * 00049200
+*                                                                     * 00049300
+*    Note that the expansion dictionary must be aligned on a page     * 00049400
+*    boundary and must be followed immediately by the 16 2-byte       * 00049500
+*    entropy descriptors.                                             * 00049600
+*                                                                     * 00049700
+*    Note that the offset to the entropy descriptors divided by 128   * 00049800
+*    must be in bits 52-60 of the expansion dictionary address.       * 00049900
+*                                                                     * 00050000
+*01* MACRO USAGE NOTES:                                               * 00050100
+*                                                                     * 00050200
+*                                                                     * 00050300
+*    1.  Printing of the macro expansion is controlled by the ZPRINT  * 00050400
+*        global macro variable.  Any value other than 'NO' will       * 00050500
+*        result in the macro expansion being printed.  The default is * 00050600
+*        'YES'.  The following examples illustrate how the ZPRINT     * 00050700
+*        variable should be set.                                      * 00050800
+*                                                                     * 00050900
+*                    GBLC &ZPRINT                                     * 00051000
+*            &ZPRINT SETC 'YES'          &ZPRINT SETC 'NO'            * 00051100
+*                                                                     * 00051200
+*                                                                     * 00051300
+*                                                                     * 00051400
+*01* CHANGE ACTIVITY:                                                 * 00051500
+*                                                                     * 00051600
+*   Flag LineItem  FMID    Date   ID    Comment                       * 00051700
+*                                                                     * 00051800
+*    $T0=OY59584A HBB4430 920901 PD00XB:  Compression interface macro * 00051900
+*    $T1=OY59584  HBB4430 921101 PD00XB:  Compression interface macro * 00052000
+*    $L1=PEV      HBB7730 050414 PD00XB:  Avoid assembler low-storage * 00052100
+*                                         message                     * 00052200
+*    $L2=OAxxxxx  HBB7790 160106 PD00XB:  Entropy Encoding            * 00052300
+****** END OF SPECIFICATIONS *****************************************/ 00052400
+*/********************************************************************* 00052500
+         MACRO                                                          00052600
+&XLABEL  CSRCMPSC &CBLOCK=,&RETCODE=                                    00052700
+.*                                                                      00052800
+*              MACDATE -11/15/17-<0>                                    00052900
+.*                                                                      00053000
+.*******************************************************************    00053100
+.***AB.02  GLOBAL VARIABLES TO CONTROL PRINT AND CODE GENERATION        00053200
+.*******************************************************************    00053300
+              GBLC  &ZPRINT     YES=PRINT NO=NO PRINT                   00053400
+              GBLC  &ZTEST      YES=TEST NO=NO TEST                     00053500
+              GBLC  &ZSYSTEM    PCCODE10, MVS, SAK, VM, XAX             00053600
+.*                                                                      00053700
+              GBLC  &ZCSRCMPSC  YES=MACRO USED AT LEAST ONCE            00053800
+.*******************************************************************    00053900
+.***AB.03  COMMONLY USED LOCAL MACRO VARIABLES                          00054000
+.*******************************************************************    00054100
+              LCLC  &ZMS        ERROR MESSAGE WORK AREA                 00054200
+              LCLC  &ZCNDX      SYSNDX CHARACTERS                       00054300
+              LCLC  &ZCLNG      USED WHEN LENGTH IS NEEDED              00054400
+              LCLC  &ZCGPR      USED WHEN VALUE IS IN A GPR             00054500
+              LCLC  &ZCVAL      USED TO CONTAIN FIXED VALUE             00054600
+              LCLA  &ZAWRK      USED AS A WORK AREA                     00054700
+              LCLA  &ZASIZ      USED FOR SIZE OF VALUE                  00054800
+              LCLA  &ZN         NUMERIC WORK VARIABLE                   00054900
+              LCLC  &ZC         CHARACTER WORK VARIABLE                 00055000
+              LCLC  &ZTLC       CHARACTER TOO LONG VARIABLE             00055100
+              LCLA  &ZTLA       VALUE TOO LONG VARIABLE                 00055200
+              LCLC  &ZMAC_G     "G" or null                             00055300
+&ZMAC_G       SETC  ''                                                  00055400
+              LCLC  &ZMAC_LR                                            00055500
+&ZMAC_LR      SETC  'LR'                                                00055600
+              LCLC  &ZMAC_L                                             00055700
+&ZMAC_L       SETC  'L'                                                 00055800
+              LCLC  &ZMAC_ST                                            00055900
+&ZMAC_ST      SETC  'ST'                                                00056000
+              LCLC  &ZMAC_LLGT                                          00056100
+&ZMAC_LLGT    SETC  'L'                                                 00056200
+              LCLC  &ZMAC_LGR                                           00056300
+&ZMAC_LGR     SETC  'LR'                                                00056400
+              LCLC  &ZMAC_LG                                            00056500
+&ZMAC_LG      SETC  'L'                                                 00056600
+              LCLC  &ZMAC_STG                                           00056700
+&ZMAC_STG     SETC  'ST'                                                00056800
+              LCLA  &ZMACRET    MACRO RETURN CODE                       00056900
+&ZMACRET      SETA  0           ASSUME NO ERRORS                        00057000
+.*                                                                      00057100
+              LCLC  &ZCSYSLIST(255)             NONXKEY, POS ARRAY      00057200
+              LCLA  &ZASYSLNDX  WORK INDEX FOR ZCSYSLIST()              00057300
+              LCLA  &ZPLLEN     PARAMETER LIST LENGTH                   00057400
+              LCLC  &ZENDBASEPL                 End of base PL          00057500
+.********************************************************************   00057600
+.***AB.05  INVOKE MVS MACROS TO CONTROL CODE GENERATION                 00057700
+.********************************************************************   00057800
+              GBLC  &SYSSPLV    SP LEVEL 1,2,3 -SPLEVEL                 00057900
+              GBLC  &SYSASCE    SYSTEM STATE P ANY AR-SYSSTATE          00058000
+              GBLA  &SYSALVL    SYSSTATE ARCHLVL                        00058100
+              GBLC  &SYSAM64    SYSSTATE AMODE64                        00058200
+.*                                                                      00058300
+              AIF   (K'&SYSASCE GT 0).ZSYS4     SYS STATE DEFINED       00058400
+              AIF   (K'&SYSSPLV GT 0).ZSYS2     SP LEVEL DEFINED        00058500
+              SPLEVEL  TEST                                             00058600
+.ZSYS2        ANOP  ,                                                   00058700
+              AIF   ('&SYSSPLV' EQ '1').ZSYS3   PRE SP 3.1              00058800
+              AIF   ('&SYSSPLV' EQ '2').ZSYS3   PRE SP 3.1              00058900
+              SYSSTATE TEST                                             00059000
+              AGO   .ZSYS4                                              00059100
+.ZSYS3        ANOP  ,                                                   00059200
+&SYSASCE      SETC  'P'         ASSUME SYSSTATE PRIMARY                 00059300
+.ZSYS4        ANOP  ,                                                   00059400
+              AIF   ('&SYSAM64' NE 'YES').ZSYSN64                       00059500
+&ZMAC_LLGT    SETC 'LLGT'                                               00059600
+&ZMAC_LGR     SETC 'LGR'                                                00059700
+&ZMAC_LG      SETC 'LG'                                                 00059800
+&ZMAC_STG     SETC 'STG'                                                00059900
+.ZSYSN64      ANOP  ,                                                   00060000
+              AIF   (&SYSALVL LE 1).ZSYS4A                              00060100
+&ZMAC_G       SETC 'G'                                                  00060200
+&ZMAC_LR      SETC 'LGR'                                                00060300
+&ZMAC_L       SETC 'LG'                                                 00060400
+&ZMAC_ST      SETC 'STG'                                                00060500
+.ZSYS4A       ANOP  ,                                                   00060600
+.*******************************************************************    00060700
+.***AB.07  DEFINE ALL MACRO VARIABLES                                   00060800
+.*******************************************************************    00060900
+              LCLC  &XCBLOCK    ++ NAME                                 00061000
+              LCLC  &XRETCODE   ++ NAME                                 00061100
+.*******************************************************************    00061200
+.***AB.13  DEFINE MACRO VARIABLES FOR INPUT/OUTPUT PROCESSING           00061300
+.*******************************************************************    00061400
+              LCLC  &ZXCBLOCK   ++ INOUT NAME                           00061500
+              LCLC  &ZXRETCODE  ++ OUTPUT NAME                          00061600
+.********************************************************************   00061700
+.***AG.MF02  FULL MACRO SYNTAX CHECKING                                 00061800
+.********************************************************************   00061900
+              ACTR  10000                                               00062000
+.*----------------------------------------------------------------***   00062100
+.***AG.KXVAR05 NAME, RQD INOUT, KEYS -XVARIABLE KEY                     00062200
+              AIF   (N'&CBLOCK LE 1).ZG2A       CK NUM                  00062300
+&ZMS          SETC  '"CBLOCK='                                          00062400
+&ZMS          SETC  '&ZMS.&CBLOCK"'                                     00062500
+&ZMS          SETC  '&ZMS "CBLOCK"'                                     00062600
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00062700
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00062800
+.ZG2A         ANOP  ,                                                   00062900
+.*-------------------------------------------------------------------   00063000
+.***AG.KXVAR06 NAME, RQD INOUT, KEYS -XVARIABLE                         00063100
+&ZXCBLOCK     SETC  'INOUT'     SET IN/OUTPUT                           00063200
+&XCBLOCK      SETC  '&CBLOCK(1)'                SET XVARIABLE           00063300
+              AIF   (N'&CBLOCK GT 1).ZG2B       MULTI                   00063400
+&XCBLOCK      SETC  '&CBLOCK'   SET XVARIABLE                           00063500
+.ZG2B         AIF   (K'&CBLOCK(1) GT 0).ZG2C                            00063600
+&ZXCBLOCK     SETC  ''          RESET IN/OUTPUT                         00063700
+&ZMS          SETC  ' '                                                 00063800
+&ZMS          SETC  '&ZMS "CBLOCK" KEY AND ITS'                         00063900
+              MNOTE 8,' &ZMS ARGUMENT ARE REQUIRED.'                    00064000
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00064100
+.ZG2C         ANOP  ,                                                   00064200
+.*-------------------------------------------------------------------   00064300
+.***AG.KCK02 NAME, RQD INOUT, KEYS -GPR OUT OF RANGE                    00064400
+              AIF   (K'&ZXCBLOCK LE 0).ZG2R     NOT I/O                 00064500
+              AIF   ('&XCBLOCK'(1,1) NE '(').ZG2R                       00064600
+&ZCGPR        SETC  '&XCBLOCK'(2,K'&XCBLOCK-2)                          00064700
+              AIF   ('&ZCGPR'(1,1) NE '0').ZG2P                         00064800
+              AIF   (K'&ZCGPR GT 2).ZG2Q                                00064900
+              AIF   ('&ZCGPR' EQ '0').ZG2Q                              00065000
+&ZCGPR        SETC  '&ZCGPR'(2,1)                                       00065100
+              AIF   (T'&ZCGPR NE 'N').ZG2Q      INVALID REG NAME        00065200
+.ZG2P         ANOP  ,                                                   00065300
+              AIF   (T'&ZCGPR NE 'N').ZG2R      NON NUMERIC             00065400
+              AIF   ('&ZCGPR' LT '1').ZG2Q                              00065500
+              AIF   ('&ZCGPR' LE '12').ZG2R                             00065600
+.ZG2Q         ANOP  ,                                                   00065700
+&ZMS          SETC  '"CBLOCK='                                          00065800
+&ZMS          SETC  '&ZMS.&CBLOCK"'                                     00065900
+&ZMS          SETC  '&ZMS ARGUMENT 1 MUST SPECIFY A REGISTER'           00066000
+              MNOTE 8,' &ZMS IN THE RANGE (1)-(12).'                    00066100
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00066200
+.ZG2R         ANOP  ,                                                   00066300
+.*----------------------------------------------------------------***   00066400
+.***AG.KXVAR05 NAME, OPT OUTPUT, KEYS -XVARIABLE KEY                    00066500
+              AIF   (N'&RETCODE LE 1).ZG5A      CK NUM                  00066600
+&ZMS          SETC  '"RETCODE='                                         00066700
+&ZMS          SETC  '&ZMS.&RETCODE"'                                    00066800
+&ZMS          SETC  '&ZMS "RETCODE"'                                    00066900
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00067000
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00067100
+.ZG5A         ANOP  ,                                                   00067200
+.*-------------------------------------------------------------------   00067300
+.***AG.KXVAR14 NAME, OPT OUTPUT, KEYS -XVARIABLE                        00067400
+              AIF   (K'&RETCODE(1) LE 0).ZG5C   NO PARM                 00067500
+&ZXRETCODE    SETC  'OUTPUT'    SET OUTPUT                              00067600
+&XRETCODE     SETC  '&RETCODE(1)'               SET XVARIABLE           00067700
+              AIF   (N'&RETCODE GT 1).ZG5C                              00067800
+&XRETCODE     SETC  '&RETCODE'  SET XVARIABLE                           00067900
+.ZG5C         ANOP  ,                                                   00068000
+.*-------------------------------------------------------------------   00068100
+.***AG.KCK02 NAME, OPT OUTPUT, KEYS -GPR OUT OF RANGE                   00068200
+              AIF   (K'&ZXRETCODE LE 0).ZG5R    NOT I/O                 00068300
+              AIF   ('&XRETCODE'(1,1) NE '(').ZG5R                      00068400
+&ZCGPR        SETC  '&XRETCODE'(2,K'&XRETCODE-2)                        00068500
+              AIF   ('&ZCGPR'(1,1) NE '0').ZG5P                         00068600
+              AIF   (K'&ZCGPR GT 2).ZG5Q                                00068700
+              AIF   ('&ZCGPR' EQ '0').ZG5Q                              00068800
+&ZCGPR        SETC  '&ZCGPR'(2,1)                                       00068900
+              AIF   (T'&ZCGPR NE 'N').ZG5Q      INVALID REG NAME        00069000
+.ZG5P         ANOP  ,                                                   00069100
+              AIF   (T'&ZCGPR NE 'N').ZG5R      NON NUMERIC             00069200
+              AIF   ('&ZCGPR' EQ '15').ZG5R                             00069300
+              AIF   ('&ZCGPR' LT '2').ZG5Q                              00069400
+              AIF   ('&ZCGPR' LE '12').ZG5R                             00069500
+.ZG5Q         ANOP  ,                                                   00069600
+&ZMS          SETC  '"RETCODE='                                         00069700
+&ZMS          SETC  '&ZMS.&RETCODE"'                                    00069800
+&ZMS          SETC  '&ZMS ARGUMENT 1 MUST SPECIFY A REGISTER'           00069900
+              MNOTE 8,' &ZMS IN THE RANGE (2)-(12) OR (15).'            00070000
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00070100
+.ZG5R         ANOP  ,                                                   00070200
+.******************************************************************     00070300
+.***AH.P00 CHECK STANDALONE POSITIONAL VARIABLES                        00070400
+.******************************************************************     00070500
+              ACTR  10000                                               00070600
+.*----------------------------------------------------------------***   00070700
+.***AH.P02 EXTRA POSITIONALS                                            00070800
+              AIF   (N'&SYSLIST LE 0).ZGLISTX   NO EXTRAS               00070900
+              AIF   (N'&SYSLIST NE 2).ZGLISTX1  NOT NULL                00071000
+              AIF   ('&SYSLIST(1)' NE '').ZGLISTX1  NOT NULL            00071100
+              AIF   ('&SYSLIST(2)' EQ '').ZGLISTX  NOT NULL             00071200
+.ZGLISTX1     ANOP  ,                                                   00071300
+&ZCVAL        SETC  ''          ERROR FIELD                             00071400
+&ZAWRK        SETA  0           POSITIONAL NUMBER                       00071500
+.ZGLIST2      ANOP  ,                                                   00071600
+&ZAWRK        SETA  &ZAWRK+1    NEXT POSITIONAL                         00071700
+              AIF   (&ZAWRK GT N'&SYSLIST).ZGLIST3  DONE                00071800
+&ZCVAL        SETC '&ZCVAL,&SYSLIST(&ZAWRK)'    EXTRA                   00071900
+              AGO   .ZGLIST2                                            00072000
+.*                                                                      00072100
+.ZGLIST3      ANOP  ,                                                   00072200
+&ZCVAL        SETC '&ZCVAL'(2,K'&ZCVAL-1)       STRIP COMMA             00072300
+&ZMS          SETC  'POSITIONAL ARGUMENT(S),'                           00072400
+&ZMS          SETC  '&ZMS "&ZCVAL"'                                     00072500
+&ZMS          SETC  '&ZMS CANNOT BE USED.'                              00072600
+&ZMS          SETC  '&ZMS NO POSITIONAL ARGUMENTS'                      00072700
+              MNOTE 8,' &ZMS ARE ALLOWED.'                              00072800
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00072900
+.ZGLISTX      ANOP  ,                                                   00073000
+&ZASYSLNDX    SETA  0                                                   00073100
+.*******************************************************************    00073200
+.***AE.ZMR01 NO CODE GENERATED IF ERRORS DETECTED                       00073300
+.*******************************************************************    00073400
+              AIF   (&ZMACRET NE 0).ZLX2        ERROR DETECTED          00073500
+.*******************************************************************    00073600
+.***AE.01  START OF CSRCMPSC MACRO CODE                                 00073700
+.*******************************************************************    00073800
+              LCLC  &M0M0001                 NAME                       00073900
+&M0M0001      SETC  '&XLABEL'                SET NAME                   00074000
+              AIF   (K'&XLABEL NE 0).XLAB2                              00074100
+&M0M0001      SETC  'M00M&SYSNDX'            DEFAULT NAME               00074200
+.*                                                                      00074300
+.XLAB2        ANOP  ,                                                   00074400
+&M0M0001 DS    0H                             CSRCMPSC-0                00074500
+.*******************************************************************    00074600
+.***AE.PR01 PRINT CONTROLS, DEFAULT IS YES                              00074700
+.*******************************************************************    00074800
+              PUSH  PRINT                                               00074900
+              AIF   ('&ZPRINT' NE 'NO').ZPRINTX  TURN PRINT ON          00075000
+              PRINT OFF         ++ PR01                                 00075100
+              AGO   .ZPRNTXX                                            00075200
+.ZPRINTX      PRINT ON                                                  00075300
+.ZPRNTXX      ANOP  ,                                                   00075400
+.*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*  00075500
+.*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*  00075600
+.********************************************************************   00075700
+.***AL.A01  INTERNAL ARRAY TO PRODUCE FORMATTED CODE                    00075800
+.********************************************************************   00075900
+                      LCLA  &ZOPN          LIST INSTRUCTION INDEX       00076000
+                      LCLA  &ZOPN1         INVOCATION INDEX             00076100
+                      LCLC  &ZOPL(4095)    LABEL                        00076200
+                      LCLC  &ZOPO(4095)    OPERATION                    00076300
+                      LCLC  &ZOPV(4095)    VALUE                        00076400
+                      LCLC  &ZOPD(4095)    DESCRIPTION                  00076500
+.*                                                                      00076600
+&ZOPN                 SETA  0              INITIAL INST INDEX VALUE     00076700
+.*-------------------------------------------------------------------   00076800
+&ZOPN1                SETA &ZOPN                                        00076900
+.*******************************************************************    00077000
+.***AO.X02  RETURN CODE PROCESSING                                      00077100
+.*******************************************************************    00077200
+                      AIF   (N'&RETCODE LE 0).ZMRETX                    00077300
+                      AIF   ('&XRETCODE'(1,1) EQ '(').ZMRET2            00077400
+                      AIF   ('&XRETCODE' EQ 'GPR15').ZMRETX             00077500
+                      AIF   ('&XRETCODE' EQ 'REG15').ZMRETX             00077600
+                      AIF   ('&XRETCODE' EQ 'R15').ZMRETX               00077700
+                      AIF   ('&XRETCODE' EQ '15').ZMRETX                00077800
+&ZOPN                 SETA  &ZOPN+1                                     00077900
+&ZOPL(&ZOPN)          SETC  ' '                                         00078000
+&ZOPO(&ZOPN)          SETC  'ST'                                        00078100
+&ZOPV(&ZOPN)          SETC  '15,&XRETCODE'                              00078200
+&ZOPD(&ZOPN)          SETC  '++ SET RETURN CODE'                        00078300
+                      AGO   .ZMRETX                                     00078400
+.*                                                                      00078500
+.ZMRET2               ANOP  ,                                           00078600
+&ZCGPR                SETC  '&XRETCODE'(2,K'&XRETCODE-2)                00078700
+                      AIF   ('&ZCGPR' EQ 'GPR15').ZMRETX                00078800
+                      AIF   ('&ZCGPR' EQ 'REG15').ZMRETX                00078900
+                      AIF   ('&ZCGPR' EQ 'R15').ZMRETX                  00079000
+                      AIF   ('&ZCGPR' EQ '15').ZMRETX                   00079100
+&ZOPN                 SETA  &ZOPN+1                                     00079200
+&ZOPL(&ZOPN)          SETC  ' '                                         00079300
+&ZOPO(&ZOPN)          SETC  '&ZMAC_LR'                                  00079400
+&ZOPV(&ZOPN)          SETC  '&ZCGPR,15'                                 00079500
+&ZOPD(&ZOPN)          SETC  '++ SET RETURN CODE'                        00079600
+.ZMRETX               ANOP  ,                                           00079700
+.*******************************************************************    00079800
+.***AO.X05  FORMAT GENERATED INSTRUCTIONS                               00079900
+.*******************************************************************    00080000
+                      ACTR  10000                                       00080100
+.*                                                                      00080200
+                      LCLA  &ZLC           COLUMN POSITION              00080300
+                      LCLA  &ZOPX          LIST TABLE INDEX             00080400
+                      LCLC  &ZLL           LABEL                        00080500
+                      LCLC  &ZLOP          OPERATION                    00080600
+                      LCLC  &ZLV           VALUE                        00080700
+                      LCLC  &ZLD           DESCRIPTION                  00080800
+.*                                                                      00080900
+&ZOPX                 SETA  1                                           00081000
+.ZL2                  AIF   (&ZOPX GT &ZOPN1).ZLX  B IF DONE            00081100
+&ZLL                  SETC  '&ZOPL(&ZOPX)'                              00081200
+&ZLOP                 SETC  '&ZOPO(&ZOPX)'                              00081300
+&ZLV                  SETC  '&ZOPV(&ZOPX)'                              00081400
+&ZLD                  SETC  '&ZOPD(&ZOPX)'                              00081500
+                      AIF   (K'&ZLD LE 0).ZL5                           00081600
+&ZLC                  SETA  35             COMMENT COLUMN               00081700
+                      AIF   ('&ZLD'(1,1) NE '*').ZL3                    00081800
+&ZLC                  SETA  33             COMMMENT COLUMN              00081900
+.ZL3                  AIF   (K'&ZLV GE &ZLC-16-1).ZL4                   00082000
+&ZLV                  SETC  '&ZLV'.' '                                  00082100
+                      AGO   .ZL3                                        00082200
+.*                                                                      00082300
+.ZL4                  ANOP  ,                                           00082400
+&ZLV                  SETC  '&ZLV'.' '                                  00082500
+.ZL5                  ANOP  ,                                           00082600
+&ZLV                  SETC  '&ZLV'.'&ZLD'                               00082700
+.*                                                                      00082800
+&ZLL     &ZLOP &ZLV                                                     00082900
+.*                                                                      00083000
+&ZOPX                 SETA  &ZOPX+1        NEXT STRUCTURE               00083100
+                      AGO   .ZL2           CONTINUE LOOPING             00083200
+.*                                                                      00083300
+.ZLX                  ANOP  ,                                           00083400
+.*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*  00083500
+&L         SETC  '&ZMAC_LLGT'                                      @L2A 00083600
+           AIF   ('&CBLOCK'(1,1) EQ '(').INREG                     @T1A 00083700
+           LAE   1,&CBLOCK(1)        Get parameter address/ALET    @T2A 00083800
+           AGO   .DONE                                             @T1A 00083900
+.INREG  ANOP                                                       @T1A 00084000
+           AIF ('&CBLOCK(1)' EQ '1').DONE                          @T1A 00084100
+           LAE   1,0(0,&CBLOCK(1))   Get parameter address/ALET    @T2A 00084200
+.DONE   ANOP                                                       @T1A 00084300
+           &L    15,16(0,0)         Get CVT address                @T1A 00084400
+           L     15,140(15,0)       Get ECVT address               @T1A 00084500
+           L     15,248(15,0)       Get address of service         @T1A 00084600
+           BASSM 14,15              Call compression service       @T1A 00084700
+.*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*  00084800
+.*******************************************************************    00084900
+.***AP.X01  FORMAT GENERATED CODE                                       00085000
+.ZL21                 AIF   (&ZOPX GT &ZOPN).ZLX1  B IF DONE            00085100
+&ZLL                  SETC  '&ZOPL(&ZOPX)'                              00085200
+&ZLOP                 SETC  '&ZOPO(&ZOPX)'                              00085300
+&ZLV                  SETC  '&ZOPV(&ZOPX)'                              00085400
+&ZLD                  SETC  '&ZOPD(&ZOPX)'                              00085500
+                      AIF   (K'&ZLD LE 0).ZL51                          00085600
+&ZLC                  SETA  35             COMMENT COLUMN               00085700
+                      AIF   ('&ZLD'(1,1) NE '*').ZL31                   00085800
+&ZLC                  SETA  33             COMMENT COLUMN               00085900
+.ZL31                 AIF   (K'&ZLV GE &ZLC-16-1).ZL41                  00086000
+&ZLV                  SETC  '&ZLV'.' '                                  00086100
+                      AGO   .ZL31                                       00086200
+.*                                                                      00086300
+.ZL41                 ANOP  ,                                           00086400
+&ZLV                  SETC  '&ZLV'.' '                                  00086500
+.ZL51                 ANOP  ,                                           00086600
+&ZLV                  SETC  '&ZLV'.'&ZLD'                               00086700
+.*                                                                      00086800
+&ZLL     &ZLOP &ZLV                                                     00086900
+.*                                                                      00087000
+&ZOPX                 SETA  &ZOPX+1        NEXT STRUCTURE               00087100
+                      AGO   .ZL21          CONTINUE LOOPING             00087200
+.*                                                                      00087300
+.ZLX1                 ANOP  ,                                           00087400
+.*******************************************************************    00087500
+.***AP.X02  END OF CSRCMPSC MACRO                                       00087600
+&ZCSRCMPSC            SETC  'YES'          SET CSRCMPSC USED            00087700
+         POP   PRINT                                                    00087800
+*                                            CSRCMPSC-0                 00087900
+         SPACE 1                                                        00088000
+.ZLX2                 ANOP  ,                                           00088100
+         MEND                                                           00088200
+**********************************************************************/ 00088300
+*/*PB.OC01 INVOKE MACRO---------------------------------------------*/  00088400
+*%CSRCMPSC: MACRO KEYS(CBLOCK,RETCODE);                                 00088500
+*  ANS('?'!!MACLABEL!!' '!!'CSRCMPSP '!!MACLIST!!                       00088600
+*         ' '!!MACKEYS!!';') COL(MACLMAR);                              00088700
+*%END CSRCMPSC;                                                         00088800

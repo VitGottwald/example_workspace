@@ -1,0 +1,833 @@
+*/*************START OF SPECIFICATIONS********************************/ 00010000
+*/*                                                                  */ 00020000
+*/*                                                                  */ 00030000
+*/* $MAC(IHAACEE) COMP(SC1BN) PROD(RACF):                            */ 00040000
+*/*                                                                  */ 00050000
+*/* DESCRIPTIVE NAME = Accessor Environment Element (ACEE)           */ 00060000
+*/*                                                                  */ 00070000
+*/*01* PROPRIETARY STATEMENT=                                        */ 00080000
+*/***PROPRIETARY_STATEMENT********************************************/ 00090000
+*/*                                                                  */ 00100000
+*/* LICENSED MATERIALS - PROPERTY OF IBM                             */ 00110000
+*/* 5650-ZOS COPYRIGHT IBM CORP. 1977, 2019                          */ 00110015
+*/*                                                                  */ 00140000
+*/* STATUS= HBB77C0                                                  */ 00150000
+*/*                                                                  */ 00160000
+*/***END_OF_PROPRIETARY_STATEMENT*************************************/ 00170000
+*/*                                                                  */ 00180000
+*/*01* EXTERNAL CLASSIFICATION:                                  @P8A*/ 00190000
+*/*02*   PI: BASE                                                @P8A*/ 00200000
+*/*02*   NOTPI: FIELDS                                           @P8A*/ 00210000
+*/*               ACEEAMP  ACEEMDLS  ACEECGRP  ACEECLCP          @P8A*/ 00220000
+*/*               ACEEGATA ACEEPADS  ACEEPTDS  ACEEOCOX          @LGC*/ 00230000
+*/*               ACEESBVR                                       @LKA*/ 00230015
+*/*                                                             1@LGD*/ 00240000
+*/*01* END OF EXTERNAL CLASSIFICATION:                           @P8A*/ 00250000
+*/*                                                                  */ 00260000
+*/*                                                                  */ 00270000
+*/* METHOD OF ACCESS = %INCLUDE SYSLIB(IHAACEE) FOR PL/S             */ 00280000
+*/*            ISSUE THE IHAACEE MACRO IN BAL                        */ 00290000
+*/*            FOR VIA SUPPORT, SPECIFY %IHAVIA = 'YES' BEFORE  @M3A */ 00300000
+*/*            %INCLUDE. DECLARE ACEE_ALET AS FIXED(32).        @M3A */ 00310000
+*/*            IF OTHER THAN BASED(ACEEPTR) IS WANTED, PUT THE  @M3A */ 00320000
+*/*            DESIRED VALUE IN ACEEBASE.                       @M3A */ 00330000
+*/*                                                                  */ 00340000
+*/*01* FUNCTION: Maps the ACEE, represents the authorities of a      */ 00350000
+*/*              single accessor in the address space.               */ 00360000
+*/*02*           1. If you use ACEEIEP, it must point to an area of  */ 00380000
+*/*              storage you obtained using a GETMAIN. RACF frees    */ 00380100
+*/*              this area when it frees the ACEE. For RACF to do    */ 00380200
+*/*              this, the first word of the area must contain the   */ 00380300
+*/*              subpool and the length of the area. The subpool     */ 00380400
+*/*              appears in the high-order byte, and the length      */ 00380500
+*/*              appears in the next 3 bytes.                        */ 00380600
+*/*                                                                  */ 00380700
+*/*02*           If you do not conform to this requirement in your   */ 00380800
+*/*              use of ACEEIEP, you must supply a RACINIT exit to   */ 00380900
+*/*              free the area and set the ACEEIEP field to 0 when a */ 00381000
+*/*              caller issues a RACINIT DELETE. In certain          */ 00381100
+*/*              situations, however, your exit is not called during */ 00381200
+*/*              RACF error recovery, and unpredictable results may  */ 00381300
+*/*              occur.  Therefore, it is strongly recommended that  */ 00381400
+*/*              you adhere to the specified requirements.           */ 00381500
+*/*                                                                  */ 00381600
+*/*02*           Examples of nonconforming use of ACEEIEP follow:    */ 00381700
+*/*02*           a. ACEEIEP contains data, rather than a pointer.    */ 00381800
+*/*02*           b. ACEEIEP contains a pointer, however the first    */ 00381900
+*/*              word of the area pointed to by ACEEIEP does not     */ 00382000
+*/*              contain the subpool and length information for the  */ 00382100
+*/*              area.                                               */ 00382200
+*/*02*           c. ACEEIEP contains a pointer, and the first word   */ 00382300
+*/*              of the area pointed to contains the subpool and     */ 00382400
+*/*              length information for a data area that points to   */ 00382500
+*/*              additional area obtained using GETMAIN.             */ 00382600
+*/*                                                                  */ 00382700
+*/*02*           This situation might not cause an abend, but it     */ 00382800
+*/*              results in a failure to free the acquired data      */ 00382900
+*/*              area.                                               */ 00383000
+*/*                                                                  */ 00383100
+*/*02*           If your use of ACEEIEP does not conform to the      */ 00383200
+*/*              specified requirements, or if your data area        */ 00383300
+*/*              contains any pointers to other data areas, you must */ 00383400
+*/*              provide an ACEE compression/expansion exit. See     */ 00383500
+*/*              z/OS Security Server RACF System Programmer's Guide */ 00383600
+*/*              for more information.                               */ 00383700
+*/*                                                                  */ 00383800
+*/*02*           The area that ACEEIEP points to is retrieved with   */ 00383900
+*/*              the ACEE. Before reusing ACEEIEP, installation code */ 00384000
+*/*              must process any existing area that ACEEIEP points  */ 00384100
+*/*              to. A pointer to storage may be lost if             */ 00384200
+*/*              installation code stores over ACEEIEP.              */ 00384300
+*/*                                                                  */ 00384400
+*/*02*           When reusing ACEEIEP, the storage for the new data  */ 00384500
+*/*              that ACEEIEP points to should be in the same        */ 00384600
+*/*              subpool as the ACEE. The ACEESP field of the ACEE   */ 00384700
+*/*              contains the subpool of the ACEE. For more          */ 00384800
+*/*              information about subpool use, see the z/OS MVS     */ 00384900
+*/*              Programming: Assembler Services Guide.              */ 00385000
+*/*                                                                  */ 00385100
+*/*02*           2. Within an IMS address space, ACEEAPTR is         */ 00385200
+*/*              reserved for use by IMS during IMS initialization   */ 00385300
+*/*              and signon.                                         */ 00385400
+*/*                                                                  */ 00385500
+*/*02*           3. Both ACEETRLV and ACEETRDA are 0 if one of the   */ 00385600
+*/*              following conditions is met:                        */ 00385700
+*/*02*           - The NODES class is active and a NODES profile of  */ 00385900
+*/*              the form submitnode.RUSER.userid exists with a UACC */ 00386000
+*/*              of at least UPDATE.                                 */ 00386100
+*/*02*           - The POE's class is not active.                    */ 00386300
+*/*02*           - Neither TERMID nor POE was specified.             */ 00386400
+*/*02*           - There is no matching profile.                     */ 00386500
+*/*                                                                  */ 00386600
+*/*02*           If the level is not specified in the profile,       */ 00386700
+*/*              ACEETRLV is 0 even when none of the conditions are  */ 00386800
+*/*              met. Similarly, if the DATA is not specified in the */ 00386900
+*/*              profile, ACEETRDA is 0 even when none of the        */ 00387000
+*/*              conditions are met.                                 */ 00387100
+*/*                                                                  */ 00387200
+*/*02*           4. Both ACEEAPLV and ACEEAPDA are 0 if one of the   */ 00387300
+*/*              following conditions is met:                        */ 00387400
+*/*02*           - The NODES class is active and a NODES profile of  */ 00387600
+*/*              the form submitnode.RUSER.userid exists with a UACC */ 00387700
+*/*              of at least UPDATE.                                 */ 00387800
+*/*02*           - The APPL class is not active.                     */ 00388000
+*/*02*           - APPL was not specified on the RACROUTE            */ 00388100
+*/*              REQUEST=VERIFY.                                     */ 00388200
+*/*02*           - No matching profile exists.                       */ 00388400
+*/*              If the level is not specified in the APPL profile,  */ 00388600
+*/*              ACEEAPLV is 0 even when none of the conditions are  */ 00388700
+*/*              met. Similarly, if the DATA is not specified in the */ 00388800
+*/*              profile, ACEEAPDA is 0 even when none of the        */ 00388900
+*/*              conditions are met.                                 */ 00389000
+*/*02*           5. The acronym at offset 0 is changed from ACEE to  */ 00389200
+*/*              acee prior to freeing the ACEE storage.             */ 00389300
+*/*02*           6. If you use ACEE3PTY, you must:                   */ 00389500
+*/*02*           - Do not use ACEE3PTY ACEE as an address-space ACEE */ 00389600
+*/*              (ASXBSENV) or task ACEE (TCBSENV).                  */ 00389700
+*/*02*           - Make sure that the ACEE3PTY ACEE is not deleted   */ 00389900
+*/*              while it is being used by RACF.                     */ 00390000
+*/*02*           - The ACEE3PTY must be set to zero, once its value  */ 00390200
+*/*              is extracted and before the ACEE which points to    */ 00390300
+*/*              the third-party ACEE is deleted and before another  */ 00390400
+*/*              3rd-party RACHECK using that ACEE is performed.     */ 00390500
+*/*02*           - The deletion of the ACEE3PTY ACEE must be         */ 00390700
+*/*              complete while the resource manager is in the       */ 00390800
+*/*              proper key. The ACEE3PTY ACEE is obtained from the  */ 00390900
+*/*              same subpool as the ACEE in which it is anchored.   */ 00391000
+*/*                                                                  */ 00395500
+*/*                                                                  */ 00395600
+*/*01* MACRO NAME: IHAACEE                                           */ 00395700
+*/*                                                                  */ 00395800
+*/*01* DSECT NAME: ACEE                                              */ 00395900
+*/*                                                                  */ 00396000
+*/*01* COMPONENT:  Resource Access Control Facility (SC1BN)          */ 00396100
+*/*                                                                  */ 00396200
+*/*01* EYE-CATCHER: ACEE                                             */ 00396300
+*/*02*   OFFSET:    0                                                */ 00396400
+*/*02*   LENGTH:    4                                                */ 00396500
+*/*                                                                  */ 00396600
+*/*                                                                  */ 00396700
+*/*01* STORAGE ATTRIBUTES:                                           */ 00396800
+*/*02*   SUBPOOL:   255 (or as specified by the issuer of RACROUTE   */ 00396900
+*/*                 REQUEST=VERIFY)                                  */ 00397000
+*/*02*   KEY:       0                                                */ 00397100
+*/*02*   RESIDENCY: May reside above 16M                             */ 00397200
+*/*                                                                  */ 00397300
+*/*01* SIZE: 192 bytes (does not include any data pointed to by      */ 00397400
+*/*          ACEE)                                                   */ 00397500
+*/*                                                                  */ 00397600
+*/*01* CREATED BY: RACF or MVS's system authorization facility (SAF),*/ 00397700
+*/*                depending on the parameters                       */ 00397800
+*/*                specified on RACROUTE REQUEST=VERIFY              */ 00397900
+*/*                                                                  */ 00398000
+*/*01* POINTED TO BY: A field supplied by the issuer of RACROUTE     */ 00398100
+*/*                   REQUEST=VERIFY. Or, for MVS only:              */ 00398200
+*/*                   ASXBSENV or TCBSENV. ACEEs pointed to by       */ 00398300
+*/*                   ASXBSENV or TCBSENV always                     */ 00398400
+*/*                   reside below 16M.                              */ 00398500
+*/*                                                                  */ 00398600
+*/*01* SERIALIZATION: NONE                                           */ 00398701
+*/*                                                                  */ 00398801
+*/*                                                                  */ 00398901
+*/*                                                                  */ 00399000
+*/* CHANGE ACTIVITY =                                                */ 00400000
+*/*        RACF VERSION 1,RELEASE 2                          @PC002PY*/ 00410000
+*/*        @ZA25840                                                  */ 00420000
+*/*        RACF VERSION 1, RELEASE 3                         @PC003PY*/ 00430000
+*/*        $L4=HRF1402,RACF/140,810701,SJRDSD:                   @L4A*/ 00440000
+*/*        @ZA60739                                          @ZA60739*/ 00450000
+*/*        $L5=HRF1502,RACF/150,811015,CNTDSD:                   @L5A*/ 00460000
+*/*        $L6=HRF1602,RACF/160,830207,CNTDSD:                   @L6A*/ 00470000
+*/*        UZ90283                                           @ZA90283*/ 00480000
+*/*        UZ90284                                           @ZA90284*/ 00490000
+*/*        UZ90285                                           @ZA90285*/ 00500000
+*/*        $L7=HRF1702,RACF/170,840716,CNTDSD:                   @L7A*/ 00510000
+*/*        $L8=HRF1802,RACF/180,860904,CNTDSD:                   @L8A*/ 00520000
+*/*        $M1=MVSB1   RACF/190 880328 PDRNH1: MVS B1 SECURITY   @M1A*/ 00530000
+*/*        $M2=MVSB1   RACF/190 880418 PDTGB1: MVS B1 SECURITY   @M2A*/ 00540000
+*/*        $P1=PGW0003 RACF/190 880428 PDI_H1: PGW0003           @P1A*/ 00550000
+*/*        $D1=DCR98   RACF/190 890614 PDI_H1: DCR98             @D1A*/ 00560000
+*/*        $P2=PGP0468 RACF/190 890614 PDI_H1: PGP0468           @P2A*/ 00570000
+*/*        $P3=PGP0474 RACF/190 890719 PDI_H1: PGP0474           @P3A*/ 00580000
+*/*        $P4=PGP0388 RACF/190 890719 PDI_H1: PGP0388           @P4A*/ 00590000
+*/*        $M3=APPCSPE RACF/190 900625 PDA7: SUPPORT FOR MVS 4.2 @M3A*/ 00600000
+*/*        $P5=PEO4849 RACF/190 901022 PDI_H1: PEO4849(OY37130)  @P5A*/ 00610000
+*/*        $01=OY47989 RACF/190 911012 PDDLR1: PE of OY43556     @01A*/ 00620000
+*/*        $02=OY54559 RACF/190 920624 PDBCC1: APAR OY54559      @02A*/ 00630000
+*/*        $P6=PIG3177 RACF/210 931021 PDKAF1: PIG3177           @P6A*/ 00640000
+*/*        $M4=OW10709 RACF/220 940729 PDAHW1: POSIT Support 2.2 @M4A*/ 00650000
+*/*        $M5=OW10709 RACF/220 940931 PDDCG1: RRSF              @M5A*/ 00660000
+*/*        $P7=PO80812 RACF/220 950621 PDAHW1: PTM PO80812       @P7A*/ 00670000
+*/*        $03=OW15238 RACF/220 950401 PDNMG1: DCE SPE           @03A*/ 00680000
+*/*        $P8=PSD0785 RACF/220 960202 PDEMD1: PTM PSD0785       @P8A*/ 00690000
+*/*        $P9=PSD0841 RACF/220 960215 PDEMD1: PTM PSD0841       @P9A*/ 00700000
+*/*        $PA=PSD0821 RACF/220 960216 PDAWC1: PTM PSD0821       @PAA*/ 00710000
+*/*        $PB=PSD1021 RACF/220 960402 PDAWC1: PTM PSD1021       @PBA*/ 00720000
+*/*        $04=OW22347 RACF/220 960903 PDAWC1: OW22347           @04A*/ 00730000
+*/*        $05=OW25237 RACF/220 970214 PDBEC1: OW25237           @05A*/ 00740000
+*/*        $D2=PVT0134 RACF/260 971030 PDR_B1: RACF 2.6 DCR 0001 @D2A*/ 00750000
+*/*        $06=OW33161 RACF/260 980511 PDAJB1: OW33161           @06A*/ 00760000
+*/*        $M6=PROTUID RACF/280 980608 PDGTM1: Protected UID's   @M6A*/ 00770000
+*/*        $M7=DCERT   HRF7703  990426 PDMKL1: Digital Cert      @M7A*/ 00780000
+*/*        $D3=ACLDCR1 HRF7706  010410 PDAWS1: ACL support DCR 1 @D3A*/ 00790000
+*/*        $L9=MLS2    HBB7708  020218 PDPFW:  MLS2 support      @L9A*/ 00800000
+*/*        $PC=PYN0219 HBB7708  020225 PDPFW:  PTM PYN0219       @PCA*/ 00810000
+*/*        $LA=MLS2    HBB7708  020325 PDPFW:  MLS2 support      @LAA*/ 00820000
+*/*        $LB=FTPD    HBB7720  031120 PDBRW1: FTP Daemon supt   @LBA*/ 00830000
+*/*        $LC=SAFID   HBB7730  050425 PDCCM1: SAFID             @LCA*/ 00840000
+*/*        $LD=RACFIPCS,HBB7750,061122 PDDFA1: IPCS SUPPORT      @LDA*/ 00850000
+*/*        $LE=LOGSTAT HBB7760  071113 PDER1:  Daily Statistics  @LEA*/ 00860000
+*/*        $LF=IDPROP  HBB7760  080403 PDFM1:  IDPROP            @LFA*/ 00861000
+*/*        $PC=ME15083 HBB7760  081121 PDLAW1: Defect ME15083    @PDA*/ 00861100
+*/*        $LG=DB2ENF  HBB7790  120703 PDMAN1: DB2ENF            @LGA*/ 00861200
+*/*        $LH=RACFROA HBB77A0  140615 PDRRG1: Read-Only Auditor @LHA*/ 00861300
+*/*        $LI=ZD003XBD HBB77A0 160112 PDGTM1: Multifactor auth  @LIA*/ 00861403
+*/*        $LJ=PRIVESC HRF77C0 170508 PDM_O1: 203846             @LJA*/ 00861418
+*/*        $LK=CMACRO  HBB77C0 171017 PDM_O1: 204666             @LKA*/ 00861433
+*/*                                                                  */ 00861503
+*/*                                                                  */ 00861603
+*/*                                                                  */ 00862000
+*/*   NOTES = There is IPCS support to format this macro.            */ 00863000
+*/*           When adding fields, please add to the end or in        */ 00864000
+*/*           reserved space.  Do not change offsets of existing     */ 00865000
+*/*           fields.  Update the IPCS support in module: ICHIACEE   */ 00866000
+*/*                                                              @LDA*/ 00867000
+*/*                                                                  */ 00868000
+*/* CHANGE DESCRIPTIONS :                                            */ 00869000
+*/*       A - 000000-999999                                  @PC001PY*/ 00870000
+*/*       A - MVS B1 SECURITY WORK UNIT IDENTITY                 @M1A*/ 00880000
+*/*       A - FIELD FOR TEMPORARY DATA SET NAME TABLE ANCHOR     @M2A*/ 00890000
+*/*       A - ADD '+' ON COLUMN 72                               @P1A*/ 00900000
+*/*       C - MOVE UTOKEN FROM O.C.O. TO NON-O.C.O. AREA         @D1A*/ 00910000
+*/*       A - CHANGE ACEETOKN FROM LENGTH(TOKEN) TO 80, SO       @P2A*/ 00920000
+*/*           MODULE DON'T HAVE TO INCLUDE ICHRUTKN TO COMPILE   @P2A*/ 00930000
+*/*       A - MAKE UTOKEN A SEPERATE CONTROL BLOCK               @P3A*/ 00940000
+*/*       C - CORRECT CHANGE ACTIVITY FOR @P1                    @P4A*/ 00950000
+*/*       A - SUPPORT TOKENXTR/TOKENMAP IN XM MODE.              @M3A*/ 00960000
+*/*       C - RE-WORD THE COMMENT                                @P5A*/ 00970000
+*/*       C - Reship due to cover letter error                   @01A*/ 00980000
+*/*       C - UPDATE COMMENTS OF VARIOUS FIELDS                  @02A*/ 00990000
+*/*           INCLUDES: ACEEINST, ACEEUSRI, ACEEGRPN, ACEETRMP,  @02A*/ 01000000
+*/*                     ACEEAPLV, ACEETRLV, ACEETRDA, ACEETRID,  @02A*/ 01010000
+*/*                     ACEEAPDA, ACEEUNAM, ACEECGRP, ACEESLVL,  @02A*/ 01020000
+*/*                     AND ACEEPTDS.                            @02A*/ 01030000
+*/*           (ALSO SEE NEW NOTES IN RACF DATA AREAS MANUAL)     @02A*/ 01040000
+*/*       C - Update prologue information                        @P6A*/ 01050000
+*/*       C - Added fields ACEEVMSK and ACEEVCLA to support the  @M4A*/ 01060000
+*/*           new POSIT values.                                  @M4A*/ 01070000
+*/*       C - Acee ACEERASP bit                                  @M5A*/ 01080000
+*/*       C - Update comments to remove reference of ACEEVCLA    @P7A*/ 01090000
+*/*           on ACEEVMSK declare.                               @P7A*/ 01100000
+*/*       A - Bits for DCE                                       @03A*/ 01110000
+*/*       A - Add External Classification information            @P8A*/ 01120000
+*/*       A - Deleted extraneous line at the end of the macro    @P9A*/ 01130000
+*/*       A - Add four byte date field for the Year 2000         @PAA*/ 01140000
+*/*       D - Remove reference to ACEECPRG in the External       @PBA*/ 01150000
+*/*           Classification information.                        @PBA*/ 01160000
+*/*       C - Update the PROPRIETARY STATEMENT                   @PBA*/ 01170000
+*/*       A - No code change. Correcting an install problem      @04A*/ 01180000
+*/*           with OS/390 R2.                                        */ 01190000
+*/*       A - Added bit ACEEXNVR                                 @05A*/ 01200000
+*/*       A - Added bit ACEETSKP for callable services           @D2A*/ 01210000
+*/*       A - Add 2 new flag bits to support OS/390 UNIX         @06A*/ 01220000
+*/*           Apar OW32119.                                      @06A*/ 01230000
+*/*       A - Added the ACEENPWR flag for the                        */ 01240000
+*/*           "Protected UserIDs" support                        @M6A*/ 01250000
+*/*       A - Add bit ACEERAUI and ACEEX5PR                      @M7A*/ 01260000
+*/*       A - Add bits ACEERUAA and ACEERUAV for ACL support     @D3A*/ 01270000
+*/*       A - Add new fields to ACEE for MLS2 support                */ 01280000
+*/*           ACEESTOK, ACEESRVA, and ACEESRVP                   @L9A*/ 01290000
+*/*       A - Correct Assembler for ACEESRVA and ACEESRVP        @PCA*/ 01300000
+*/*       A - Extend length to next double word boundary         @LAA*/ 01310000
+*/*       A - Add a pointer to a nested ENVR object, and a bit   @LBA*/ 01320000
+*/*           indicating whether or not to use it in FASTAUTH    @LBA*/ 01330000
+*/*       A - Add a pointer to the ICTX                          @LCA*/ 01340000
+*/*       A - Add flag for daily statistics                      @LEA*/ 01350000
+*/*       A - Add a pointer to the IDID                          @LFA*/ 01360000
+*/*         - Add ACEE creation time                             @LFA*/ 01370000
+*/*       C - Change ACEEDALY Bit(1) to BIT(1) for PLS3 compiles @PDA*/ 01371000
+*/*       C - Remove ACEE3PTY from the DMTI list                 @LGA*/ 01372000
+*/*       A - Add bit ACEEROA to ACEEFLG1 in ACEEBASE            @LHA*/ 01372100
+*/*       A - Added bits ACEEMFAU (User MUST authenticate            */ 01372203
+*/*           with MFA) and ACEEMFAA (user authenticated             */ 01372303
+*/*           with MFA) in ACEEFLG6                              @LIA*/ 01372403
+*/*       A - Added the '*' character in column 1 in the             */ 01372503
+*/*           PL/X code to allow ASSEMBLER to assemble this          */ 01372603
+*/*           macro without errors, when it is included in           */ 01372703
+*/*           an ASSEMBLER module, with the COPY statement       @LIA*/ 01372803
+*/*       A - Add 3 byte sub-version to reserved space.          @LJA*/ 01372818
+*/*       A - Change prolog to be friendly toward C macro        @LKA*/ 01372833
+*/*           generation tools.                                  @LKA*/ 01372848
+*/*                                                                  */ 01372903
+*/*                                                                  */ 01380000
+*/*                                                                  */ 01390000
+*/**************END OF SPECIFICATIONS*********************************/ 01400000
+*%GOTO ACEEPLS;                     /* BILINGUAL HEADER                 01410000
+         MACRO                                                          01420000
+         IHAACEE                                                        01430000
+ACEE     DSECT  ,ACEEPTR            ACCESSOR ENVIRONMENT ELEMENT        01440000
+ACEEACEE DS    CL4                  ACRONYM IN EBCDIC -ACEE-            01450000
+ACEECORE DS    0F                   ACEE SUBPOOL AND LENGTH             01460000
+ACEESP   DS    AL1                  ACEE SUBPOOL NUMBER                 01470000
+ACEELEN  DS    AL3                  LENGTH OF ACEE                      01480000
+ACEEVRSN DS    AL1                  ACEE VERSION NUMBER          @L4A   01490000
+ACEEVR01 EQU   1                    ACEE VERSION NUMBER = 1.     @M1A   01500000
+ACEEVR02 EQU   2                    ACEE VERSION NUMBER = 2.     @M1A   01510000
+ACEEVR03 EQU   3                    ACEE VERSION NUMBER = 3.     @LAA   01520000
+ACEECURV EQU   3                    ACEE CURRENT VERSION NUMBER  @LAC   01530000
+ACEESBVR DS    CL3                  ACEE SUB-Version             @LJC   01530015
+ACEEIEP  DS    A                    RESERVED FOR INSTALLATION.          01550000
+*                                   IF USED, IT MUST POINT TO A         01560000
+*                                   ONE BYTE SUBPOOL FOLLOWED BY        01570000
+*                                   A THREE BYTE LENGTH.                01580000
+ACEEINST DS    A                    USER DATA ADDRESS:  POINTS TO  @02C 01590000
+*                                   A 1-BYTE LENGTH FIELD FOLLOWED @02C 01600000
+*                                   BY THE INSTALLATION DATA       @02A 01610000
+*                                   SPECIFIED IN THE USER PROFILE. @02A 01620000
+*                                   THE LENGTH INCLUDES THE 1-BYTE @02A 01630000
+*                                   LENGTH FIELD.  THE ADDRESS IS  @02A 01640000
+*                                   ZERO IF (1) NO VALID USERID    @02A 01650000
+*                                   WAS PROVIDED OR (2) NO DATA    @02A 01660000
+*                                   WAS PRESENT IN THE PROFILE.    @02A 01670000
+ACEEUSER DS    0CL9                 USERID INFORMATION                  01680000
+ACEEUSRL DS    AL1                  USERID LENGTH                       01690000
+ACEEUSRI DS    CL8                  CONTAINS THE VALID RACF USERID @02C 01700000
+*                                   UNLESS (1) THE USERID ON THE   @02C 01710000
+*                                   VERIFY CALL WAS '*BYPASS*' FOR @02A 01720000
+*                                   AUDITABLE WORK THAT BYPASSES   @02A 01730000
+*                                   AUTHORIZATION CHECKING, OR     @02A 01740000
+*                                   (2) NO USERID WAS GIVEN SO THE @02A 01750000
+*                                   FIELD CONTAINS AN '*'.         @02A 01760000
+ACEEGRP  DS    0CL9                 GROUP NAME INFORMATION              01770000
+ACEEGRPL DS    AL1                  GROUP NAME LENGTH                   01780000
+ACEEGRPN DS    CL8                  VALID CONNECT GROUP, UNLESS    @02C 01790000
+*                                   ACEEUSRI IS '*BYPASS*' OR '*'. @02A 01800000
+*                                   FOR THESE TWO CASES ACEEGRPN   @02A 01810000
+*                                   WILL BE '*'.                   @02A 01820000
+ACEEFLG1 DS    B                    USER FLAGS                          01830000
+ACEESPEC EQU   X'80'                1 - SPECIAL ATTRIBUTE               01840000
+ACEEADSP EQU   X'40'                1 - AUTOMATIC DATA SECURITY         01850000
+*                                   PROTECTION                 @PC002PY 01860000
+ACEEOPER EQU   X'20'                1 - OPERATIONS ATTRIBUTE            01870000
+ACEEAUDT EQU   X'10'                1 - AUDITOR ATTRIBUTE      @PC002PY 01880000
+ACEELOGU EQU   X'08'                1 - USER IS TO HAVE MOST RACF       01890000
+*                                       FUNCTIONS LOGGED       @PC002PY 01900000
+ACEEROA  EQU   X'04'                1 - READ-ONLY AUDITOR               01910000
+*                                       ATTRIBUTE                  @LHA 01910100
+ACEEPRIV EQU   X'02'                1 - USER IS A STARTED PROCEDURE     01920000
+*                                   WITH THE PRIVILEGED ATTRIBUTE @L6A  01930000
+ACEERACF EQU   X'01'                1 - RACF DEFINED USER               01940000
+ACEEFLG2 DS    B                    DEFAULT UNIVERSAL ACCESS            01950000
+ACEEALTR EQU   X'80'                1 - ALTER AUTORITY TO               01960000
+*                                       RESOURCE               @PC002PY 01970000
+ACEECNTL EQU   X'40'                1 - CONTROL AUTHORITY TO            01980000
+*                                       RESOURCE               @PC002PY 01990000
+ACEEUPDT EQU   X'20'                1 - UPDATE AUTHORITY TO             02000000
+*                                       RESOURCE               @PC002PY 02010000
+ACEEREAD EQU   X'10'                1 - READ AUTHORITY TO               02020000
+*                                       RESOURCE               @PC002PY 02030000
+*        EQU   X'08'                RESERVED FOR COMPATIBILITY     @L8A 02040000
+*        EQU   X'04'                RESERVED                            02050000
+*        EQU   X'02'                RESERVED                            02060000
+ACEENONE EQU   X'01'                1 - NO AUTHORITY TO                 02070000
+*                                       RESOURCE               @PC002PY 02080000
+ACEEFLG3 DS    B                    MISCELLANEOUS FLAGS                 02090000
+ACEEGRPA EQU   X'80'                ACCESS LIST OF GROUP DS             02100000
+*                                   TO CONTAIN                          02110000
+*                                   0 - USERID                          02120000
+*                                   1 - GROUP NAME AND USERID           02130000
+ACEERASP EQU   X'40'                ON- IF RACF ADDRESS SPACE    @M5C   02140000
+ACEECLNT EQU   X'20'                ON- IF UN-AUTHENTICATD CLIENT  @03C 02150000
+ACEEACLT EQU   X'10'                ON- IF AUTHENTICATED CLIENT    @03C 02160000
+ACEETSKP EQU   X'08'                ON- IF TASK LEVEL PROCESS      @D2A 02170000
+ACEEIUSP EQU   X'04'                ON - INITUSP has been done     @06C 02180000
+ACEEDUID EQU   X'02'                ON -default UID being used     @06C 02190000
+ACEENPWR EQU   X'01'                ON - If Password Not Required  @M6A 02200000
+ACEEDATE DS    CL3                  DATE OF RACINIT                     02210000
+ACEEPROC DS    CL8                  NAME OF STARTED PROC OR BLANKS      02220000
+*                                   IF NOT A STARTED PROC               02230000
+ACEETRMP DS    A                    ADDRESS THAT POINTS TO THE     @02C 02240000
+*                                   TERMINAL ID.  THE FIELD IS     @02C 02250000
+*                                   ZERO FOR NON-TERMINAL USERS.   @02C 02260000
+ACEEFLG4 DS    XL2                  MISCELLANEOUS FLAGS 2      @PC002PY 02270000
+*        EQU   X'80'                RESERVED                   @PC002PY 02280000
+*        EQU   X'40'                RESERVED                   @PC002PY 02290000
+ACEEUATH EQU   X'20'                1 - USER IS AUTHORIZED TO DEFINE    02300000
+*                                       OTHER USERS            @PC002PY 02310000
+*        EQU   X'10'                RESERVED                   @PC002PY 02320000
+ACEEDASD EQU   X'08'                1 - USER IS AUTHORIZED TO PROTECT   02330000
+*                                       DASD VOLUMES           @PC002PY 02340000
+ACEETAPE EQU   X'04'                1 - USER IS AUTHORIZED TO PROTECT   02350000
+*                                       TAPE VOLUMES           @PC002PY 02360000
+ACEETERM EQU   X'02'                1 - USER IS AUTHORIZED TO PROTECT   02370000
+*                                       TERMINALS              @PC002PY 02380000
+ACEEAPLV DS    AL1                  APPLICATION LEVEL:             @02C 02390000
+*                                   CONTAINS THE LEVEL VALUE FROM  @02A 02400000
+*                                   THE APPL PROFILE.              @02A 02410000
+ACEETRLV DS    AL1                  POE LEVEL:                     @02C 02420000
+*                                   CONTAINS THE LEVEL VALUE FROM  @02A 02430000
+*                                   THE GENERAL RESOURCE PROFILE   @02A 02440000
+*                                   THAT PROTECTS THE PORT OF      @02A 02450000
+*                                   ENTRY.                         @02A 02460000
+ACEETRDA DS    A                    POE DATA ADDRESS:  POINTS TO A @02C 02470000
+*                                   1-BYTE LENGTH FIELD FOLLOWED   @02C 02480000
+*                                   BY THE INSTALLATION DATA FROM  @02A 02490000
+*                                   THE PROFILE THAT PROTECTS THE  @02A 02500000
+*                                   PORT OF ENTRY.  THE LENGTH     @02A 02510000
+*                                   INCLUDES THE 1-BYTE LENGTH     @02A 02520000
+*                                   FIELD.                         @02A 02530000
+ACEETRID DS    CL8                  AN 8-BYTE AREA CONTAINING THE  @02C 02540000
+*                                   TERMINAL ID.  THE NAME IS      @02A 02550000
+*                                   LEFT-JUSTIFIED AND PADDED ON   @02A 02560000
+*                                   THE RIGHT WITH BLANKS.  THIS   @02A 02570000
+*                                   FIELD WILL BE BLANK WHEN (1)   @02A 02580000
+*                                   TERMID IS NOT SPECIFIED AND    @02A 02590000
+*                                   (2) EITHER THE POE IS NOT      @02A 02600000
+*                                   SPECIFIED OR THE POE CLASS IS  @02A 02610000
+*                                   NOT TERMINAL.                  @02A 02620000
+ACEEAMP  DS    A                    ADDRESS 1ST ANCHORED MODEL @ZA25840 02630000
+ACEECLTH DS    BL4                  USER CLASS AUTHORIZATIONS -         02640000
+*                                   THESE BIT POSITIONS ARE MAPPED      02650000
+*                                   BY THE CLASS DESCRIPTOR ENTRIES     02660000
+*                                   ANCHORED OFF THE RACF CVT  @PC003PY 02670000
+ACEECLCP DS    A                    ANCHOR FOR INSTORAGE PROFILE        02680000
+*                                   TREES BUILT BY THE RACLIST          02690000
+*                                   FUNCTION                   @PC003PY 02700000
+ACEEAPTR DS    A                    ADDRESS FIELD RESERVED FOR          02710000
+*                                   APPLICATION USAGE          @PC----  02720000
+ACEEAPLN DS    CL8                  NAME OF APPLICATION TO WHICH        02730000
+*                                   USER IS CONNECTED OR BLANKS         02740000
+*                                   IF NO APPLICATION SPECIFIED         02750000
+*                                                              @PC003PY 02760000
+ACEEAPDA DS    A                    APPLICATION DATA ADDRESS:      @02C 02770000
+*                                   POINTS TO A 1-BYTE LENGTH      @02C 02780000
+*                                   FIELD FOLLOWED BY THE DATA     @02C 02790000
+*                                   FROM THE APPL PROFILE.  THE    @02A 02800000
+*                                   LENGTH INCLUDES THE 1-BYTE     @02A 02810000
+*                                   LENGTH FIELD.                  @02A 02820000
+ACEEUNAM DS    A                    ADDRESS OF USER NAME STRING.   @L4A 02830000
+*                                   THE FIRST BYTE IS A LENGTH     @02C 02840000
+*                                   FIELD FOLLOWED BY THE NAME     @02C 02850000
+*                                   STRING.  THE LENGTH INCLUDES   @02C 02860000
+*                                   THE 1-BYTE LENGTH FIELD.       @02C 02870000
+ACEEMDLS DS    A                    ADDRESS OF THE MODEL NAME      @L4A 02880000
+*                                   ARRAY. ZERO, IF ARRAY NOT      @L4A 02890000
+*                                   OBTAINED BY RACINIT.           @L4A 02900000
+*                                                                  @L4A 02910000
+ACEECGRP DS    A                    ADDRESS OF THE CONNECT GROUP        02920000
+*                                   TABLE                          @PAC 02930000
+ACEEGATA DS    A                    ADDRESS OF THE GENERIC              02940000
+*                                   ANCHOR TABLE                   @L5A 02950000
+ACEEFCGP DS    A                    ADDRESS OF LIST OF GROUPS USER      02960000
+*                                   IS A MEMBER OF, BUILT BY RACINIT,   02970000
+*                                   USED BY FRACHECK, IT IS NOT         02980000
+*                                   AUTOMATICALLY REFRESHED    @ZA60739 02990000
+ACEEDSLP DS    A                    ADDRESS OF THE LIST OF CATEGORIES   03000000
+*                                   THIS USER IS ALLOWED TO ACCESS @L7A 03010000
+ACEEDAT4 DS    CL4                  4 BYTE DATE FIELD IN THE FORM OF    03020000
+*                                   ccyydddF WHERE cc DENOTES THE       03030000
+*                                   CENTURY X'00' FOR 1900 AND X'01'    03040000
+*                                   FOR 2000.                     4@PAA 03050000
+ACEEPADS DS    A                    ADDRESS OF THE LIST OF DATA SETS    03060000
+*                                   ACCESSED BY CONTROLLED PROGRAMS     03070000
+*                                   EXECUTED BY THIS USER          @L7A 03080000
+ACEESLVL DS    BL1                  MAXIMUM SECURITY LEVEL ACCESSIBLE   03090000
+*                                   BY THIS USER                   @02C 03100000
+ACEEFLG5 DS    XL1                  MISCELLANEOUS FLAGS            @L7A 03110000
+ACEEMODE EQU   X'80'                AMODE OF ACEE DATA AREAS       @L7A 03120000
+*                                     0 -  24 BIT MODE             @L7A 03130000
+*                                     1 -  31 BIT MODE             @L7A 03140000
+ACEEVMSK EQU   X'40'                0 - ACEEPLCL points to a 128   @P7C 03150000
+*                                       bit mask if ACEEPLCL is    @P7C 03160000
+*                                       non-zero                   @P7C 03170000
+*                                   1 - ACEEPLCL points to a 1024  @P7C 03180000
+*                                       bit mask                   @P7C 03190000
+ACEED4OK EQU   X'20'                1 - ACEEDAT4 CONTAINS DATA     @PAC 03200000
+*                                   0 - ACEEDAT4 NOT USED          @PAA 03210000
+ACEEXNVR EQU   X'10'                1 - ENVR object created on     @05A 03220000
+*                                       another system             @05A 03230000
+ACEESTOK EQU   X'08'                0 - SERVAUTH resource name no  @L9C 03240000
+*                                       longer available           @L9C 03250000
+*                                   1 - ACEE built from TOKEN with @L9C 03260000
+*                                       SERVAUTH port of entry     @L9C 03270000
+ACEENSTE EQU   X'04'                1 - ENVR object in ACEENSTA should +03280000
+                                        be used in FASTAUTH        @LBC 03290000
+ACEEDALY EQU   X'02'                1 - User logged on to an       @LEC 03300000
+*                                       application which only     @LEA 03310000
+*                                       records daily logon        @LEA 03320000
+*                                       statistics                 @LEA 03330000
+*        EQU   X'01'                RESERVED                       @L7A 03340000
+ACEEFLG6 DS    CL1                  More miscellaneous flags       @M7A 03350000
+ACEERAUI EQU   X'80'                1 - Restricted access user ID  @M7A 03360000
+ACEERUAA EQU   X'40'                1 - Restricted access user can     +03370000
+                                        gain UNIX file access by       +03380000
+                                        virtue of the OTHER bits   @D3A 03390000
+ACEERUAV EQU   X'20'                1 - A check has been made to       +03400000
+                                        RESTRICTED.FILESYS.ACCESS      +03410000
+                                        for this process           @D3A 03420000
+ACEEMFAU EQU   X'10'                1 - User MUST authenticate     @LIA 03430003
+*                                       with MFA                   @LIA 03440003
+ACEEMFAA EQU   X'08'                1 - User authenticated with    @LIA 03441003
+*                                       MFA                        @LIA 03442003
+*        EQU   X'04'                RESERVED                       @M7A 03450000
+*        EQU   X'02'                RESERVED                       @M7A 03460000
+*        EQU   X'01'                RESERVED                       @M7A 03470000
+         DS    CL1                  RESERVED.                      @M7C 03480000
+ACEE3PTY DS    A                    ADDRESS OF ACEE CREATED BY         +03490000
+                                    THIRD PARTY RACHECK SVC            +03500000
+                                    PROCESSING                     @P1C 03510000
+ACEEPLCL DS    A                    POINTER TO EXTENDED CLASS          +03520000
+                                    AUTHORIZATION MASK, OR 0       @P1C 03530000
+ACEESUID DS    CL8                  SURROGATE USERID (AUDIT)       @M1A 03540000
+ACEEOCOX DS    A                    POINTER TO ACEX                @P5C 03550000
+ACEEPTDS DS    A                    POINTER TO FIRST TDS TABLE     @M2A 03560000
+ACEEX5PR DS    A                    Pointer to X500 name pair      @M7C 03570000
+*                                   structure.  Structure contains @M7C 03580000
+*                                   a 4-byte length of structure,  @M7C 03590000
+*                                   followed by up to 255 bytes of @M7C 03600000
+*                                   issuers name and up to 255     @M7A 03610000
+*                                   bytes of subjects name.  Name  @M7A 03620000
+*                                   pair storage is the same       @M7A 03630000
+*                                   subpool and addressing mode    @M7A 03640000
+*                                   as the ACEE.                   @M7A 03650000
+ACEETOKP DS    A                    POINTER TO UTOKEN              @P3D 03660000
+ACEESRVA DS    A                    Pointer to an area containing  @L9A 03670000
+*                                   a 1-byte length followed by    @PCC 03680000
+*                                   the SERVAUTH resource name     @PCC 03690000
+ACEESRVP DS    A                    Pointer to an area containing  @L9A 03700000
+*                                   a 1-byte length followed by    @PCC 03710000
+*                                   the SERVAUTH profile name that @PCC 03720000
+*                                   granted access to the SERVAUTH @PCC 03730000
+*                                   resource                       @PCC 03740000
+ACEENSTA DS    A                    Pointer to ENVR object for     @LBA 03750000
+*                                   server/daemon which created    @LBA 03760000
+*                                   this ACEE                      @LBA 03770000
+ACEEICTX DS    A                    Pointer to the identity context@LCA 03780000
+*                                   extension (ICTX)               @LCA 03790000
+ACEEIDID DS    A                    Pointer to the distributed     @LFA 03800000
+*                                   identity data (IDID)           @LFA 03810000
+ACEETIME DS    CL4                  ACEE creation time             @LFC 03820000
+         MEND                                                           03830000
+* TERMINATE PL/S COMMENT                                             */ 03840000
+*%ACEEPLS:;                         /* PLS ACEE STRUCTURE            */ 03850000
+*%IF IHAVIA = 'YES' %THEN                                    /* @M3A */ 03860000
+*    %IHAALET = 'VIA(ACEE_ALET)';                            /* @M3A */ 03870000
+*%ELSE                                                       /* @M3A */ 03880000
+*    %IHAALET = ' ';                                         /* @M3A */ 03890000
+*%IF ACEEBASE=' ' %THEN                                      /* @M3A */ 03900000
+*%ACEEBASE='BASED(ACEEPTR)';                                 /* @M3A */ 03910000
+*   DECLARE 1 ACEE ACEEBASE IHAALET,/* ACCESSOR ENVIRONMENT ELEMENT     03920002
+*                                                               @M3C */ 03930002
+*             2 ACEEACEE CHAR(4),   /* ACRONYM IN EBCDIC -ACEE-      */ 03940002
+*             2 ACEECORE PTR(31),   /* ACEE SUBPOOL AND LENGTH       */ 03950002
+*               3 ACEESP   PTR(8),  /* ACEE SUBPOOL NUMBER           */ 03960002
+*               3 ACEELEN  PTR(24), /* LENGTH OF ACEE                */ 03970002
+*             2 ACEEVRSN   FIXED(8),/* VERSION                   @LAC*/ 03980002
+*             2 ACEESBVR   CHAR(3), /* Sub version.              @LJA*/ 03980017
+*             2 ACEEIEP    PTR(31), /* RESERVED FOR INSTALLATION.       04000002
+*                                      IF USED, IT MUST POINT TO A      04010002
+*                                      ONE BYTE SUBPOOL FOLLOWED BY     04020002
+*                                      A THREE BYTE LENGTH.          */ 04030002
+*             2 ACEEINST   PTR(31),/* USER DATA ADDRESS:  POINTS TO     04040002
+*                                     A 1-BYTE LENGTH FIELD FOLLOWED    04050002
+*                                     BY THE INSTALLATION DATA          04060002
+*                                     SPECIFIED IN THE USER PROFILE.    04070002
+*                                     THE LENGTH INCLUDES THE 1-BYTE    04080002
+*                                     LENGTH FIELD.  THE ADDRESS IS     04090002
+*                                     ZERO IF (1) NO VALID USERID       04100002
+*                                     WAS PROVIDED OR (2) NO DATA WAS   04110002
+*                                     PRESENT IN THE PROFILE.    @02C*/ 04120002
+*             2 ACEEUSER,           /* USERID INFORMATION            */ 04130002
+*               3 ACEEUSRL PTR(8),  /* USERID LENGTH                 */ 04140002
+*               3 ACEEUSRI CHAR(8), /* CONTAINS THE VALID RACF USERID   04150002
+*                                     UNLESS (1) THE USERID ON THE      04160002
+*                                     VERIFY CALL WAS '*BYPASS*' FOR    04170002
+*                                     AUDITABLE WORK THAT BYPASSES      04180002
+*                                     AUTHORIZATION CHECKING, OR        04190002
+*                                     (2) NO USERID WAS GIVEN SO THE    04200002
+*                                     FIELD CONTAINS AN '*'.     @02C*/ 04210002
+*             2 ACEEGRP,            /* GROUP NAME INFORMATION        */ 04220002
+*               3 ACEEGRPL PTR(8),  /* GROUP NAME LENGTH             */ 04230002
+*               3 ACEEGRPN CHAR(8), /* VALID CONNECT GROUP, UNLESS      04240002
+*                                      ACEEUSRI IS '*BYPASS*' OR '*'.   04250002
+*                                      FOR THESE TWO CASES ACEEGRPN     04260002
+*                                      WILL BE '*'.              @02C*/ 04270002
+*             2 ACEEFLG1   BIT(8),  /* USER FLAGS                    */ 04280002
+*               3 ACEESPEC BIT(1),  /* 1 - SPECIAL ATTRIBUTE         */ 04290002
+*               3 ACEEADSP BIT(1),  /* 1 - AUTOMATIC DATA SECURITY      04300002
+*                                          PROTECTION        @PC002PY*/ 04310002
+*               3 ACEEOPER BIT(1),  /* 1 - OPERATIONS ATTRIBUTE      */ 04320002
+*               3 ACEEAUDT BIT(1),  /* 1 - AUDITOR ATTRIBUTE @PC002PY*/ 04330002
+*               3 ACEELOGU BIT(1),  /* 1 - USER IS TO HAVE MOST RACF    04340002
+*                                          FUNCTIONS LOGGED  @PC002PY*/ 04350002
+*               3 ACEEROA  BIT(1),  /* 1 - READ-ONLY AUDITOR            04360002
+*                                          ATTRIBUTE             @LHA*/ 04360102
+*               3 ACEEPRIV BIT(1),  /* 1 - USER IS A STARTED PROCEDURE  04370002
+*                                      WITH THE PRIVILEGED ATTRIBUTE    04380002
+*                                                                @L6A*/ 04390002
+*               3 ACEERACF BIT(1),  /* 1 - RACF DEFINED USER         */ 04400002
+*             2 ACEEFLG2   BIT(8),  /* DEFAULT UNIVERSAL ACCESS      */ 04410002
+*               3 ACEEALTR BIT(1),  /* 1 - ALTER AUTHORITY TO           04420002
+*                                          RESOURCE          @PC002PY*/ 04430002
+*               3 ACEECNTL BIT(1),  /* 1 - CONTROL AUTHORITY TO         04440002
+*                                          RESOURCE          @PC002PY*/ 04450002
+*               3 ACEEUPDT BIT(1),  /* 1 - UPDATE AUTHORITY TO          04460002
+*                                          RESOURCE          @PC002PY*/ 04470002
+*               3 ACEEREAD BIT(1),  /* 1 - READ AUTHORITY TO            04480002
+*                                          RESOURCE          @PC002PY*/ 04490002
+*               3 *        BIT(1),  /* RESERVED FOR COMPATIBILITY       04500002
+*                                                                @L8A*/ 04510002
+*               3 *        BIT(1),  /* RESERVED                      */ 04520002
+*               3 *        BIT(1),  /* RESERVED                      */ 04530002
+*               3 ACEENONE BIT(1),  /* 1 - NO AUTHORITY TO              04540002
+*                                          RESOURCE          @PC002PY*/ 04550002
+*             2 ACEEFLG3   BIT(8),  /* MISCELLANEOUS FLAGS           */ 04560002
+*               3 ACEEGRPA BIT(1),  /* ACCESS LIST OF GROUP DS          04570002
+*                                      TO CONTAIN                       04580002
+*                                      0 - USERID                       04590002
+*                                      1 - GROUP NAME AND USERID     */ 04600002
+*               3 ACEERASP BIT(1),  /* 1 - IF RACF ADDRESS SPACE @M5C*/ 04610002
+*               3 ACEECLNT BIT(1),  /* 1 - UNAUTHENTICATED CLIENT@03C*/ 04620002
+*               3 ACEEACLT BIT(1),  /* 1 - AUTHENTICATED CLIENT  @03C*/ 04630002
+*               3 ACEETSKP BIT(1),  /* 1 - if task level process @D2A*/ 04640002
+*               3 ACEEIUSP BIT(1),  /* 1 - INITUSP has been done @06C*/ 04650002
+*               3 ACEEDUID BIT(1),  /* 1 -default UID being used @06C*/ 04660002
+*               3 ACEENPWR BIT(1),  /* 1 - Password Not Required @M6A*/ 04670002
+*             2 ACEEDATE CHAR(3),   /* DATE OF RACINIT               */ 04680002
+*             2 ACEEPROC CHAR(8),   /* NAME OF STARTED PROC OR          04690002
+*                                      BLANKS IF NOT STARTED PROC    */ 04700002
+*             2 ACEETRMP PTR(31),   /* ADDRESS THAT POINTS TO THE       04710002
+*                                      TERMINAL ID.  THE FIELD IS       04720002
+*                                      ZERO FOR NON-TERMINAL            04730002
+*                                      USERS.                    @02C*/ 04740002
+*             2 ACEEFLG4   BIT(16), /* MISCELLANEOUS FLAGS 2 @PC002PY*/ 04750002
+*               3 *        BIT(1),  /* RESERVED              @PC002PY*/ 04760002
+*               3 *        BIT(1),  /* RESERVED              @PC002PY*/ 04770002
+*               3 ACEEUATH BIT(1),  /* 1 - USER IS AUTHORIZED TO        04780002
+*                                          DEFINE OTHER USERS           04790002
+*                                                            @PC003PY*/ 04800002
+*               3 *        BIT(1),  /* RESERVED              @PC002PY*/ 04810002
+*               3 ACEEDASD BIT(1),  /* 1 - USER IS AUTHORIZED TO        04820002
+*                                          PROTECT DASD VOLUMES         04830002
+*                                                            @PC002PY*/ 04840002
+*               3 ACEETAPE BIT(1),  /* 1 - USER IS AUTHORIZED TO        04850002
+*                                          PROTECT TAPE VOLUMES         04860002
+*                                                            @PC002PY*/ 04870002
+*               3 ACEETERM BIT(1),  /* 1 - USER IS AUTHORIZED TO        04880002
+*                                          PROTECT TERMINALS @PC002PY*/ 04890002
+*               3 *        BIT(9),  /* RESERVED              @PC002PY*/ 04900002
+*             2 ACEEAPLV PTR(8),    /* APPLICATION LEVEL:               04910002
+*                                      CONTAINS THE LEVEL VALUE FROM    04920002
+*                                      THE APPL PROFILE.         @02C*/ 04930002
+*             2 ACEETRLV PTR(8),   /* POE LEVEL:                        04940002
+*                                     CONTAINS THE LEVEL VALUE FROM     04950002
+*                                     THE GENERAL RESOURCE PROFILE      04960002
+*                                     THAT PROTECTS THE PORT OF         04970002
+*                                     ENTRY.                     @02C*/ 04980002
+*             2 ACEETRDA   PTR(31), /* POE DATA ADDRESS:  POINTS TO A   04990002
+*                                     1-BYTE LENGTH FIELD FOLLOWED      05000002
+*                                     BY THE INSTALLATION DATA FROM     05010002
+*                                     THE PROFILE THAT PROTECTS THE     05020002
+*                                     PORT OF ENTRY.  THE LENGTH        05030002
+*                                     INCLUDES THE 1-BYTE LENGTH        05040002
+*                                     FIELD.                     @02C*/ 05050002
+*             2 ACEETRID  CHAR(8),  /* AN 8-BYTE AREA CONTAINING THE    05060002
+*                                      TERMINAL ID.  THE NAME IS        05070002
+*                                      LEFT-JUSTIFIED AND PADDED ON     05080002
+*                                      THE RIGHT WITH BLANKS.  THIS     05090002
+*                                      FIELD WILL BE BLANK WHEN (1)     05100002
+*                                      TERMID IS NOT SPECIFIED AND      05110002
+*                                      (2) EITHER THE POE IS NOT        05120002
+*                                      SPECIFIED OR THE POE CLASS IS    05130002
+*                                      NOT TERMINAL.             @02C*/ 05140002
+*             2 ACEEAMP PTR(31),    /* ADDRESS FIRST ANCHORED           05150002
+*                                      MODEL                 @ZA25840*/ 05160002
+*             2 ACEECLTH BIT(32),   /* USER CLASS AUTHORIZATIONS -      05170002
+*                                      THESE BIT POSITIONS ARE MAPPED   05180002
+*                                      BY THE CLASS DESCRIPTOR ENTRIES  05190002
+*                                      ANCHORED OFF THE RACF CVT        05200002
+*                                                            @PC003PY*/ 05210002
+*             2 ACEECLCP PTR(31),   /* ANCHOR FOR INSTORAGE PROFILE     05220002
+*                                      TREES BUILT BY THE RACLIST       05230002
+*                                      FUNCTION              @PC003PY*/ 05240002
+*             2 ACEEAPTR PTR(31),   /* ADDRESS FIELD RESERVED FOR       05250002
+*                                      APPLICATION USAGE     @PC003PY*/ 05260002
+*             2 ACEEAPLN CHAR(8),   /* NAME OF APPLICATION TO WHICH     05270002
+*                                      USER IS CONNECTED OR BLANKS      05280002
+*                                      IF NO APPLICATION SPECIFIED      05290002
+*                                                            @PC003PY*/ 05300002
+*             2 ACEEAPDA PTR(31),   /* APPLICATION DATA ADDRESS:        05310002
+*                                      POINTS TO A 1-BYTE LENGTH        05320002
+*                                      FIELD FOLLOWED BY THE DATA       05330002
+*                                      FROM THE APPL PROFILE.  THE      05340002
+*                                      LENGTH INCLUDES THE 1-BYTE       05350002
+*                                      LENGTH FIELD.             @02C*/ 05360002
+*             2 ACEEUNAM PTR(31),   /*ADDRESS OF USER NAME STRING.      05370002
+*                                     THE FIRST BYTE IS A LENGTH        05380002
+*                                     FIELD FOLLOWED BY THE NAME        05390002
+*                                     STRING.  THE LENGTH INCLUDES      05400002
+*                                     THE 1-BYTE LENGTH FIELD.   @02C*/ 05410002
+*             2 ACEEMDLS PTR(31),   /* ADDRESS OF THE DATA SET          05420002
+*                                      MODEL NAME ARRAY. ZERO,          05430002
+*                                      IF ARRAY NOT OBTAINED BY         05440002
+*                                      RACINT.                   @L4A*/ 05450002
+*             2 ACEECGRP PTR(31),   /* ADDRESS OF THE CONNECT GROUP     05460002
+*                                      TABLE                     @PAC*/ 05470002
+*             2 ACEEGATA PTR(31),   /* ADDRESS OF THE GENERIC           05480002
+*                                      ANCHOR TABLE              @L5A*/ 05490002
+*             2 ACEEFCGP PTR(31),   /* ADDRESS OF TABLE CONTAINING THE  05500002
+*                                      LIST OF GROUPS THIS USERID IS A  05510002
+*                                      MEMBER OF, BUILT BY RACINIT,     05520002
+*                                      USED BY FRACHECK, IT IS NOT      05530002
+*                                      AUTOMATICALLY REFRESHED          05540002
+*                                                            @ZA60739*/ 05550002
+*             2 ACEEDSLP PTR(31),   /* ADDRESS OF THE LIST OF           05560002
+*                                      CATEGORIES TO WHICH THIS USER    05570002
+*                                      IS ALLOWED ACCESS         @L7A*/ 05580002
+*             2 ACEEDAT4 CHAR(4),   /* 4 BYTE DATE FIELD IN THE FORM OF 05590002
+*                                      ccyydddF WHERE cc DENOTES THE    05600002
+*                                      CENTURY X'00' FOR 1900 AND X'01' 05610002
+*                                      FOR 2000.                4@PAA*/ 05620002
+*             2 ACEEPADS PTR(31),   /* ADDRESS OF THE LIST OF DATA      05630002
+*                                      SETS ACCESSED BY CONTROLLED      05640002
+*                                      PROGRAMS EXECUTED BY THIS        05650002
+*                                      USER                      @L7A*/ 05660002
+*             2 ACEESLVL FIXED(8),  /* MAXIMUM SECURITY LEVEL           05670002
+*                                      ACCESSIBLE BY THIS USER   @02C*/ 05680002
+*             2 ACEEFLG5   BIT(8),  /* MISCELLANEOUS FLAGS       @L7A*/ 05690002
+*               3 ACEEMODE BIT(1),  /* 1 - ACEE MODE IS IN 31-BIT       05700002
+*                                          MODE                  @L7A*/ 05710002
+*               3 ACEEVMSK BIT(1),  /* 0 - ACEEPLCL points to a 128     05720002
+*                                          bit mask if ACEEPLCL is      05730002
+*                                          non-zero                     05740002
+*                                      1 - ACEEPLCL points to a 1024    05750002
+*                                          bit mask              @P7C*/ 05760002
+*               3 ACEED4OK BIT(1),  /* 1 - ACEEDAT4 CONTAINS DATA       05770002
+*                                      0 - ACEEDAT4 NOT USED     @PAA*/ 05780002
+*               3 ACEEXNVR BIT(1),  /* 1 - ENVR object created on       05790002
+*                                          another system        @05A*/ 05800002
+*               3 ACEESTOK BIT(1),  /* 1 - ACEE built from Token        05810002
+*                                          with SERVAUTH port of        05820002
+*                                          entry                 @L9C*/ 05830002
+*               3 ACEENSTE BIT(1),  /* 1 - ENVR object in ACEENSTA      05840002
+*                                          should be used in FASTAUTH   05850002
+*                                                                @LBA*/ 05860002
+*               3 ACEEDALY BIT(1),  /* 1 - user logged on to an         05870002
+*                                          application which only       05880002
+*                                          records daily logon          05890002
+*                                          statistics            @PDC*/ 05900002
+*               3 *        BIT(1),  /* RESERVED                  @LEC*/ 05910002
+*             2 ACEEFLG6   BIT(8),  /* More miscellaneous flags  @M7A*/ 05920002
+*               3 ACEERAUI BIT(1),  /* 1 - Restricted access            05930002
+*                                          user ID               @M7A*/ 05940002
+*               3 ACEERUAA BIT(1),  /* 1 - Restricted access user can   05950002
+*                                          gain UNIX file access by     05960002
+*                                          virtue of the OTHER bits     05970002
+*                                                                @D3A*/ 05980002
+*               3 ACEERUAV BIT(1),  /* 1 - A check has been made to     05990002
+*                                          RESTRICTED.FILESYS.ACCESS    06000002
+*                                          for this process      @D3A*/ 06010002
+*               3 ACEEMFAU BIT(1),  /* 1 - User MUST authenticate       06020003
+*                                          with MFA              @LIA*/ 06021003
+*               3 ACEEMFAA BIT(1),  /* 1 - User authenticated with      06022003
+*                                          MFA                   @LIA*/ 06023003
+*               3 *        BIT(3),  /* RESERVED                  @D3C*/ 06024003
+*             2 * CHAR(1),          /* RESERVED.                 @M7C*/ 06030002
+*             2 ACEE3PTY PTR(31),   /* ADDRESS OF ACEE CREATED BY       06040002
+*                                      THIRD PARTY RACHECK SVC          06050002
+*                                      PROCESSING                @L8A*/ 06060002
+*                                                                       06070002
+*             2 ACEEPLCL PTR(31),   /* POINTER TO EXTENDED CLASS        06080002
+*                                      AUTHORIZATION MASK, OR 0  @L8A*/ 06090002
+*                                                                       06100002
+*             2 ACEESUID CHAR(8),   /* SURROGATE USERID (AUDIT)  @M1A*/ 06110002
+*                                                                       06120002
+*             2 ACEEOCOX PTR(31),   /* POINTER TO O.C.O. EXTEND  @M2C*/ 06130002
+*             2 ACEEPTDS PTR(31),  /* POINTER TO FIRST TDS TABLE @D1C*/ 06140002
+*             2 ACEEX5PR PTR(31),  /* Pointer to X500 name pair         06150002
+*                                     structure.  Structure contains    06160002
+*                                     a 4-byte length of structure,     06170002
+*                                     followed by up to 255 bytes of    06180002
+*                                     issuers name and up to 255        06190002
+*                                     bytes of subjects name.  Name     06200002
+*                                     pair storage is the same          06210002
+*                                     subpool and addressing mode       06220002
+*                                     as the ACEE.               @M7C*/ 06230002
+*             2 ACEETOKP PTR(31),  /* POINTER TO ACEETOKN        @L9C*/ 06240002
+*             2 ACEESRVA PTR(31),  /* Pointer to an area containing     06250002
+*                                     a 1-byte length followed by the   06260002
+*                                     SERVAUTH resource name     @L9A*/ 06270002
+*             2 ACEESRVP PTR(31),  /* Pointer to an area containing     06280002
+*                                     a 1-byte length followed by the   06290002
+*                                     SERVAUTH profile name that        06300002
+*                                     granted access to the SERVAUTH    06310002
+*                                     resource                   @L9A*/ 06320002
+*             2 ACEENSTA PTR(31),  /* Pointer to ENVR object for        06330002
+*                                     server/daemon which created       06340002
+*                                     this ACEE                  @LBA*/ 06350002
+*             2 ACEEICTX PTR(31),  /* Pointer to the identity context   06360002
+*                                     extension                  @LCA*/ 06370002
+*             2 ACEEIDID PTR(31),  /* Pointer to the distributed        06380002
+*                                     identity data              @LFA*/ 06390002
+*             2 ACEETIME CHAR(4);  /* ACEE creation time         @LFC*/ 06400002
+*                                                                       06410002
+*    DCL                            /* ACEE VERSION FIELD VALUES     */ 06420002
+*        ACEEVR01 FIXED(8) CONSTANT(1), /*                              06430002
+*                                      ACEE VERSION NUMBER = 1.  @M1A*/ 06440002
+*        ACEEVR02 FIXED(8) CONSTANT(2), /*                              06450002
+*                                      ACEE VERSION NUMBER = 2.  @M1A*/ 06460002
+*        ACEEVR03 FIXED(8) CONSTANT(3), /*                              06470002
+*                                      ACEE VERSION NUMBER = 3.  @LAA*/ 06480002
+*        ACEECURV FIXED(8) CONSTANT(3); /*                              06490002
+*                                    ACEE CURRENT VERSION NUMBER @LAC*/ 06500002
+*                                                                       06510002
+*    DCL ACEELCLA BIT(128) BASED(ACEEPLCL); /* EXTENDED CLASS           06520002
+*                                      AUTHORIZATION MASK AREA   @L8A*/ 06530002
+*    DCL ACEEVCLA BIT(1024) BASED(ACEEPLCL); /* LONGER EXTENDED CLASS   06540002
+*                                      AUTHORIZATION MASK AREA -        06550002
+*                                      USED IF ACEEVMSK IS ON    @P7C*/ 06560002
+*                                                                       06570002
+*    DCL ACEETOKN CHAR(*) BASED(ACEETOKP);  /* UTOKEN            @P3C*/ 06580002
+*                                                                       06590002
+*/*                                                                  */ 06600002
+*/**************** END OF ACEE DEFINITION ****************************/ 06610002

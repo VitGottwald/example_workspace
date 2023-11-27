@@ -1,0 +1,153 @@
+*/**** START OF SPECIFICATIONS **************************************** 00050000
+*********************************************************************** 00100000
+*                                                                     * 00150000
+*01* MACRO NAME:  IKJFREE                           Macro Date: 08/91 * 00200000
+*                                                                     * 00250000
+*01* DESCRIPTIVE NAME:  Dynamic Storage Return Macro                  * 00300000
+*                                                                     * 00350000
+*****PROPRIETARY_STATEMENT********************************************  00400000
+* *01* PROPRIETARY STATEMENT=                                        *  00450000
+*                                                                    *  00500000
+*                                                                    *  00550000
+*   LICENSED MATERIALS - PROPERTY OF IBM                             *  00600000
+*   THIS MACRO IS "RESTRICTED MATERIALS OF IBM"                      *  00650000
+*   5685-025 (C) COPYRIGHT IBM CORP. 1989, 1991                      *  00700000
+*   SEE COPYRIGHT INSTRUCTIONS                                       *  00750000
+*                                                                    *  00800000
+*   STATUS= HTE22D2                                                  *  00850000
+*                                                                    *  00900000
+*  **END_OF_PROPRIETARY_STATEMENT*************************************  00950000
+*                                                                     * 01000000
+*01* FUNCTION:                                                        * 01050000
+*      The Free Storage Macro will return storage to the storage      * 01100000
+*      pool (if given) or a FREEMAIN is used to return the            * 01150000
+*      storage.                                                       * 01200000
+*                                                                     * 01250000
+*01* INVOCATION REQUIREMENTS:                                         * 01300000
+*                                                                     * 01350000
+*      Restrictions:     This macro is intended only for use in TSO/E * 01400000
+*                        modules.  The storage pool is not an         * 01450000
+*                        intended programming interface.              * 01500000
+*                                                                     * 01550000
+*01* INVOCATION FORMAT:                                               * 01600000
+*                                                                     * 01650000
+*          IKJFREE   LV=(  ),                                         * 01700000
+*                    A=(  ),                                          * 01750000
+*                    SP=(   ),                                        * 01800000
+*                    SAVEREGS=YES                                     * 01850000
+*                                                                     * 01900000
+*      Where:                                                         * 01950000
+*                                                                     * 02000000
+*                                                                     * 02050000
+*       A                                                             * 02100000
+*          is the parameter that represents a register to contain     * 02150000
+*          the address of the storage returned.  All registers are    * 02200000
+*          valid except register 2-4.                                 * 02250000
+*                                                                     * 02300000
+*                                                                     * 02350000
+*       LV                                                            * 02400000
+*          is the parameter that represents a register containing     * 02450000
+*          the length of storage to obtain.   All registers are       * 02500000
+*          valid except register 2-4.                                 * 02550000
+*                                                                     * 02600000
+*                                                                     * 02650000
+*       SP                                                            * 02700000
+*          is the parameter that represents the register containing   * 02750000
+*          the subpool to obtain the storage in. All registers are    * 02800000
+*          valid except register 2-4.  This is ignored if the storage * 02850000
+*          is returned to the storage pool.                           * 02900000
+*                                                                     * 02950000
+*       SAVEREGS=YES                                                  * 03000000
+*          indicates to save and restore registers 2-4 which are used * 03050000
+*          as work registers by the macro.  Use of this parameter     * 03100000
+*          depends on a savearea pointed to by register 13.           * 03150000
+*                                                                     * 03200000
+*  NOTE:  Registers 2-4 cannot be used on any of the above parameters * 03250000
+*         since they are used as work registers by this macro.        * 03300000
+*                                                                     * 03350000
+*                                                                     * 03400000
+*01* RETURN CODES:                                                    * 03450000
+*                                                                     * 03500000
+*            0.   The storage release was successful. This will       * 03550000
+*                 be the case if the storage is released to the       * 03600000
+*                 pool or via FREEMAIN.        Since an unconditional * 03650000
+*                 FREEMAIN will be issued, no other return code will  * 03700000
+*                 be returned.                                        * 03750000
+*                                                                     * 03800000
+*01* MODULE TYPE:  MACRO                                              * 03850000
+*                                                                     * 03900000
+*02*   PROCESSOR:  ASSEMBLER                                          * 03950000
+*                                                                     * 04000000
+*01* COMPONENT:  28502                                                * 04050000
+*                                                                     * 04100000
+*01* DISTRIBUTION LIBRARY: ADISTLIB                                   * 04150000
+*                                                                     * 04200000
+*01* CHANGE-ACTIVITY:                                                 * 04250000
+*A00000000-99999999 Created for APAR OY46651                  @YA46651* 04300000
+*                                                                     * 04350000
+*    OY46969 - Remove the serialization on the free side.             * 04400000
+*              If the storage falls within the stack then             * 04450000
+*              this task (current) is the originating task            * 04500000
+*              and owns the stack. Then this task can manipulate      * 04550000
+*              the stack without any other task interfering.          * 04600000
+*              If the storage falls outside the stack then it         * 04650000
+*              will be freed via FREEMAIN.                    @YA46969* 04700000
+*                                                                     * 04750000
+****** END OF SPECIFICATIONS ****************************************** 04800000
+         MACRO                                                          04850000
+&LABEL   IKJFREE &LV=,&SP=,&A=,&SAVEREGS=                               04900000
+.*                                                                      04950000
+.*                                                                      05000000
+         AIF   ('&SAVEREGS' NE 'YES').NOSAVE                            05050000
+         STM   2,4,28(13)                                               05100000
+.NOSAVE  L     4,548                   POINT TO THE ASCB    (PSAAOLD)   05150000
+         L     4,108(,4)               POINT TO THE ASXB    (ASCBASXB)  05200000
+         L     4,20(,4)                POINT TO LWA         (ASXBLWA)   05250000
+         LTR   4,4                     IS IT NON-ZERO                   05300000
+         BZ    IKJ1&SYSNDX             NO - DO FREEMAIN                 05350000
+         CLI   67(4),X'3C'             IS IT AT TSO/E 2.2 OR HIGHER?    05400000
+         BL    IKJ1&SYSNDX             NO - DO FREEMAIN                 05450000
+         L     4,544(4)                POINT TO STORAGE pool            05500000
+         LTR   4,4                     ENSURE IT EXISTS                 05550000
+         BZ    IKJ1&SYSNDX             NO pool - DO FREEMAIN            05600000
+         LA    2,36(4)                 GET ADDR OF START OF pool        05650000
+         CR    &A,2                    Is the Specified Address lower   05700000
+*                                      than the start of the pool       05750000
+         BL    IKJ1&SYSNDX             YES - DO FREEMAIN       @YA46969 05800000
+         L     2,548                   POINT TO THE ASCB    (PSAAOLD)   05850000
+         L     2,108(,2)               POINT TO THE ASXB    (ASCBASXB)  05900000
+         L     2,20(,2)                POINT TO LWA         (ASXBLWA)   05950000
+         C     &A,548(2)               Is the specified address higher  06000000
+*                                      than the end of the pool?        06050000
+         BH    IKJ1&SYSNDX             YES - DO FREEMAIN       @YA46969 06100000
+         LR    3,&A                    Calculate the end address of     06150000
+         AR    3,&LV                   the storage to be freed          06200000
+         BCTR  3,0                                                      06250000
+         C     3,548(2)               Does the specified storage extend 06300000
+*                                     past the end of the pool?         06350000
+         BH    IKJ4&SYSNDX             Yes, Error Encountered  @YA46969 06400000
+         L     3,20(4)                 R3 = pool start ptr              06450000
+         C     3,548(2)                Is pool start ptr higher         06500000
+*                                      than the end of the pool?        06550000
+         BH    IKJ4&SYSNDX             IF YES, pool in error   @YA46969 06600000
+         LA    2,36(4)                 R2 = start addr of storage area  06650000
+         CR    3,2                     Is pool ptr below starting       06700000
+*                                      addr of storage area?            06750000
+         BL    IKJ4&SYSNDX             IF YES, pool in error   @YA46969 06800000
+         LR    3,&A                    Calculate the end address of     06850000
+         AR    3,&LV                   the storage to be freed          06900000
+         C     3,20(4)                 Is the end address + 1 equal     06950000
+*                                      to the pool start ptr?           07000000
+         BNE   IKJ4&SYSNDX             No, Error Encountered   @YA46969 07050000
+         ST    &A,20(4)                Update pool start to start       07100000
+*                                      address of specified area        07150000
+         B     IKJ4&SYSNDX                                     @YA46969 07200000
+IKJ1&SYSNDX DS 0H                                                       07250000
+         AIF   ('&SP' NE '').SPFREE                                     07300000
+         FREEMAIN RU,A=&A,LV=&LV                                        07350000
+         AGO   .EXITF                                                   07400000
+.SPFREE  FREEMAIN RU,A=&A,LV=&LV,SP=&SP                                 07450000
+.EXITF   ANOP                                                           07500000
+IKJ4&SYSNDX DS 0H                                                       07550000
+         LM    2,4,28(13)              RESTORE REGISTERS 2-4            07600000
+         MEND                                                           07650000

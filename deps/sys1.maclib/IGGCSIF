@@ -1,0 +1,126 @@
+*/* Mapping of fields returned from catalog search interface.           00010000
+*   If the field does not exist in the catalog entry, then CSI          00010100
+*   returns all bytes as X'FF'.                                         00010200
+* PROPRIETARY V3 STATEMENT                                              00010300
+* Licensed Materials - Property of IBM                                  00010400
+* "Restricted Materials of IBM"                                         00010500
+* 5650-ZOS                                                              00010600
+* Copyright IBM Corp. 2020                                              00010700
+* END PROPRIETARY V3 STATEMENT                                          00010800
+* LINKAGE:                                                              00010900
+*    ASSEMBLER:                                                         00011000
+*        IGGCSIF (field_name,xxx,...) Required positional parameter     00012000
+*                                     that identifies the fields to     00012100
+*                                     map.  You can omit parentheses    00012200
+*                                     if to map only one field.         00012300
+*                Supported positional parameters are (in mixed case):   00012400
+*                  ENCRYPTA           Information about encrypted DS    00012500
+*                DSECT={YES ! NO}     Default is YES. DSECT=NO allows   00012600
+*                                     you to imbed this in a CSECT or   00012700
+*                                     DSECT.  Default is YES.           00012800
+*                PREFIX=xxx           Beginning of each symbol, default 00012900
+*                                     is CSIF.  Allows you to code it   00013000
+*                                     more than once.                   00013100
+*        USING  CSIFNALL,reg                                            00013200
+*    PL/X:                                                              00013300
+*        %IGGCSIFBased = 'BASED(ENCRPtr)'                               00013400
+*        To embed in another structure:                                 00013500
+*          %IGGCSIFBased = 'NONE'                                       00013600
+*        %INCLUDE SYSLIB(IGGCSIF)         Default is BASED              00013700
+*             (Etc.)                                                    00013800
+* $L0=OA59386,HDZ2230,31Jul2020,SMBRANCH:                         @L0A  00013900
+*        1) NEW BILINGUAL MACRO FOR BASIC/LARGE ENCRYPTION        @L0A  00014000
+*           SUPPORT, maps substructures of encryption cell        @L0A  00015000
+*        2) NEW FLAG CSIFDSENCNP ADDED FOR NO BLOCK PREFIXES      @L0A  00016000
+* $01=D392009,HDZ2250,27Sep,2020,SMBRANCH: On line                @01A  00016100
+*      AIF   (&ParmPos LE N'&SYSLIST).NextPos  Branch if another  @01A  00016300
+*      Change ".NextPos" to ".Next"                               @01A  00016400
+**********************************************************************/ 00017000
+*%Goto VVRENALLPLX;                                                     00018000
+         MACRO                                                          00019000
+         IGGCSIF &DSECT=YES,&PREFIX=CSIF                                00020000
+         LCLB  &DoDSECT       DSECT=YES is in effect                    00030000
+         LCLC  &P             Prefix for each symbol                    00040000
+         LCLA  &ParmPos       Index to positional parameters            00050000
+         AIF   ('NO' EQ Upper('&DSECT')).NoDummy                        00060000
+         AIF   ('YES' EQ Upper('&DSECT')).DoDummy                       00070000
+.* Write "The DSECT KEYWORD MUST BE YES OR NO"                          00080000
+         IGGERMAC 205,'DSECT','YES OR NO'    Ignore problem anyway      00090000
+.DoDummy ANOP                                                           00100000
+&DoDSECT SETB  1              Define DSECTs                             00110000
+.NoDummy ANOP                                                           00120000
+&P       SETC  '&Prefix'      Copy to a shorter symbol                  00130000
+&ParmPos SETA  1              First positional parameter to examine     00140000
+         AIF   (N'&SYSLIST EQ 0).Error1  Branch if no positional param  00141000
+.*   This loop examines each positional parameter.                      00142000
+.*       Allow mixed case.                                              00142100
+.Loop    AIF   ('ENCRYPTA' NE Upper('&SYSLIST(&ParmPos)')).Test2        00142200
+         AIF   (NOT &DoDSECT).No1                                       00142300
+&P.NALL  DSECT                CSIFNALL area for data set encryption     00142400
+         AGO   .Exp1                                                    00142500
+.No1     ANOP                                                           00142600
+&P.NALL  DS    0CL96        0 CSIFNALL area for data set encryption     00142700
+.Exp1    ANOP                 Expand fields                             00142800
+&P.TYPE  DC    0CL2           Encryption type                           00142900
+&P.TYPA  DC    FL1'0'         Encryption algorithm X'01': AES           00143000
+&P.TYPKL DC    FL1'0'       1 Encryption key length X'00': 256-bit      00144000
+&P.KEYL  DC    CL64''       2 Key label                                 00145000
+&P.NICV  DC    CL8''       42 ICV value, high order half of 16-byte ICV 00146000
+&P.MODE  DC    BL1'0'      4A Encryption mode (X'02' FOR XTS)           00147000
+*                             Note: copy from BCFZCRYP macro            00148000
+&P.VERIFY DC   CL16' '     4B Verification bytes                        00149000
+&P.FLAG   DC   X'0'        5B Verification flags                        00150000
+&P.VERSET EQU  X'80'          Verification bytes set                    00160000
+&P.VERSETV1 EQU X'40'         Verification bytes version 1              00170000
+&P.FLAG2  DC   X'0'        5C Verification flags                   @L0A 00180000
+&P.DSENCNP EQU X'80'          Blocks do not have prefixes. Set     @L0A 00190000
+*                               only for basic and large format DS @L0A 00200000
+         DC    CL3''       5D Reserved                             @L0C 00210000
+         AGO  .Next           Go to examine next parameter              00220000
+.*                                                                      00230000
+.Test2   ANOP     Future fields will be supported here in a manner      00240000
+.*                as for ENCRYPTA at .Loop.                             00250000
+.* Reject a null or unrecognized value.                                 00260000
+.* "IHB300 INVALID POSITIONAL PARAMETER -xxxx"                          00270000
+         IHBERMAC 1300,&SYSList(&ParmPos)                               00280000
+.Next    ANOP                                                           00290000
+&ParmPos SETA  &ParmPos+1     Look at next positional parameter         00300000
+         AIF   (&ParmPos LE N'&SYSLIST).Next     Branch if another @01C 00310001
+         MEXIT                                                          00320000
+.Error1  MNOTE 12,'The positional parameter is required to identify the*00330000
+                field'                                                  00331000
+         MEND                                                       */  00332000
+*                                                                       00333000
+*%VVRENALLPLX:;                                                         00334000
+*  %Dcl IGGCSIFBased char;                                              00335000
+*  %If IGGCSIFBased = 'NONE' %then %Goto IGGCSIFNoBase;                 00336000
+*  %If IGGCSIFBased = '' %then %IGGCSIFBased = 'based';                 00337000
+*Dcl 1 VVRENALL IGGCSIFBased,                                           00338000
+*%IGGCSIFNoBase:;                                                       00339000
+*    3 VVRETYPE FIXED(16) BDY(BYTE),   /* ENCRYPTION TYPE           */  00340000
+*       5 VVRETYPA FIXED(8) BDY(BYTE), /* ENCRYPTION ALGORITHM      */  00350000
+*                                      /* X'01': AES                */  00360000
+*       5 VVRETYPKL FIXED(8) BDY(BYTE),/* ENCRYPTION KEY LEN        */  00370000
+*                                      /* X'00': 256-BIT            */  00380000
+*     3 VVREKEYL CHAR(64),     /* KEY LABEL                         */  00390000
+*     3 VVRENICV CHAR(8),      /* ICV VALUE (HIGH ORDER HALF OF     */  00400000
+*                              /* 16-BYTE ICV)                      */  00410000
+*     3 VVREMODE FIXED(8),     /*ENCRYPTION MODE (X'02' FOR XTS)    */  00420000
+*                              /* NOTE:COPY FROM MACRO BCFZCRYP     */  00430000
+*     3 VVREVERIFY CHAR(16),   /* VERIFICATION BYTES                */  00440000
+*                              /*                                   */  00450000
+*     3 VVREFLAG   CHAR(1),    /* VERIFICATION FLAG                 */  00460000
+*       5 VVREVERSET  BIT(1),  /* VERIFICATION BYTES SET            */  00470000
+*       5 VVREVERSETV1 BIT(1), /* VERIFICATION BYTES VERSION 1      */  00480000
+*       5 *           BIT(6),  /* RESERVED                         C*/  00490000
+*     3 VVREFLAG2  CHAR(1),    /*                               @L0A*/  00500000
+*       5 VVREDSENCNP  BIT(1), /* No Block Prefixes             @L0A*/  00510000
+*       5 *            BIT(7), /*                               @L0A*/  00520000
+*     3 *          CHAR(3)     /* RESERVED                      @L0C*/  00530000
+*                              /* End of VVRENALL                   */  00540000
+*  %If IGGCSIFBased = 'NONE' %then %GOTO IGGCSIFMore;                   00550000
+*                         ;    /* End of VVRENALL                   */  00560000
+*  %GOTO IGGCSIFEnd;                                                    00570000
+*%IGGCSIFMore:;                                                         00580000
+*                         ,    /* End of VVRENALL                   */  00590000
+*%IGGCSIFEnd:;                                                          00600000

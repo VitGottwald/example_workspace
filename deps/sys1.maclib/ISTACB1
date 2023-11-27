@@ -1,0 +1,485 @@
+        MACRO                                                                   
+&NAME    ISTACB1 &DDNAME=,&EXLST=0,&MACRF=,                    @ZA34940C        
+               &JFCB=0,&BUFND=0,&BUFNI=0,&PASSWD=0,                    C        
+               &BLKSIZE=0,&LRECL=0,&BUFSP=0,                           C        
+               &CCTYPE=,&STRNO=1,&CATALOG=NO,                  @ZA07566C        
+               &BSTRNO=0,&MAREA=0,&MLEN=0,&CRA=,                X04SVHSC        
+               &AM=,&APPLID=0,&USERPTR=0,                      @ZA34940C        
+               &PARMS=,&PARM2=,&PARM3=                         @ZA34940         
+.*                                                                              
+.* ********************************************************************         
+.*                                                                    *         
+.* MACRO NAME: ISTACB1                                                *         
+.*                                                                    *         
+.* DESCRIPTIVE NAME: BUILD ACB FOR AM=VTAM                            *         
+.*                                                                    *         
+.* MACRO-COPYRIGHT: LICENSED MATERIALS - PROPERTY OF IBM                        
+.*                                                                              
+.*                  THIS PRODUCT CONTAINS "RESTRICTED MATERIALS OF IBM"         
+.*                                                                              
+.*                  5695-117 (C) COPYRIGHT IBM CORP. 1991, 2004                 
+.*                  ALL RIGHTS RESERVED.                                        
+.*                                                                              
+.*                  U.S. GOVERNMENT USERS RESTRICTED RIGHTS -                   
+.*                  USE, DUPLICATION OR DISCLOSURE RESTRICTED BY                
+.*                  GSA ADP SCHEDULE CONTRACT WITH IBM CORP.                    
+.*                                                                              
+.*                  SEE COPYRIGHT INSTRUCTIONS.                                 
+.*                                                                              
+.* FUNCTION:   THE FUNCTION OF THIS MACRO IS TO BUILD,         @ZA34940         
+.*             AT ASSEMBLY TIME, AN ACB FOR A VTAM USER.       @ZA34940         
+.*             ISTACB1 IS INVOKED BY THE MACRO ACB WHEN        @ZA34940         
+.*             A USER ISSUES AN ACB MACRO WITH 'AM=VTAM'       @ZA34940         
+.*             SPECIFIED.                                      @ZA34940         
+.*                                                             @ZA34940         
+.* CHANGE ACTIVITY:                                            @ZA34940         
+.*      CBMM SPLIT SUPPORT                                     @ZA34940         
+.*      SNA4 SUPPORT                                           @G69AKJP         
+.*      DCR 4790.00Z                                           @D5P4790         
+.*      DCR 4791.00                                            @D5K4791         
+.*      DCR 4792.00                                            @D5K4792         
+.*      PTM P008914                                            @P5K8914         
+.*      PTM P008915                                            @P5K8915         
+.*      PTM P008979                                            @P5K8979         
+.*                                                                              
+.* $MAC(ISTACB1),COMP(O/C),PROD(VTAM): VTAM ACB MACRO PROCESSOR                 
+.*                                                                              
+.* FLAG REASON   RELEASE DATE   ORIGIN  FLAG DESCRIPTORS                        
+.* ---- -------- ------- ------ ------  ---------------------------             
+.* $B1= AP@@@CLD HVT3401 890314 496698: Persistent LU-LU Sessions               
+.* $B2= AA@@@MST HVT3401 891018 042845: CROSS-MEMORY API SUPPORT                
+.* $V1= P076950  HVT3401 891129 042845: COMMENT CHANGES                         
+.* $KF= NQNSTG2  NQNAME2 910605 457572: ENHANCED NQN SUPPORT                    
+.* $T1= P099597  NQNAME2 920206 457572: FORMAT ASSEMBLER OUTPUT                 
+.* $I1= FF@@@MST APPCFDX 911116 879315: APPC Full-Duplex support                
+.* $T2= P100577  NQNAME2 920224 879315: Missing LCLC causes AsmXF error         
+.* $L1= FO@@@MST PERFMON 920609 043006: Performance Monitor                     
+.* $L2= KA@@@PLD APPCRR  930812 576146: DCE Security Services                   
+.* $U2= P105579  KEEPFRR 931008 879315: New ACB keyword                         
+.* $U3= P109285  KEEPFRR 931104 879315: Implement FZKDR001 - remove             
+.*                                      keyword added by P105579                
+.* $N1= P126308  POLARIS 970918 879315: EXITFRR= on ACB PARMS                   
+.*                                                                              
+.* Flag Reason   Release  Date   Origin    Description                          
+.* ---- -------- -------- ------ --------  ------------------------             
+.* $R1= X16MNPRT CSV1R6   031006 GIERLACH: MNPS Predatory Takeover              
+.* $R2= D133105  X16MNPRT 031106 GIERLACH: FORCETKO=NO without PERSIST          
+.* ********************************************************************         
+.*                                                                              
+.*                                                             @G69AKJP         
+.* GLOBALS                                                      X04SVHS         
+         GBLC  &IDAMAC1,&IDAMAC2,&IDAMAC3 MACRF CODES           X04SVHS         
+         GBLC  &IDAIFL1                 CATALOG/CRA CODES       X04SVHS         
+         GBLA  &IDAENO                  NUMBER OF ELEMENTS     @ZA06420         
+.* LOCALS                                                       X04SVHS         
+         LCLA  &VTMEXT                  LENGTH OF VTAM EXT     X03004HS         
+         LCLA  &LEN                     SUBPARAMETER ACB LENGTH  X03004         
+         LCLA  &STYPE                   ACCESS METHOD ID        X04SVHS         
+         LCLA  &I                       LOOP COUNTER           @G69AKJP         
+         LCLA  &L                       LENGTH(KEYWORD VALUE)  @G69AKJP         
+         LCLA  &ACBFXD                  USER FIELD             @D5K4792         
+         LCLB  &A,&M                    CCTYPE BITS                             
+         LCLB  &F,&N,&S,&SS             KEEPFRR, NQNAMES, SRBEXIT,              
+.*                                      AND WHETHER                             
+.*                                      SRBEXIT WAS SPECIFIED @B2A @KFA         
+         LCLB  &PSC                     PERSISTENT CAPABLE BIT     @T1C         
+         LCLB  &FD                      APPC FULL-DUPLEX BIT       @I1A         
+         LCLB  &PM                      PERFORMANCE MONITOR BIT    @L1A         
+         LCLB  &XF                      EXITFRR BIT                @N1A         
+         LCLB  &TO                      FORCETKO BIT               @R1A         
+         LCLB  &TOSET                   FORCETKO Coded             @R2A         
+         LCLC  &NIB                     NIB ADDRESS            @G69AKJP         
+         LCLC  &APVTR                   APPLVCTR ADDRESS           @L2A         
+         LCLC  &USE                     USER FIELD             @D5K4791         
+         LCLC  &USED                    USER DEFAULT FIELD     @D5K4791         
+         LCLC  &USERFLD                 USER FIELD             @D5K4791         
+         LCLC  &PERSIST                 PERSISTENT CAPABLE FIELD   @B1A         
+         LCLC  &FDX                     APPC FULL-DUPLEX VALUE     @I1A         
+         LCLC  &PERFMON                 PERFORMANCE MONITOR VALUE  @L1A         
+         LCLC  &CHAR1,&CHAR2,&CHAR3,&CHAR4      USER FIELD     @D5K4791         
+         LCLC  &FRR,&SRB                CHARACTER INPUT            @B2A         
+         LCLC  &NQN                     NQNAMES INPUT VALUE        @T2A         
+         LCLC  &XFRR                    EXITFRR INPUT VALUE        @N1A         
+         LCLC  &FTKO                    FORCETKO INPUT VALUE       @R1A         
+.*                                                                              
+.*             INITIALIZE GLOBALS TO ZERO                                       
+&IDAMAC1 SETC  '00000000'                                       X04SVHS         
+&IDAMAC2 SETC  '00000000'                                       X04SVHS         
+&IDAMAC3 SETC  '00000000'                                       X04SVHS         
+&IDAIFL1 SETC  '00000000'                                       X04SVHS         
+&IDAENO  SETA  0                                               @ZA06420         
+.*                                                                              
+.*       DIAGNOSE ALL KEYWORDS IN PARMS SUBLIST FOR            @G69AKJP         
+.*       VTAM VALIDITY                                         @G69AKJP         
+.*                                                             @G69AKJP         
+.DOPARMS ANOP                                                  @G69AKJP         
+&NIB     SETC  '0'                      INITIALIZE NIB ADDRESS @G69AKJP         
+&APVTR   SETC  '0'                      INITIALIZE APPLVCTR ADDRESS             
+.*                                                                 @L2A         
+&USE     SETC  'F''0'''                 INITIALIZE USER FIELD  @D5K4791         
+&USED    SETC  'F''0'''                 USER FIELD DEFAULT     @D5K4791         
+&I       SETA  0                        INITIALIZE COUNTER     @G69AKJP         
+&SS      SETB  0                        INITIALIZE TO SRBEXIT NOT               
+.*                                      CODED                      @V1C         
+         AIF   ('&PARMS' EQ '').P0DONE                         @G69AKJP         
+.PARMS   ANOP                                                  @G69AKJP         
+&I       SETA  &I+1                                            @G69AKJP         
+         AIF   (&I GT N'&PARMS).P0DONE  BR IF NO MORE PARMS    @G69AKJP         
+         AIF   ('&PARMS(&I)'(1,4) EQ 'NIB=').NIBAD             @G69AKJP         
+         AIF   ('&PARMS(&I)'(1,8) EQ 'USERFLD=').USERAD        @D5K4791         
+         AIF   ('&PARMS(&I)'(1,8) EQ 'KEEPFRR=').FRRPRM            @B2A         
+         AIF   ('&PARMS(&I)'(1,8) EQ 'PERSIST=').PERST             @B1A         
+         AIF   ('&PARMS(&I)'(1,8) EQ 'SRBEXIT=').SRBPRM            @B2A         
+         AIF   ('&PARMS(&I)'(1,8) EQ 'NQNAMES=').NQNPRM            @KFA         
+         AIF   ('&PARMS(&I)'(1,4) EQ 'FDX=').AFDXPRM               @I1A         
+         AIF   ('&PARMS(&I)'(1,8) EQ 'PERFMON=').PFMNPRM           @L1A         
+         AIF   ('&PARMS(&I)'(1,9) EQ 'APPLVCTR=').APVTRAD          @L2A         
+         AIF   ('&PARMS(&I)'(1,8) EQ 'EXITFRR=').EXFRR             @N1A         
+         AIF   ('&PARMS(&I)'(1,9) EQ 'FORCETKO=').FRCTKO           @R1A         
+         ISTERMAC 11,&PARMS(&I),PARMS                          @G69AKJP         
+         AGO   .PARMS                                          @G69AKJP         
+.NIBAD   ANOP                                                  @G69AKJP         
+&L       SETA  K'&PARMS(&I)-4           LENGTH OF CHAR STRING  @G69AKJP         
+         AIF   (&L EQ 0).PARMSND        TEST FOR NULL          @G69AKJP         
+&NIB     SETC  '&PARMS(&I)'(5,&L)       &NIB = CHAR STRING     @G69AKJP         
+.PARMSND ANOP                                                  @G69AKJP         
+         AGO   .PARMS                                          @G69AKJP         
+.*                                                                 @B2A         
+.* **************** TEST KEEPFRR OPERAND ********************      @B2A         
+.FRRPRM  ANOP                                                      @B2A         
+&L       SETA  K'&PARMS(&I)-8           GET LENGTH OF PARAMETER    @B2A         
+         AIF   (&L EQ 0).FRRNO          IF OMITTED, DEFAULT IS NO  @B2A         
+&FRR     SETC  '&PARMS(&I)'(9,&L)       GET VALUE SUPPLIED         @B2A         
+         AIF   ('&FRR' EQ 'NO').FRRNO   IF NO, PROCESS SETTING     @B2A         
+         AIF   ('&FRR' EQ 'YES').FRRYES IF YES, PROCESS SETTING    @B2A         
+         MNOTE 12,'INVALID KEYWORD VALUE KEEPFRR=&FRR'                          
+.*                                      INVALID VALUE SPECIFIED    @B2A         
+.FRRNO   ANOP                           KEEPFRR=NO OR OMITTED      @B2A         
+&F       SETB  0                        SET FLAG BIT VARIABLE OFF  @B2A         
+         AGO   .FRRDONE                 FINISH PROCESSING          @B2A         
+.FRRYES  ANOP                           KEEPFRR=YES                @B2A         
+&F       SETB  1                        SET FLAG BIT VARIABLE ON   @B2A         
+.FRRDONE ANOP                           FINSIHED PROCESSING        @B2A         
+         AGO   .PARMS                   GET NEXT KEYWORD           @B2A         
+.*                                                                 @B2A         
+.* **************** TEST SRBEXIT OPERAND ********************      @B2A         
+.*                                                                 @B2A         
+.SRBPRM  ANOP                                                      @B2A         
+&SS      SETB  1                        INDICATE 'SRBEXIT' CODED   @V1C         
+&L       SETA  K'&PARMS(&I)-8           GET LENGTH OF PARAMETER    @B2A         
+         AIF   (&L EQ 0).SRBNO          IF OMITTED, DEFAULT IS NO  @B2A         
+&SRB     SETC  '&PARMS(&I)'(9,&L)       GET VALUE SUPPLIED         @B2A         
+         AIF   ('&SRB' EQ 'NO').SRBNO   IF NO, PROCESS SETTING     @B2A         
+         AIF   ('&SRB' EQ 'YES').SRBYES IF YES, PROCESS SETTING    @B2A         
+         MNOTE 12,'INVALID KEYWORD VALUE SRBEXIT=&SRB'                          
+.*                                      INVALID VALUE SPECIFIED    @B2A         
+.SRBNO   ANOP                           SRBEXIT SET TO NO OR OMITTED            
+.*                                                                 @B2A         
+&S       SETB  0                        SET FLAG BIT TO 0 FOR LATER             
+.*                                      EXPANSION                  @B2A         
+         AGO   .SRBDONE                 FINISH PROCESSING          @B2A         
+.SRBYES  ANOP                           SRBEXIT SET TO YES         @B2A         
+&S       SETB  1                        SET FLAG BIT TO 1 FOR LATER             
+.*                                      EXPANSION                  @B2A         
+.SRBDONE ANOP                           FINSIHED PROCESSING        @B2A         
+         AGO   .PARMS                   GET NEXT KEYWORD           @B2A         
+.*                                                                 @KFA         
+.*****************TEST NQNAMES OPERAND **************************  @KFA         
+.*                                                                 @KFA         
+.NQNPRM  ANOP                                                      @KFA         
+&L       SETA  K'&PARMS(&I)-8           GET LENGTH OF PARAMETER    @KFA         
+         AIF   (&L EQ 0).NQNNO          IF OMITTED, DEFAULT IS NO  @KFA         
+&NQN     SETC  '&PARMS(&I)'(9,&L)       GET SUPPLIED VALUE         @KFA         
+         AIF   ('&NQN'(1,&L) EQ 'NO').NQNNO                        @KFA         
+.*                                      NQNAMES=NO WAS CODED       @KFA         
+         AIF   ('&NQN'(1,&L) EQ 'YES').NQNYES                      @KFA         
+.*                                      NQNAMES=YES WAS CODED      @KFA         
+         MNOTE 12,'INVALID KEYWORD VALUE NQNAMES=&NQN'             @KFA         
+.*                                      INVALID STRING SUPPLIED    @KFA         
+.NQNNO   ANOP                           NQNAMES=NO OR OMITTED      @KFA         
+.*                                                                 @KFA         
+&N       SETB  0                        SET FLAG BIT TO 0 FOR LATER             
+.*                                      EXPANSION                  @KFA         
+         AGO   .NQNDONE                 FINISH PROCESSING          @KFA         
+.NQNYES  ANOP                           NQNAMES=YES SPECIFIED      @KFA         
+&N       SETB  1                        SET FLAG BIT TO 1 FOR LATER             
+.*                                      EXPANSION                  @KFA         
+.NQNDONE ANOP                           FINISHED PROCESSING        @KFA         
+         AGO   .PARMS                   GET NEXT KEYWORD           @KFA         
+.*                                                                 @KFA         
+.*****************TEST PERSIST OPERAND **************************  @KFA         
+.*                                                                 @KFA         
+.PERST   ANOP                                                      @B1A         
+&L       SETA  K'&PARMS(&I)-8    LENGTH OF CHAR STRING             @B1A         
+         AIF   (&L EQ 0).PRSTNO  FIELD MISSING-DEFAULT TO NO       @B1A         
+&PERSIST SETC  '&PARMS(&I)'(9,&L)  &PERSIST = CHAR STRING          @B1A         
+         AIF   ('&PERSIST'(1,&L) EQ 'YES').PRSTYS                  @B1A         
+         AIF   ('&PERSIST'(1,&L) EQ 'NO').PRSTNO                   @B1A         
+.*                                                                 @B1A         
+         MNOTE 12,'INVALID KEYWORD VALUE PERSIST=&PERSIST'         @B1A         
+         AGO   .PARMS            CHECK FOR ADDITIONAL INPUT        @B1A         
+.PRSTYS  ANOP                                                      @B1A         
+&PSC     SETB  1                 PERSISTENT CAPABLE           @B1A @T1C         
+         AGO   .PARMS                                              @B1A         
+.PRSTNO  ANOP                                                      @B1A         
+&PSC     SETB  0                 NOT PERSISTENT CAPABLE       @B1A @T1C         
+         AGO   .PARMS                                              @B1A         
+.*                                                                 @I1A         
+.***************** TEST FDX    OPERAND **************************  @I1A         
+.AFDXPRM ANOP                                                      @I1A         
+&L       SETA  K'&PARMS(&I)-4    LENGTH OF CHAR STRING             @I1A         
+         AIF   (&L EQ 0).FDXNO   FIELD NULL - DEFAULT TO NO        @I1A         
+&FDX     SETC  '&PARMS(&I)'(5,&L)  &FDX = CHAR STRING              @I1A         
+         AIF   ('&FDX'(1,&L) EQ 'YES').FDXYES                      @I1A         
+         AIF   ('&FDX'(1,&L) EQ 'NO').FDXNO                        @I1A         
+.*                                                                 @I1A         
+         MNOTE 12,'INVALID KEYWORD VALUE FDX=&FDX'                 @I1A         
+         AGO   .PARMS            CHECK FOR ADDITIONAL INPUT        @I1A         
+.FDXYES  ANOP                                                      @I1A         
+&FD      SETB  1                 FDX=YES SPECIFIED ON ACB          @I1A         
+         AGO   .PARMS                                              @I1A         
+.FDXNO   ANOP                                                      @I1A         
+&FD      SETB  0                 FDX=NO SPECIFIED ON ACB (DEFAULT) @I1A         
+         AGO   .PARMS                                              @I1A         
+.*                                                                 @L1A         
+.*****************TEST PERFMON OPERAND **************************  @L1A         
+.PFMNPRM ANOP                                                      @L1A         
+&L       SETA  K'&PARMS(&I)-8    LENGTH OF CHAR STRING             @L1A         
+         AIF   (&L EQ 0).PFMNNO  FIELD NULL - DEFAULT TO NO        @L1A         
+&PERFMON SETC  '&PARMS(&I)'(9,&L)  &PERFMON = CHAR STRING          @L1A         
+         AIF   ('&PERFMON'(1,&L) EQ 'YES').PFMNYES                 @L1A         
+         AIF   ('&PERFMON'(1,&L) EQ 'NO').PFMNNO                   @L1A         
+.*                                                                 @L1A         
+         MNOTE 12,'INVALID KEYWORD VALUE PERFMON=&PERFMON'         @L1A         
+         AGO   .PARMS            CHECK FOR ADDITIONAL INPUT        @L1A         
+.PFMNYES ANOP                                                      @L1A         
+&PM      SETB  1                 PERFMON=YES SPECIFIED ON ACB      @L1A         
+         AGO   .PARMS                                              @L1A         
+.PFMNNO  ANOP                                                      @L1A         
+&PM      SETB  0                 PERFMON=NO SPECIFIED  (DEFAULT)   @L1A         
+         AGO   .PARMS                                              @L1A         
+.*                                                                              
+.*****************TEST APPLVCTR OPERAND *************************  @L2A         
+.*                                                                 @L2A         
+.APVTRAD ANOP                                                      @L2A         
+&L       SETA  K'&PARMS(&I)-9           GET LENGTH OF PARAMETER    @L2A         
+         AIF   (&L EQ 0).APVDONE        IF OMITTED, TAKE DEFAULT   @L2A         
+&APVTR   SETC  '&PARMS(&I)'(10,&L)      GET SUPPLIED VALUE         @L2A         
+.APVDONE ANOP                           FINISHED PROCESSING        @L2A         
+         AGO   .PARMS                   GET NEXT KEYWORD           @L2A         
+.*                                                                 @L2A         
+.* **************** TEST EXITFRR OPERAND ********************      @N1A         
+.EXFRR   ANOP                                                      @N1A         
+&L       SETA  K'&PARMS(&I)-8           GET LENGTH OF PARAMETER    @N1A         
+         AIF   (&L EQ 0).XFRRNO         IF OMITTED, DEFAULT IS NO  @N1A         
+&XFRR    SETC  '&PARMS(&I)'(9,&L)       GET VALUE SUPPLIED         @N1A         
+         AIF   ('&XFRR' EQ 'NO').XFRRNO   IF NO, PROCESS SETTING   @N1A         
+         AIF   ('&XFRR' EQ 'YES').XFRRYES IF YES, PROCESS SETTING  @N1A         
+         MNOTE 12,'INVALID KEYWORD VALUE EXITFRR=&XFRR'                         
+.*                                      INVALID VALUE SPECIFIED    @N1A         
+.XFRRNO  ANOP                           EXITFRR=NO OR OMITTED      @N1A         
+&XF      SETB  0                        SET FLAG BIT VARIABLE OFF  @N1A         
+         AGO   .XFRDONE                 FINISH PROCESSING          @N1A         
+.XFRRYES ANOP                           EXITFRR=YES                @N1A         
+&XF      SETB  1                        SET FLAG BIT VARIABLE ON   @N1A         
+.XFRDONE ANOP                           FINISHED PROCESSING        @N1A         
+         AGO   .PARMS                   GET NEXT KEYWORD           @N1A         
+.*                                                                 @N1A         
+.* **************** TEST FORCETKO OPERAND *******************      @R1A         
+.FRCTKO  ANOP                                                      @R1A         
+&TOSET   SETB  0                        Assume not coded           @R2A         
+&L       SETA  K'&PARMS(&I)-9           GET LENGTH OF PARAMETER    @R1A         
+         AIF   (&L EQ 0).FTKONO         IF OMITTED, DEFAULT IS NO  @R1A         
+&FTKO    SETC  '&PARMS(&I)'(10,&L)      GET VALUE SUPPLIED         @R1A         
+&TOSET   SETB  1                        FORCETKO was coded         @R2A         
+         AIF   ('&FTKO' EQ 'NO').FTKONO   IF NO, PROCESS SETTING   @R1A         
+         AIF   ('&FTKO' EQ 'YES').FTKOYES IF YES, PROCESS SETTING  @R1A         
+         MNOTE 12,'INVALID KEYWORD VALUE FORCETKO=&FTKO'                        
+.*                                      INVALID VALUE SPECIFIED    @R1A         
+.FTKONO  ANOP                           FORCETKO=NO OR OMITTED     @R1A         
+&TO      SETB  0                        SET FLAG BIT VARIABLE OFF  @R1A         
+         AGO   .FTKDONE                 FINISH PROCESSING          @R1A         
+.FTKOYES ANOP                           FORCETKO=YES               @R1A         
+&TO      SETB  1                        SET FLAG BIT VARIABLE ON   @R1A         
+.FTKDONE ANOP                           FINISHED PROCESSING        @R1A         
+         AGO   .PARMS                   GET NEXT KEYWORD           @R1A         
+.*                                                                 @R1A         
+.* **************** TEST USER FIELD OPERAND *****************  @D5K4791         
+.USERAD  ANOP                                                  @D5K4791         
+.*                                                             @D5K4791         
+&ACBFXD  SETA  K'&PARMS(&I)-8      LENGTH OF CHAR STRING       @D5K4791         
+         AIF   (&ACBFXD EQ 0).ACBOUT    .  FIELD MISSING       @D5K4791         
+&USE     SETC  '&PARMS(&I)'(9,&ACBFXD)   &USE = CHAR STRING    @D5K4791         
+         AIF   ('&USE'(1,2) EQ 'C''').ACBCKP                   @D5K4791         
+         AIF   ('&USE'(1,2) EQ 'X''').ACBCKP                   @D5K4791         
+         AIF   ('&USE'(1,2) EQ 'F''').ACBCKP                   @D5K4791         
+         AIF   ('&USE'(1,2) EQ 'A(').ACBCKQ                    @D5K4791         
+         AIF   ('&USE'(1,2) EQ 'V(').ACBCKQ                    @D5K4791         
+         AGO   .ACBERQ                                         @D5K4791         
+.ACBCKP  AIF   ('&USE'(&ACBFXD,1) EQ '''').ACBGOP              @D5K4791         
+         AGO   .ACBERP                                         @P5K8914         
+.ACBCKQ  AIF   ('&USE'(&ACBFXD,1) EQ ')').ACBGOP               @D5K4791         
+.ACBERP  MNOTE 0,'CHECK FOR UNBALANCED PARENTHESES OR APOSTROPHES'              
+.*                                                             @P5K8914         
+.ACBERQ  MNOTE 12,'INVALID KEYWORD VALUE USERFLD=&USERFLD'     @D5K4791         
+         AGO   .PARMS            CHECK FOR ADDITIONAL INPUT    @P5K8915         
+.ACBOUT  ANOP                                                  @D5K4791         
+&USE     SETC  '&USED'           USER FIELD DEFAULTED          @D5K4791         
+         AGO   .PARMS            CHECK FOR ADDITIONAL INPUT    @P5K8915         
+.ACBGOP  ANOP                                                  @D5K4791         
+&USE     SETC  '&USE'(1,1)'L4'.'&USE'(2,&ACBFXD-1)             @D5K4791         
+         AGO   .PARMS            CHECK FOR ADDITIONAL INPUT    @P5K8915         
+.P0DONE  ANOP                                                  @P5P8802         
+.*                                                                 @R1A         
+.**************** VERIFY FORCETKO AND PERSIST SETTINGS ******      @R1A         
+         AIF   (NOT(&TOSET)).NOERR      FORCETKO CODED        @R1A @R2C         
+         AIF   (&PSC).NOERR             PERSIST=YES CODED          @R1A         
+         MNOTE 12,'FORCETKO CODED WITHOUT PERSIST=YES'        @R1A @R2C         
+&TO      SETB  0                        INVALID, RESET FORCETKO    @R1A         
+.NOERR   ANOP                           NO ERROR CONDITION         @R1A         
+.*                                                                 @R1A         
+.************************************************************      @R1A         
+         ISTCBACB MACRF=&MACRF,CATALOG=&CATALOG,CRA=&CRA,      @ZA34940*        
+               AM=&AM,CALLER=ACB        SET VALUES FOR BIT     @ZA34940         
+.*                                      KEYWORDS IN GLOBALS     X04SVHS         
+.*            ISTCBACB IS CALLED TO PROCESS BIT KEYWORDS MACRF,@ZA34940         
+.*             CATALOG, AND CRA.  IT WILL VALIDITY CHECK OPTIONS                
+.*             SPECIFIED, MUTUALLY EXCLUSIVE CHECK WHERE APPLICABLE,            
+.*             AND SET GLOBALS WITH THE VALUES OF THE KEYWORDS.                 
+.*                                                                              
+&LEN     SETA  76                       SET FOR COMMON LENGTH    X03004         
+         AIF   ('&AM' EQ '').SETLEN     IF AM IS NULL           X04SVHS         
+.*                                      DEFAULT LEN TO VSAM,    X04SVHS         
+.*                                      AND SUBTYPE TO 0        X04SVHS         
+.*                                                                              
+&STYPE   SETA  X'10'                    SET VSAM SUBTYPE        X04SVHS         
+         AIF   ('&AM' EQ 'VSAM').SETLEN IS IT VSAM              X04SVHS         
+&VTMEXT  SETA  32                       NO, SET VTAM EXT LEN   @D5P4790         
+&STYPE   SETA  X'20'                    SET VTAM SUBTYPE        X04SVHS         
+         AIF   ('&AM' EQ 'VTAM').SETLEN IF VTAM SET VTAM LEN    X04SVHS         
+.*                                      AND SUBTYPE             X04SVHS         
+.*                                      ELSE ERROR              X04SVHS         
+&STYPE   SETA  0                        ZERO SUBTYPE            X04SVHS         
+&VTMEXT  SETA  0                        GENERATE NORMAL LEN ACB X04SVHS         
+         ISTERMAC 3,AM,&AM              ISSUE ERROR MSG        @ZA34940         
+.SETLEN  ANOP                                                   X04SVHS         
+&NAME    DS    0F                                                               
+         DC    X'A0'                    ACB IDENTIFICATION                      
+         DC    AL1(&STYPE)              ACB SUBTYPE             X04SVHS         
+.*             X'11' - X'1F' ARE RESERVED FOR VSAM              X04SVHS         
+.*             X'21' - X'2F' ARE RESERVED FOR VTAM              X04SVHS         
+         DC    AL2(&LEN+&VTMEXT)        ACB LENGTH             X03004HS         
+         DC    A(0)                     AMB LIST POINTER                        
+         AIF   ('&AM' NE 'VTAM').SETIRR IF NOT VTAM ACBINRTN = ZERO             
+.*                                                             X03004HS         
+         DC    A(*+&LEN-8)              PTR TO VTAM EXTENSION  X03004HS         
+         AGO   .MACRF1                                         X03004HS         
+.SETIRR  ANOP                                                                   
+         DC    A(0)                     INTERFACE ROUTINE POINTER               
+.*       MACRF PROCESSING                                                       
+.MACRF1  ANOP                                                   X04SVHS         
+         DC    B'&IDAMAC1'              MACRF(1)                X04SVHS         
+         DC    B'&IDAMAC2'              MACRF(2)                X04SVHS         
+         DC    AL1(&BSTRNO)             NO OF CONCURRENT        X04SVHS         
+*                                       STRINGS FOR AIX PATH    X04SVHS         
+         DC    AL1(&STRNO)              NUMBER OF STRINGS       X04SVHS         
+         DC    AL2(&BUFND)              NUMBER OF DATA BUFFERS                  
+         DC    AL2(&BUFNI)              NUMBER OF INDEX BUFFERS                 
+         DC    B'&IDAMAC3'              MACRF(3)                X04SVHS         
+         DC    B'00000000'              MACRF(4)                X04SVHS         
+         DC    AL2(0)                   JES BUFFER POOL/NUMBER  X04SVHS         
+*                                       OF JOURNAL BUFFERS                      
+         DC    X'80'                    RECFM=A                                 
+         AIF   ('&CCTYPE' EQ '').CCSET                                          
+&A       SETB  ('&CCTYPE' EQ 'A')                                               
+&M       SETB  ('&CCTYPE' EQ 'M')                                               
+         AIF   (&A OR &M).CCSET                                                 
+         ISTERMAC 5,CCTYPE,&CCTYPE                             @ZA34940         
+.CCSET   DC    B'00000&A&M.0'           CONTROL CHARACTER TYPE                  
+         DC    X'0008'                  DSORG=ACB                               
+         AIF   ('&MAREA' EQ '0').GENM0 IF &MAREA = 0 BYPASS     X04SVHS         
+.*                                      CHKING FOR AM=VSAM      X04SVHS         
+         AIF   ('&AM' EQ '' OR '&AM' EQ 'VSAM').GENMA           X04SVHS         
+.*                                      IF NOT VSAM ACB, ERROR  X04SVHS         
+         ISTERMAC 24,MAREA              ISSUE ERR MSG          @ZA34940         
+         AGO   .GENM0                                           X04SVHS         
+.GENMA   ANOP                                                   X04SVHS         
+         DC    A(&MAREA)                MESSAGE AREA            X04SVHS         
+         AGO   .GPSWD                                           X04SVHS         
+.GENM0   ANOP                                                   X04SVHS         
+         DC    A(0)                                             X04SVHS         
+.GPSWD   ANOP                                                   X04SVHS         
+         DC    A(&PASSWD)               PASSWORD POINTER                        
+         DC    A(&EXLST)                EXIT LIST POINTER                       
+         AIF   ('&DDNAME' NE '' AND '&AM' NE 'VTAM').DDNMCHK   @ZA31869         
+         AIF   ('&DDNAME' EQ '').VTAM   NO DDNAME SPECIFIED?     X03004         
+         ISTERMAC 24,DDNAME             NOT A VTAM KEYWORD     @ZA34940         
+         AGO   .ACBB2                                            X03004         
+.VTAM    ANOP                                                    X03004         
+         AIF   ('&AM' NE 'VTAM').NONAME TRY LABEL IF NO VTAM     X03004         
+         DC    X'FF'                    INDICATE VTAM            X03004         
+         DC    XL7'00'                  PAD WITH ZEROS           X03004         
+         AGO   .ACBB3                                            X03004         
+.NONAME  ANOP                                                    X03004         
+         AIF   ('&NAME' EQ '').BLANK    IS THERE A LABEL                        
+         DC    CL8'&NAME'               DDNAME                                  
+         AGO   .ACBB3                                                           
+.BLANK   DC    CL8' '                   DDNAME                                  
+         AGO   .ACBB3                                                           
+.DDNMCHK ANOP                                                  @ZA31869         
+         AIF   (K'&DDNAME GT 8 OR '&DDNAME'(1,1) LT 'A' OR             C        
+               '&DDNAME'(1,1) GT 'Z').DDNMERR  CHECK FOR VALID @ZA31869         
+         AGO   .ACBB2                          DDNAME          @ZA31869         
+.DDNMERR ISTERMAC 3,DDNAME,&DDNAME      INVALID DDNAME         @ZA34940         
+.ACBB2   DC    CL8'&DDNAME'             DDNAME                                  
+.ACBB3   DC    X'02'                    OFLAGS                                  
+         DC    AL1(0)                   ERFLAGS                                 
+         DC    B'&IDAIFL1'              INFLGS(1)               X04SVHS         
+         DC    B'00000000'              INFLGS(2)               X04SVHS         
+         DC    A(&JFCB)                 OPENJ JFCB POINTER                      
+         DC    A(&BUFSP)                BUFFER SPACE                            
+         AIF   ('&BLKSIZE' EQ '0').CHKMLN                       X04SVHS         
+         AIF   ('&MLEN' EQ '0').BLKSET                          X04SVHS         
+.*             IF BLKSIZE AND MLEN ARE BOTH SPECIFIED           X04SVHS         
+.*             IT IS AN ERROR                                   X04SVHS         
+         ISTERMAC 19,BLKSIZE,MLEN                              @ZA34940         
+.BLKSET  ANOP                                                   X04SVHS         
+         DC    AL2(&BLKSIZE)            BLOCK SIZE                              
+         AGO   .LRECLST                                         X04SVHS         
+.CHKMLN  ANOP                                                   X04SVHS         
+         AIF   ('&MLEN' EQ '0').BLKSET                          X04SVHS         
+.*                                      IF MLEN IS SPEC,        X04SVHS         
+.*                                      CHECK FOR VSAM ACB      X04SVHS         
+         AIF   ('&AM' NE '' AND '&AM' NE 'VSAM').MLERR          X04SVHS         
+.*                                      IF NOT VSAM ACB, ERROR  X04SVHS         
+         DC    AL2(&MLEN)               MESSAGE LENGTH          X04SVHS         
+         AGO   .LRECLST                                         X04SVHS         
+.MLERR   ISTERMAC 24,MLEN               ISSUE ERR MSG          @ZA34940         
+         AGO   .BLKSET                                          X04SVHS         
+.LRECLST ANOP                                                   X04SVHS         
+         DC    AL2(&LRECL)              RECORD SIZE                             
+         AIF   ('&USERPTR' EQ '0').UPTR  NO USER PTR PROVIDED                   
+         DC    A(&USERPTR)              ADDRESS OF USER WORKAREA                
+         AGO   .CBMWP                                                           
+.UPTR    DC    A(0)                     USER WORKAREA POINTER                   
+.CBMWP   DC    A(0)                     CONTROL BLOCK MANIPULATION              
+*                                       WORKAREA POINTER                        
+         AIF   ('&AM' EQ 'VTAM').SETAPP  WAS VTAM SPECIFIED      X03004         
+         AIF   ('&APPLID' EQ '0').NONAPP  WAS APPLID SPECIFIED   X03004         
+         ISTERMAC 18,APPLID                                    @ZA34940         
+.NONAPP  ANOP                           IGNORE APPLID            X03004         
+         DC    A(0)                     PTR TO APPL NAME         X03004         
+         MEXIT                          END THE MACRO            X03004         
+.SETAPP  ANOP                           VTAM SPECIFIED           X03004         
+         DC    A(&APPLID)               PTR TO APPL NAME         X03004         
+         LA    15,32                    SET RETURN CODE(VTAM)    X03004         
+         BR    14                       RETURN TO CALLER(VTAM)   X03004         
+         DC    B'&F.&S.&SS.&PSC.0&N.00' ACBOPT1 FLAGS         @KFA @T1C         
+         DC    B'&FD.&PM.0&XF.&TO.000'  ACBOPT2 FLAGS              @R1C         
+         DC    F'0'                     RESERVED                 X03004         
+         DC    A(&NIB)                  NIB ADDRESS            @G69AKJP         
+         DC    A(0)                     AMSI ADDRESS           @D5K4791         
+         DC    A(0)                     RIVL ADDRESS           @D5K4791         
+         DC    &USE                     USER FIELD             @D5K4791         
+         DC    A(&APVTR)                APPLVCTR ADDRESS           @L2A         
+.OUT     MEND                                                                   

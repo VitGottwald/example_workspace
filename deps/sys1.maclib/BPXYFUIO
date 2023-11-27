@@ -1,0 +1,471 @@
+* %If BPXYFUIO_SWITCH = '' %THEN                                                
+* %DO;                                                                          
+*        %GOTO FUIOPRO  ;        /* Bilingual header                            
+         MACRO                                                                  
+         BPXYFUIO &DSECT=YES,&LIST=YES                                          
+         GBLB  &FUIO411                                                         
+         GBLC  &SYSAM64       Variable set by SYSSTATE AMODE64=YES              
+         AIF   (&FUIO411 EQ 1).E411                                             
+&FUIO411 SETB  1                                                                
+         AIF   ('&LIST' EQ 'YES').A411                                          
+         PUSH  PRINT  BPXYFUIO: File System User I/O block                      
+         PRINT OFF                                                              
+         AGO   .A411                                                            
+*                                  */                                           
+*%FUIOPRO : ;                                                                   
+*/****START OF SPECIFICATIONS******************************************         
+*                                                                               
+*    $MAC (BPXYFUIO) COMP(SCPX1) PROD(BPX):                                     
+*                                                                               
+*01* MACRO NAME: BPXYFUIO                                                       
+*                                                                               
+*01* DSECT NAME: N/A                                                            
+*                                                                               
+*01* DESCRIPTIVE NAME: OpenMVS File System User Input / Output Block            
+*                                                                               
+*02*   ACRONYM: FUIO                                                            
+**/                                                                             
+*/*01* PROPRIETARY STATEMENT=                                        */         
+*/***PROPRIETARY_STATEMENT********************************************/         
+*/*                                                                  */         
+*/*                                                                  */         
+*/* LICENSED MATERIALS - PROPERTY OF IBM                             */         
+*/* 5650-ZOS COPYRIGHT IBM CORP. 1993, 2021                          */         
+*/*                                                                  */         
+*/* STATUS= HBB77D0                                                  */         
+*/*                                                                  */         
+*/***END_OF_PROPRIETARY_STATEMENT*************************************/         
+*/*                                                                             
+*01* EXTERNAL CLASSIFICATION:  GUPI                                             
+*01* END OF EXTERNAL CLASSIFICATION:                                            
+*                                                                               
+*01* FUNCTION:                                                                  
+*                                                                               
+*      The FUIO is a file system control block used to pass                     
+*      I/O information on read and write operations.                            
+*                                                                               
+*01* METHOD OF ACCESS:                                                          
+*                                                                               
+*02*   PL/X:                                                                    
+*                                                                               
+*        %INCLUDE SYSLIB(BPXYFUIO)                                              
+*        By default, the Fuio is based on FuioPtr.  If                          
+*        other basing is desired, use %FuioBASE='BASED(XXXXXX)'.                
+*        A Declare for FuioPtr is also generated.                               
+*                                                                               
+*        The Fuio_type PL/X data type is defined by this macro.    @D6A         
+*        To have only the type defined, and not the instance       @D6A         
+*        named "Fuio", use %FUIOBASE = 'TYPEONLY'.                 @D6A         
+*                                                                               
+*02*   ASM:                                                                     
+*        SYSSTATE  AMODE64=NO/YES                                               
+*        BPXYFUIO  DSECT=YES!NO,LIST=YES!NO                                     
+*                                                                               
+*        With DSECT=NO, storage is allocated in line                            
+*        and addressability is provided thru that DSECT or CSECT.               
+*        With DSECT=YES, a DSECT is produced and "USING FUIO,reg"               
+*        is required for addressability.  Here "reg" contains the               
+*        address of FUIO#LENGTH bytes of storage.                               
+*        The defaults are DSECT=YES and LIST=YES.                               
+*                                                                               
+*01* SIZE: Release dependent, see mapping                                       
+*                                                                               
+*01* POINTED TO BY:                                                             
+*      In the dynamic storage of the logical file system routine                
+*      that has been called.  It is passed as a parameter to the                
+*      VNODE adapter layer.                                                     
+*                                                                               
+*      It may also be located in storage belonging to the caller of             
+*      Vnode interface services.                                                
+*                                                                               
+*01* CREATED BY: LFS Syscall Routine and callers of Vnode interface             
+*                services.                                                      
+*                                                                               
+*01* DELETED BY: LFS Syscall Routine and callers of Vnode interface             
+*                services                                                       
+*                                                                               
+*01* STORAGE ATTRIBUTES:                                                        
+*02*   SUBPOOL: N/A                                                             
+*02*   KEY: N/A                                                                 
+*02*   RESIDENCY: Writeable Storage                                             
+*                                                                               
+*01* FREQUENCY: 1 per call                                                      
+*                                                                               
+*01* SERIALIZATION: N/A                                                         
+*                                                                               
+*01* DEPENDENCIES: Any changes to fields in FUioInfo must also be               
+*                  reflected in BPXZDDPL.                                       
+*                                                                               
+*01* NOTES: Related macros -                                                    
+*                                                                               
+*      BPXZFUIO - Prior name of BPXYFUIO.  To facilitate migration,             
+*                 BPXZFUIO includes BPXYFUIO.  In all new code,                 
+*                 BPXYFUIO should be used.                                      
+*                                                                               
+*      BPXYVFSI - C program interface for the BPX1V (v_) services.              
+*                 The UIO structure in BPXYVFSI matches the BPXYFUIO            
+*                 structure.                                                    
+*                                                                               
+*                                                                               
+*      64-Bit Addressing & LP64 -                                @DBA           
+*                                                                               
+*      The bit combinations of FuioRealPage and FuioAddr64                      
+*      determine where to find the buffer address as follows:                   
+*                                                                               
+*                            FUIOREALPAGE                                       
+*                         OFF            ON                                     
+*                    +---------------+-----------------+                        
+*                OFF !FuioBufferAddr ! FuioBufferAddr  !                        
+*                    !has 31-bit     ! has 31-bit      !                        
+*                    !virtual addr   ! real addr       !                        
+*    FUIOADDR64      +---------------+-----------------+                        
+*                ON  !FuioBuff64VAddr! FuioBufferAddr64!                        
+*                    !has 64-bit     ! has 64-bit      !                        
+*                    !virtual addr   ! real addr       !                        
+*                    +---------------+-----------------+          @DDA          
+*                                                                               
+*        When FuioAddr64 is on and FuioRealPage is off:                         
+*         1) FuioBuff64VAddr  --> R/W Buffer, IOV64, or MSGH64.                 
+*         2) Any associated Msg Hdr will be a MSG64 with 64-Bit ptrs.           
+*         3) Any associated Iovec will be an IOV64 with 64-Bit ptrs.            
+*                                                                               
+*                                                                               
+*        A single I/O is limited to 2G Bytes, so most length fields             
+*        remain 32-Bits.   For LP64 C, SSIZE_MAX will be 2G which               
+*        is supposed to limit the program's use of its 64-Bit longs.            
+*                                                                               
+*        To use FuioBufferAddr64P or FuioBuff64VAddr as 8-byte pointer:         
+*          Issue 'ASAXMAC SetEsameInfo'to define AsaxmacP64                     
+*          Or define the following to suit your needs:                          
+*              %AsaxmacP64 = 'Ptr(64)'  <or>  'Like()', 'IsA()', etc.           
+*                                                                               
+*                                                                               
+*01* COMPONENT: OpenMVS (SCPX1)                                                 
+*                                                                               
+*01* DISTRIBUTION LIBRARY:  AMACLIB                                             
+*                                                                               
+*01* EYE-CATCHER: FUIO                                                          
+*02*   OFFSET:  0                                                               
+*02*   LENGTH:  4                                                               
+*                                                                               
+*01* CHANGE-ACTIVITY:                                                           
+*                                                                               
+*    $L0=POSIXXF  HOM1110 921201 PDNC: OpenMVS Initial Release                  
+*    $D1=OMVS2SOC HOM1120 930223 PDJV: Integrated Socket support                
+*    $D2=DOAA009, HOM1120,930330 PDJT: NFS Support - DCR A009.01                
+*    The preceding lines were copied from BPXZFUIO, reflecting activity         
+*    prior to the creation of BPXYFUIO.                                         
+*    $D3=DOAA009  HOM1120 930714 PDSV: DCR A009.03 NFS: create BPXYFUIO         
+*    $D4=DOAA009  HOM1120 931015 PDSV: ASM improvements - DCR A009.05           
+*    $P1=POA0302  HOM1120 940203 PDJV: Delete reference to subpool              
+*    $P1=PPF0001  HOM1130 940203 PDJV: Delete reference to subpool              
+*    $D5=DOAA065  HOM1130 940420 PDNE: (DCR A065.03) Memory map files           
+*    $D6=DPFA065  HOM1130 940523 PDJS: (DCR A065.18) UU rlimit support          
+*    $D7=DPFA052  HOM1130 940915 PDCL: Dcr A052.07 expand fuio for              
+*                                      Kernel extension services                
+*    $P2=PPF0230  HOM1130 950308 PDJT: Correct Iov Alet comments                
+*    $D8=DRGA134  HOM1140 950724 PDSK: UU errno changes (A134.02)               
+*    $P3=PRG0277  HOM1140 950812 PDJV: Delect sockinvalid bit                   
+*    $D9=DSYA214  JBB6604 961119 PDJT  NFS V3 Protocols       (PSY0380)         
+*    $P4=PVT0656  HBB6606 980326 PDJT: MSG_EOF -> FuioShutD                     
+*    $DA=DXDA367  HBB7703 990603 PDJC: (DCR A367.01) 64 bit real                
+*    $01=AW41586  JBB6609 991025 PDMX: Fifo atomic reads for sysplex            
+*    $DB=DxxA505  HBB7705 000503 PDJT: LP64 & 64-Bit addressing                 
+*    $DC=DXDA517  HBB7705 000705 PD2R: Pread()/Pwrite() support                 
+*    $DD=DYNA519  HBB7708 001012 PDSK: 64-bit                 A519.01           
+*    $DD=PX01158  HBB7705 010103 PDJT: FuioBuff64Vaddr to R12 A519.01           
+*    $P5=PYN0220  HBB7708 020301 PDFO: Bilingual fixup                          
+*    $T0=TJK0971  HBB7709 031031 PDJT: 64-Bit cleanup                           
+*    $P6=PJK1255  HBB7709 040105 PDSK: readdir - incorrect output               
+*    $DE=DCRC407  HBB7790 120312 PDSK: USS support for zFS- ME23749             
+*    $DF=ME23945  HBB7790 120501 PDSK: XPFS rdd+ performance                    
+*    $DG=DCRC509  HBB7790 120811 PDX8: Unicode support for pipe                 
+*    $DH=DCRC595  HBB77A0 140328 PDSK: AMODE64 64-bit autodata                  
+*    $DI=EA26976  HBB77C0 180410 PDX8: Add skiphole bit for zFS->zFS            
+*    $DJ=EA299845 HBB77D0 200826 PDSA: Union file system                        
+*                                                                               
+****END OF SPECIFICATIONS*********************************************/         
+*        %GOTO FUIOPLS   ;        /* Bilingual header                           
+.A411    ANOP  ,                                                                
+**  BPXYFUIO: User I/O block                                                    
+**  Used By:  VRW VRD VRA                                                       
+         AIF   ('&DSECT' EQ 'NO').B411                                          
+FUIO                  DSECT ,                                                   
+         AGO   .C411                                                            
+.B411    ANOP  ,                                                                
+                     DS    0D                 Clear storage                     
+FUIO                 DC    XL(FUIO#LENGTH)'00'                                  
+                     ORG   FUIO                                                 
+.C411    ANOP  ,                                                                
+FUIOBEGIN            DS    0D                                                   
+FUIOHDR              DS    0D                                                   
+*                                                                               
+FUIOID               DC    C'FUIO'                                     *        
+                                  EBCDIC ID - FUIO                              
+FUIOLEN              DC    AL4(FUIO#LENGTH)                            *        
+                                  Length of this FUIO                           
+FUIOINFO             DS    0D     Note: The following fields must      *        
+                                        map to BPXZDDPL                         
+FUIOBUFFERADDR64     DS    0CL8   64 Bit Real Buffer address      @DAC          
+FUIOBUFFERADDR64P    DS    0D     64 Bit Real Buffer address      @DBA          
+FUIOBUFFERADDR       DS    F      Buffer address for READ or           *        
+                                         WRITE, etc.  Address of iov   *        
+                                         for READV and WRITEV                   
+FUIOBUFFALET         DS    F      Alet associated with Buffer                   
+FUIOCURSOR           DS    0F     Current position in the file                  
+FUIOCUR1             DS    F      Word 1 of cursor                              
+FUIOCUR2             DS    F      Word 2 of cursor                              
+FUIOIBYTESRW         DS    F      Num of bytes to read or write        *        
+                                  (or iovcnt for READV and WRITEV)              
+FUIOASID             DS    H      Address Space ID                              
+*                                                                               
+*                                                                               
+FUIOFLAGS            DS    XL1    Flags                                         
+*                                                                               
+FUIORWIND            EQU   FUIOFLAGS                                   *        
+                                  Indicates if READ or WRITE           *        
+                                  0 - Read, 1 - Write                           
+FUIO#RD              EQU   X'7F'  Read: AND with FUIORWIND                      
+FUIO#WRT             EQU   X'80'  Write: OR with FUIORWIND                      
+*                                                                               
+FUIOPSWKEY           EQU   FUIOFLAGS                                   *        
+                                  Describes bits 1 through 4 of        *        
+                                  byte FUIOFLAGS                                
+FUIOPSWKEYMASK       EQU   X'78'  AND with FUIOPSWKEY to clear         *        
+                                  non-PSWKEY bits in FUIOFLAGS                  
+*                                                                               
+FUIOSYNC             EQU   X'04'  Sync on write requested                       
+FUIOSYNCDONE         EQU   X'02'  Sync on write was done                        
+FUIOCHKACC           EQU   X'01'  Perform access checking                       
+FUIOFLAG2            DS    XL1    More flags                      @D5A          
+FUIOREALPAGE         EQU   X'80'  Real page address provided      @D5A          
+FUIOLIMITEX          EQU   X'40'  File size limit exceeded        @D6A          
+FUIOIOVINUIO         EQU   X'20'  uio contains an iov struc       @D7A          
+FUIOSHUTD            EQU   X'10'  Do shutdown after send          @P3A          
+FUIOADDR64           EQU   X'08'  64 bit addressing               @DAA          
+FUIOSEEKCUR          EQU   X'04'  for use in pread/pwrite         @DIA          
+FUIOSKIPHOLES        EQU   X'02'  in/out for sparse file          @DIA          
+FUIOVSPECIFIC        DS    CL8    Vnop Specific Fields                          
+FUIOFSSIZELIMIT      DS    0CL8   Rlimit support                  @D6A          
+FUIOFSSIZELIMITHW    DS    F      hiword - filesize limit         @D6A          
+FUIONONEWFILES       EQU   X'80'  can't create new files          @D6A          
+FUIOFSSIZELIMITLW    DS    F      loword - filesize limit         @D6A          
+FUIOREL2SIZE         DS    0F     Fuio before Rel 3 expansion     @D7A          
+*                                                                               
+FUIOINTERNAL         DS    0CL16                                                
+FUIOCURRBUFFPTR      DS    F      Buffer currently being processed@D7A          
+FUIOCURRBUFFLEN      DS    F      Length of current buffer        @D7A          
+FUIOCURRBUFFOFFSET   DS    F      Offset into current buffer      @D7A          
+FUIOCURRIOVENTRY     DS    F      Iov entry being processed       @D7A          
+*                                                                               
+FUIOIOVRESIDUALCNT   DS    F      Num bytes remaining in iov str  @D7A          
+FUIOTOTALBYTESRW     DS    F      Total number of bytes to be moved    *        
+                                  If FuioIovinUio=on,                  *        
+                                  this is the sum of all bytes         *        
+                                  in the iov. Otherwise, this is       *        
+                                  the same as FuioIBytesRW        @D7A          
+FUIOBUFF64VADDR      DS    D      64 Bit Virtual Buffer address   @DDC          
+FUIOEND              DS    0F     End of FUIO                                   
+         SPACE 1                                                                
+*----------------------------------------------------------------               
+*   ReadDir Specific Information                                                
+*----------------------------------------------------------------               
+FUIOREADDIR          ORG   FUIOVSPECIFIC                                        
+FUIORDINDEX          DS    F      Readdir Index                                 
+FUIORDDFLAGS         DS    0XL4   Readdir flags                   @D9A          
+                     DS    XL3                                    @D9C          
+FUIORDDFLAGS4        DS    XL1    Readdir flags:                  @D9A          
+FUIOVRRDP            EQU   X'08'   Server invoked BPXVRRDP        @DFA          
+FUIORETCURSOR        EQU   X'04'   PFS must return DirEntCursor   @DEA          
+FUIOCVERRET          EQU   X'02'   Cookie Verifier Returned       @D9A          
+FUIORDDPLUS          EQU   X'01'   ReaddirPlus requested          @D9A          
+         SPACE 1                                                                
+*----------------------------------------------------------------               
+*   VN_ReadWriteV and VN_SRMsg Specific Information                             
+*----------------------------------------------------------------               
+FUIOSOCKETALETS      ORG   FUIOVSPECIFIC                                        
+FUIOIOVALET          DS    F      SRMsg IOV Alet                                
+FUIOIOVBUFALET       DS    F      All IOV's Buff's Alet                         
+*                                                                               
+*   Readdir and ReaddirPlus Output Cookie Verifier                @D9A          
+                     ORG   FUIOINTERNAL                           @D9A          
+FUIOCVER             DS    CL8    Cookie Verifier                 @D9A          
+                     ORG                                                        
+*                                                                               
+*   Constants                                                                   
+*                                                                               
+FUIO#LEN             EQU   FUIOEND-FUIOBEGIN                           *        
+                                    Length of FUIO                              
+FUIO#LENGTH          EQU   FUIO#LEN Length of FUIO                              
+FUIO#REL2LEN         EQU   FUIOREL2SIZE-FUIOBEGIN                      *        
+                                    Length of Release 2 FUIO                    
+FUIO#SP              EQU   3        Subpool for the FUIO                        
+** BPXYFUIO End                                                                 
+         SPACE 3                                                                
+         AIF   ('&LIST' EQ 'YES').E411                                          
+         POP   PRINT                                                            
+.E411    ANOP  ,                                                                
+         MEND  ,                  Terminating PL/X comment           */         
+*                                                                               
+*%FUIOPLS : ;                                                                   
+* %DCL ASABEGIN_AMODE CHAR EXTERNAL;                          /* @DHA*/         
+* %DCL PTR_64 CHAR EXTERNAL;                                  /* @DHA*/         
+* %IF Translate(FUIOBASE) ^= 'TYPEONLY' %THEN                  /*@D6A*/         
+*  %DO;                                                        /*@D6A*/         
+*    %IF FUIOBASE= '' %THEN                                                     
+*      %DO;                                                                     
+*        %FUIOBASE = 'BASED(FuioPtr)'; /* Default basing to FuioPtr  */         
+*      %END;                                                                    
+*    %IF TRANSLATE(FUIOBASE) = 'BASED(FUIOPTR)' %THEN                           
+*     %DO;                                                                      
+*      %IF ASABEGIN_AMODE='64' ! PTR_64='YES' %THEN           /* @DHA*/         
+*        %DO;                                                 /* @DHA*/         
+*         DCL FuioPtr Ptr(64);                                /* @DHA*/         
+*        %END;                                                /* @DHA*/         
+*       %ELSE                                                 /* @DHA*/         
+*        %DO;                                                 /* @DHA*/         
+*         DCL FuioPtr Ptr(31);                                                  
+*        %END;                                                /* @DHA*/         
+*     %END;                                                                     
+*    DCL Fuio IsA(Fuio_type) FUIOBASE;                         /*@D6A*/         
+*  %END;                                                       /*@D6A*/         
+*                                                                               
+* %IF AsaxmacP64 = ''                                          /*@DBA*/         
+*   %THEN %AsaxmacP64 = 'Char(8)';                             /*@DBA*/         
+*                                                                               
+* %BPXYFUIO_SWITCH = '1';                                                       
+*                                                                               
+*DCL                                                                            
+* 1 Fuio_type Type,                                            /*@D6C*/         
+*  3 FuioHdr,                      /*                            @D7A*/         
+*    5  FuioID      Char(4),       /* EBCDIC ID - FUIO               */         
+*    5  FuioLen     Fixed(32),     /* Length of this FUIO        @P1C*/         
+*  3  FuioInfo,                    /* Note: The following fields must           
+*                                           map to BPXZDDPL          */         
+*    5 FuioBufferAddr64 Char(8) Bdy(word), /* 64 Bit Buffer Addr @DAA*/         
+*     6 FuioBufferAddr64P AsaxmacP64 Bdy(Word),  /* 64-Bit real                 
+*                                                  buffer address@DBA*/         
+*      7 FuioBufferAddr Ptr(31),   /* 32 Bit Buffer address for READ or         
+*                                         WRITE, etc.  Address of iov           
+*                                         for READV and WRITEV   @D1C*/         
+*      7 FuioBuffAlet Ptr(31),     /* Alet associated with Buffer    */         
+*                                  ]+10                                         
+*    5 FuioCursor Char(8) Bdy(Dword), /* Current position in the file*/         
+*     7 FuioCur1   Fixed(32),      /*   Word 1 of cursor             */         
+*     7 FuioCur2   Fixed(32),      /*   Word 2 of cursor             */         
+*    5 FuioIBytesRW Fixed(31),     /* Num of bytes to read or write             
+*                                     (or iovcnt for READV and WRITEV)          
+*                                                                @D1C*/         
+*    5 FuioASID   Fixed(16),       /* Address Space ID               */         
+*    5 FuioFlags  Bit(8),          /* Flags                          */         
+*     7 FuioRWInd    Bit(1),       /* Indicates if READ or WRITE                
+*                                       0 - Read, 1 - Write          */         
+*     7 FuioPswKey   Bit(4),       /* Storage Access Key             */         
+*     7 FuioSync     Bit(1),       /* Sync on write requested    @D2A*/         
+*     7 FuioSyncDone Bit(1),       /* Sync on write was done     @D2A*/         
+*     7 FuioChkAcc   Bit(1),       /* Perform access checking    @D2A*/         
+*    5 FuioFlag2    Fixed(8),      /* More flags                 @D5A*/         
+*     7 FuioRealPage Bit(1),       /* Real Page address provided @D5A*/         
+*     7 FuioLimitEx  Bit(1),       /* File size limit exceeded   @D6A*/         
+*     7 FuioIovInUio Bit(1),       /* Fuio contains an Iov str   @D7A*/         
+*     7 FuioShutD    Bit(1),       /* Do shutdown after send     @P3A*/         
+*     7 FuioAddr64    Bit(1),      /* 64 Bit Addressing          @DAA*/         
+*     7 FuioSeekCur   Bit(1),      /* for use in pread/pwrite    @DCA*/         
+*     7 FuioSkipHoles Bit(1),      /* in/out for sparse file     @DIA*/         
+*     7 *             Bit(1),      /*Reserved                    @DIC*/         
+*                                  ]+20                                         
+*  3 FuioVSpecific Char(8) UNION Bdy(Word) ,              /*@D1A @D6C*/         
+*                                  /* >>> Vnop Specific Fields <<<   */         
+*    /*----------------------------------------------------------@D2A*/         
+*    /* ReadDir Specific Information                             @D3C*/         
+*    /*----------------------------------------------------------@D2A*/         
+*    5 FuioReaddir ,                                      /*@D2A @D6M*/         
+*       7 FuioRDIndex  Fixed(32),       /* Readdir Index         @D2A*/         
+*       7 FuioRddFlags Fixed(32),       /* Readdir Flags         @D9C*/         
+*         9  *          Bit(28),                               /*@D9A*/         
+*         9 FuioVRRDP     Bit(1),  /* server called BPXVRRDP     @DFA*/         
+*         9 FuioRetCursor Bit(1),  /* PFS should return cursor                  
+*                                     for each dirent            @DEA*/         
+*         9 FuioCverRet Bit(1),    /* Cookie Ver being Returned  @D9A*/         
+*         9 FuioRddPlus Bit(1),    /* ReaddirPlus requested      @D9A*/         
+*                                                                               
+*    /*----------------------------------------------------------@D1A*/         
+*    /* VN_ReadWriteV and VN_SRMsg Specific Information          @D1A*/         
+*    /*----------------------------------------------------------@D1A*/         
+*    5 FuioSocketAlets ,                                  /*@D1A @D6M*/         
+*       7 FuioIovAlet      Ptr(31),     /* SRMsg IOV Alet        @D1A*/         
+*       7 FuioIovBufAlet   Ptr(31),     /* Any IOV's Buff's Alet @D1A*/         
+*                                                                               
+*  3  FuioFSSizeLimit Char(8) Bdy(Word),   /* Rlimit support     @D6A*/         
+*     7 FuioFSSizeLimitHW Fixed(31),  /* hiword - filesize limit @D6A*/         
+*      9 FuioNoNewFiles   Bit(1),     /* can't create new files  @D6A*/         
+*      9 *                Bit(31),                            /* @D6A*/         
+*     7 FuioFSSizeLimitLW Fixed(32),  /* loword - filesize limit @D6A*/         
+*                                  ]+30                                         
+*  3  FuioRel2Size    Char(0),        /* fuio before Rel 3 expansion            
+*                                                                @D7A*/         
+*  3  * UNION ,                                               /* @DJA*/         
+*      5  FuioInternal ,                                   /*@DCC@DBC*/         
+*         /* osi_uiomove work area -   Current Iov:          @DCM@DBM*/         
+*          7  FuioCurrBuffPtr  Ptr(31),     /* Buffer address    @D7A*/         
+*          7  FuioCurrBuffLen  Fixed(32),   /* Buffer length     @D7A*/         
+*          7  FuioCurrBuffOffset Fixed(32), /* Offset in Buffer  @D7A*/         
+*          7  FuioCurrIovEntry   Fixed(32), /* Iov entry number  @D7A*/         
+*      5  * ,                                                                   
+*          7  FuioCver Char(8),     /* Readdir/ReaddirPlus Output               
+*                                      Cookie Verifier for NFS V3               
+*                                                                @DJM*/         
+*          7  *        Char(8),                               /* @DJA*/         
+*      /* Large Fifo reads cached in a sysplex server must have this            
+*         server buffer info preserved when sending each segment of             
+*         the buffer to the client.                              @DJM*/         
+*      5  FuioLargeFifo ,                                     /* @DJM*/         
+*          7 * UNION ,                                        /* @DJM*/         
+*              9 FuioUCInfoPtr Ptr(31), /* Unicvt passed to VNRW @DJM*/         
+*              9 FuioUCFlags Bit(32),                         /* @DJM*/         
+*                  11 FuioPipeBrowse Bit(1), /* Pipe browse. No                 
+                                       data deleted              @DJM*/         
+*                  11 FuioPipeGSpace Bit(1), /* Get pipe availabe               
+                                       space                     @DJM*/         
+*                  11 FuioPipeDelete Bit(1), /* Delete data in                  
+                                       pipe. No data copy        @DJM*/         
+*          7 FuioTotalFifoBytes Fixed(32),                    /* @DJM*/         
+*          7 FuioFifoOffset     Fixed(32),                    /* @DJM*/         
+*          7 FuioStorageId      Fixed(32),                    /* @DJM*/         
+*                                  ]+40                                         
+*    /* Following two words are set by osi_uiomove, ie output.   @D9A*/         
+*  3  FuioIovResidualCnt Fixed(31), /* Number of bytes remaining                
+*                                      in the iov vectors        @D7A*/         
+*  3  FuioTotalIBytesRW  Fixed(32), /* Total number of bytes to be              
+*                                      moved.  If FuioIovinUio=on,              
+*                                      this is the sum of all bytes             
+*                                      in the iov. Otherwise, this is           
+*                                      the same as FuioIBytesRW  @D7A*/         
+*                                                                               
+*  3 FuioBuff64VAddr AsaxmacP64 Bdy(Word), /* 64-bit virt addr   @DDA*/         
+*    5 FuioBuff64VAddrHW  Fixed(32),                           /*@P5A*/         
+*    5 FuioBuff64VAddr31  Ptr(31),         /*   for <2G cases    @P5A*/         
+*  3 FuioRel3Size   Char(0),        /* Fuio In Rel 3             @DBA*/         
+*                                  ]+50                                         
+*]+3  *             Char(16),                                  /*@DBA*/         
+*]+                                ]+60                                         
+*]+3  *             Char(16),                                  /*@DBA*/         
+*]+                                ]+70                                         
+*  3  *         Char(0) ;                                                       
+*                                                                               
+*                                                                               
+*                                                                               
+*                                                             /* @DED*/         
+*                                                                               
+*DCL                                                                            
+*  Fuio#ID     Char(4)   Constant('FUIO'), /* Control Block Acronym  */         
+*                                                                               
+*  Fuio#Len    Fixed(32) Constant(Length(Fuio_type)),          /*@D6C*/         
+*  Fuio#Rel2Len Fixed(32) Constant(Offset(Fuio_type.FuioRel2Size)),             
+                                                               /*@DJC*/         
+*  Fuio#Rel3Len Fixed(32) Constant(Offset(Fuio_type.FuioRel3Size)),             
+                                                               /*@DJC*/         
+*                                                                               
+*  Fuio#RD     Bit(1) Constant('0'B),   /* Read for FuioRWInd        */         
+*  Fuio#WRT    Bit(1) Constant('1'B);   /* Write for FuioRWInd       */         
+*%END;                                                                          

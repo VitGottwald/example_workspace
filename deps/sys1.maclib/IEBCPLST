@@ -1,0 +1,487 @@
+*/********************************************************************/ 00050000
+*/*                                                                  */ 00100000
+*/* $MAC(IEBCPLST) COMP(DF114):                                      */ 00150000
+*/*                                                                  */ 00200000
+*/*  MACRO NAME: IEBCPLST                                            */ 00250000
+*/*                                                                  */ 00300000
+*/*  DESCRIPTION: Maps the IEBCOPY parameter list for calls to       */ 00350000
+*/*               to the user exits                                  */ 00400000
+*/*                                                                  */ 00450000
+*/*  STATUS: z/OS DFSMS Version 2 Release 5                          */ 00500000
+*/*                                                                  */ 00550000
+*/*PROPRIETARY V3 STATEMENT                                          */ 00600000
+*/*Licensed Materials - Property of IBM                              */ 00650000
+*/*"Restricted Materials of IBM"                                     */ 00700000
+*/*5650-ZOS                                                          */ 00750000
+*/*Copyright IBM Corp. 2012,2021                                     */ 00800000
+*/*END PROPRIETARY V3 STATEMENT                                      */ 01050000
+*/*                                                                  */ 01100000
+*/*  FUNCTION: The IEBCPLST structure is used by IEBCOPY to pass     */ 01125000
+*/*  information to the "control statement"exit and the "member      */ 01150000
+*/*  selection" exit.                                                */ 01175000
+*/*                                                                  */ 01200000
+*/*  NOTES:                                                          */ 01250000
+*/*    1. IEBCPLST is created by the IEBCOPY utility when the        */ 01271400
+*/*    utility is invoked with a parameter list indicating that      */ 01292800
+*/*    user exits are to be employed.                                */ 01314200
+*/*    2. The storage acquired for IEBCPLST will be located in       */ 01335600
+*/*    the callers private storage, sub-pool 0, in the users         */ 01357000
+*/*    storage protection key.                                       */ 01378400
+*/*    3. IEBCPLST is deleted by IEBCOPY and its storage is          */ 01428400
+*/*    released to the system prior to IEBCOPYs return to its        */ 01478400
+*/*    caller.                                                       */ 01528400
+*/*                                                                  */ 01700000
+*/*  RESTRICTIONS:                                                   */ 01750000
+*/*    1. created and used by IEBCOPY                                */ 01800000
+*/*                                                                  */ 01850000
+*/*  MACRO:                                                          */ 01900000
+*/*                                                                  */ 01950000
+*/*    PROCESSOR: ASSEMBLER and PLX                                  */ 02000000
+*/*    ATTRIBUTES: INCLUDE                                           */ 02050000
+*/*                                                                  */ 02100000
+*/*    LINKAGE:                                                      */ 02150000
+*/*        ASSEMBLER :                                               */ 02200000
+*/*            IEBCPLST                                              */ 02250000
+*/*            USING  CPLST,CPLST_PTR                                */ 02300000
+*/*        PLX:                                                      */ 02350000
+*/*            %INCLUDE SYSLIB(IEBCPLST)                             */ 02400000
+*/*                                                                  */ 02450000
+*/*  CHANGE ACTIVITY:                                                */ 02500000
+*/* $P1=USEREXITS,HDZ2210,120301,AIMMR: add maximum return code  @P1A*/ 02525000
+*/* $01=OA42488,HDZ2210,20130610,sjpllm:                         @01A*/ 02533000
+*/*   1. PTF to put in AMACLIB                                       */ 02541000
+*/* $02=OA50826,HDZ2220,160817,sjples: add CPLST_CONTROL_SELECT  @02A*/ 02544000
+*/*     for preventing an unintended COMPRESS operation.         @02A*/ 02547000
+*/* $03=OA58248,HDZ2250,190919,AWERCH: PTF to put in AMACLIB     @03A*/         
+*/********************************************************************/ 02550000
+*% GOTO CPLSTPLX ;         /*                                           02750000
+         MACRO                                                          02800000
+         IEBCPLST &LIST=YES,&DSECT=YES                                  02850000
+         LCLC &D                                                        02883300
+ AIF (('&DSECT' EQ 'YES') OR ('&DSECT' EQ 'Y')).CPLST_DSECT             02916600
+CPLST_PARMLIST    DS 0F                                                 02950000
+&D       SETC 'DC'                                                      02975000
+         AIF  ('&SYSSTYP' NE 'DSECT').CPLST_HEAD                        03000000
+&D       SETC 'DS'                                                      03025000
+         AGO .CPLST_HEAD                                                03050000
+.CPLST_DSECT ANOP                                                       03075000
+CPLST_PARMLIST     DSECT                                                03100000
+&D       SETC 'DS'                                                      03125000
+.CPLST_HEAD ANOP                                                        03150000
+**********************************************************************  03156200
+*     IEBCPLST parameter list header information                     *  03162400
+**********************************************************************  03168600
+CPLST_PARMLIST_HDR   DS  0CL16  HEADER SET BY IEBCOPY                   03175000
+CPLST_PARMLIST_ID    DC  CL8'IEBCPLST' EYECATCHER                       03200000
+CPLST_PARMLIST_LEN   &D  A(CPLST_PARMLIST_LENGTH)  LENGTH OF PARMLIST  +03225000
+                                 INCLUDING A SINGLE MEMBER ENTRY ARRAY. 03250000
+CPLST_PARMLIST_VERSION DC AL1(1) VERSION NUMER = 1                      03275000
+                     DC  XL3'00' RESERVED FOR ALIGNMENT, MUST BE ZERO   03300000
+**********************************************************************  03325000
+CPLST_PARMLIST_DSNUMBER DC F'1' INPUT DS NUMBER FOR CURRENT IEBCOPY    +03350000
+                                OPERATION (ORIGIN 1).                   03375000
+CPLST_PARMLIST_ENTRY_ADD &D A(CPLST_CONTROL_AREA) ADDRESS OF THE       +03400000
+                                        DATA RECORD CONTROL AREA OR ...+03425000
+                                        THE MEMBER ENTRY ARRAY.         03450000
+CPLST_PARMLIST_COUNT DC  F'1'   NUMBER OF ENTRIES IN MEMBER ARRAY OR A +03475000
+                                BINARY 1 FOR DATA RECORD CONTROL AREA  +03500000
+                        - IEBCOPY SETS COUNT TO HOW MANY ARE AVAILABLE  03525000
+CPLST_PARMLIST_RC    DC  F'-1'  RETURN CODE - SET BY EXIT               03550000
+CPLST_RC_CONTROL     EQU 00     CONTROL STATEMENT EXIT:                +03561300
+                                ONE CONTROL STATEMENT RETURNED.        +03572600
+                                COUNT IS NUMBER OF INPUT RECORDS       +03583900
+                                TO PROCESS (MUST BE 1).                 03595200
+CPLST_RC_MEMBER_OK   EQU 00     MEMBER EXIT: SUCCESSFUL PROCESSING.     03606500
+CPLST_RC_END         EQU 04     ZERO OR ONE CONTROL STATEMENT RETURNED +03617800
+                                (LENGTH OF RECORD MAY BE 0). END OF    +03629100
+                                GROUP - PROCESS PREVIOUS AND NEW       +03640400
+                                RECORDS AND EXECUTE THE GROUP          +03651700
+                                RETURNED.                               03663000
+CPLST_RC_INIT        EQU 08     A USER EXIT SUCCESSFULLY PROCESSED AN  +03675000
+                                INITIALIZATION CALL AND SHOULD BE      +03691600
+                                CALLED AGAIN FOR THE NEXT CONTROL      +03708200
+                                OR A MEMBER ARRAY.                      03724800
+CPLST_RC_PRINT       EQU 16     PRINT ZERO OR ONE LINE (LENGTH OF      +03741400
+                                RECORD MAY BE ZERO). COUNT IS THE      +03758000
+                                NUMBER OF PRINT LINES TO PROCESS       +03774600
+                                (MUST BE 1).                            03791200
+CPLST_RC_PAGE        EQU 20     START A NEW PAGE AND PRINT ZERO OR     +03807800
+                                ONE LINE (LENGTH OF LINE MAY BE ZERO). +03824400
+                                COUNT IS THE NUMBER OF PRINT LINES TO  +03841000
+                                PROCESS (MUST BE 1).                    03857600
+CPLST_RC_FINISH      EQU 32     EXIT IEBCOPY. DATA RECORD IS IGNORED,  +03874200
+                                IEBCOPY ONLY PRINTS FINAL MESSAGE(S)   +03890800
+                                AND EXITS.                              03907400
+CPLST_RC_SEVERE      EQU 36     SEVERE ERROR ENCOUNTERED. ABORT ALL    +03925000
+                                PROCESSING.                             03962500
+                     DC  XL4'00' FILLER FOR DW ALIGNMENT, MUST BE ZERO  04000000
+CPLST_PARMLIST_FLAGS DS  0CL4   INFORMATIONAL FLAGS SET BY IEBCOPY AND +04025000
+                                PASSED TO THE EXIT.                    +04050000
+                                UNDEFINED FLAGS MUST BE ZERO            04075000
+CPLST_PARMLIST_CONTROL_FLAGS DC XL1'00' GENERAL EXIT CONTROL FLAGS      04100000
+CPLST_CONTROL_INIT   EQU B'10000000'  OPEN INPUT STATEMENT FILE OR     +04125000
+                                      STARTING A NEW MEMBER LIST.       04150000
+CPLST_CONTROL_DATA   EQU B'01000000'  INPUT STATEMENT / PRINT RECORD   +04175000
+                                      EXIT.                             04200000
+CPLST_CONTROL_MEMBER EQU B'00100000'  MEMBER-SELECTION EXIT             04225000
+CPLST_CONTROL_MAXRC  EQU B'00010000'  IEBCOPY RETURN-CODE AND REASON-  +04231200
+                                      CODE HAVE BEEN UPDATED BY THE    +04237400
+                                      EXIT.                        @P1A 04243600
+*                                                                       04250000
+CPLST_PARMLIST_INPUTDS_FLAGS DC XL1'00'  INPUT DATA SET FLAGS           04275000
+CPLST_INPUT_SEQ      EQU B'10000000'  INPUT DATA SET IS SEQUENTIAL      04300000
+CPLST_INPUT_PDSE     EQU B'01000000'  INPUT DATA SET IS A PDSE          04325000
+CPLST_INPUT_PDS      EQU B'00100000'  INPUT DATA SET IS A PDS           04350000
+CPLST_INPUT_SMDE     EQU B'00010000'  1 = directory entry is SMDE      +04358300
+                                      0 = directory entry is PDS        04366600
+*                                                                       04375000
+CPLST_PARMLIST_OUTPUTDS_FLAGS DC XL1'00' OUTPUT DATA SET FLAGS          04400000
+CPLST_OUTPUT_SEQ     EQU B'10000000'  OUTPUT DATA SET IS SEQUENTIAL     04425000
+CPLST_OUTPUT_PDSE    EQU B'01000000'  OUTPUT DATA SET IS A PDSE         04450000
+CPLST_OUTPUT_PDS     EQU B'00100000'  OUTPUT DATA SET IS A PDS          04475000
+*                                                                       04500000
+                     DC  XL1'00' RESERVED, MUST BE ZERO                 04525000
+CPLST_PARMLIST_USR   DC  XL8'00' USER DATA INITIALLY COPIED FROM       +04550000
+                               INVOCATION PARAMETER CPY_EXIT_USR        04575000
+CPLST_PARMLIST_MAXRETC DC F'0'    IEBCOPY RETURN CODE - SET BY IEBCOPY +04578100
+                                  AND MAY BE UPDATED BY THE EXIT.      +04581200
+                                  VALID CODES ARE: 0, 4, 8 .       @P1A 04584300
+CPLST_PARMLIST_MAXRSNC DC XL8'00' REASON CODE ASSOCIATED WITH IEBCOPY  +04587400
+                                  RETURN CODE - SET BY IEBCOPY AND MAY +04590500
+                                  BE UPDATED BY THE EXIT.          @P1A 04593600
+                     DC  XL4'00' RESERVED, MUST BE ZERO            @P1A 04596700
+CPLST_PARMLIST_HEAD_LENGTH EQU *-CPLST_PARMLIST                         04600000
+CPLST_PARMLIST_HEAD  EQU CPLST_PARMLIST,CPLST_PARMLIST_HEAD_LENGTH      04625000
+*                                                                       04650000
+     AIF (('&DSECT' EQ 'YES') OR ('&DSECT' EQ 'Y')).CPLST_CONTROL_DSECT 04675000
+CPLST_CONTROL_AREA   DS  0D    EXIT CONTROL AREA                        04700000
+         AGO .CPLST_CONTROL_HEAD                                        04725000
+.CPLST_CONTROL_DSECT ANOP                                               04750000
+CPLST_CONTROL_AREA   DSECT     EXIT CONTROL AREA                        04775000
+.CPLST_CONTROL_HEAD ANOP                                                04800000
+**********************************************************************  04825000
+* The input data record exit control area contains the parameters    *  04850000
+* passed to the "control statement" user exit for either a SYSIN     *  04875000
+* control statement or a SYSPRINT report record. These values will   *  04900000
+* be used when the length field is validity checked by IEBCOPY.      *  04925000
+**********************************************************************  04950000
+                     ORG CPLST_CONTROL_AREA  START OF EXIT CONTROL AREA 04975000
+CPLST_RECORD_CONTROL DS  0D    RECORD DATA CONTROL PARAMETERS           05000000
+CPLST_CONTROL_OFLAGS DS  0XL4  FLAGS SET BY INPUT CONTROL EXIT.        +05025000
+                               UNDEFINED FLAGS MUST BE ZERO             05050000
+CPLST_CONTROL_OFLAG1 DC  XL1'00' EXIT INFORMATIONAL FLAG ONE            05075000
+CPLST_CONTROL_IN     EQU B'10000000' INPUT CONTROL STATEMENT RECORD     05100000
+CPLST_CONTROL_PRINT  EQU B'01000000' OUTPUT PRINT RECORD                05125000
+CPLST_CONTROL_SELECT EQU B'00100000' MEMBER SELECTION IN EFFECT    @02A 05135000
+                     DC  XL3'00' RESERVED. MUST BE ZERO.                05150000
+*                                                                       05154500
+CPLST_CONTROL_DATA_ADDR  DC AD(0) DOUBLE WORD THAT CONTAINS THE        +05159000
+                                  31-BIT ADDRESS OF DATA RECORD. THE   +05163500
+                                  HIGH ORDER 33 BITS MUST BE ZERO.      05168000
+CPLST_CONTROL_DATA_ADD   EQU CPLST_CONTROL_DATA_ADDR+4,4 THE 31-BIT    +05172500
+                                             ADDRESS OF DATA RECORD.    05177000
+CPLST_CONTROL_DATA_LEN  DC F'0' LENGTH OF DATA RECORD                   05181500
+                     DS  0D    END OF CPLST_RECORD_CONTROL              05186000
+CPLST_RECORD_CONTROL_LENGTH EQU *-CPLST_RECORD_CONTROL LENGTH OF DATA  +05190500
+                                                   RECORD CONTROL AREA. 05195000
+*                                                                       05200000
+**********************************************************************  05250000
+* The following equates define the range of valid lengths that can   *  05300000
+* be specified in the CPLST_CONTROL_DATA_LEN field for either an     *  05350000
+* input statement or print record.                                   *  05400000
+**********************************************************************  05450000
+CPLST_INPUT_STATEMENT_MINLEN EQU 72  STATEMENT MINIMUM LENGTH INCLUDING+05450800
+                                 CONTINUATION CHARACTER IN COLUMN 72.   05451600
+CPLST_INPUT_STATEMENT_MAXLEN EQU 80  STATEMENT MAXIMUM LENGTH           05452400
+CPLST_PRINT_RECORD_MINLEN    EQU 60  PRINT RECORD MINIMUM LENGTH NOT   +05453200
+                                 INCLUDING CARRIAGE CONTROL CHARACTER.  05454000
+CPLST_PRINT_RECORD_MAXLEN    EQU 120 PRINT RECORD MAXIMUM LENGTH NOT   +05454800
+                                 INCLUDING CARRIAGE CONTROL CHARACTER.  05455600
+CPLST_CONTROL_DATA_NONE      EQU 00  OMITTED DATA RECORD LENGTH         05456400
+*                                                                       05463600
+**********************************************************************  05464400
+* The member entry, created by IEBCOPY, contains a member name that  *  05464900
+* is passed to the "member-selection" user exit. Members are         *  05465400
+* passed to the exit in alphabetic order.                               05465900
+* With CPLST_Parmlist_Version = 1, the count of one member entry     *  05466400
+* is set in the CPLST_PARMLIST_DSNUMBER field.                       *  05466900
+**********************************************************************  05467600
+                     ORG CPLST_CONTROL_AREA  START OF EXIT CONTROL AREA 05468400
+CPLST_MEMBER_ENTRY   DS  0D    ONE MEMBER ENTRY                         05469200
+CPLST_MEMBER_OFLAGS  DS  0XL4  FLAGS SET BY MEMBER SELECTION EXIT.     +05470000
+                               UNDEFINED FLAGS MUST BE ZERO             05470800
+CPLST_MEMBER_OFLAG1  DC  XL1'00' EXIT INFORMATIONAL FLAG ONE            05471600
+CPLST_MEMBER_REPLACE_ANY EQU B'10000000' REPLACE PRIMARY OR ALIAS NAME  05472400
+CPLST_MEMBER_RENAME      EQU B'01000000' USE NEWNAME FOR OUTPUT NAME    05473200
+                     DC  XL3'00' RESERVED, MUST BE ZERO                 05474000
+CPLST_MEMBER_RC      DC  F'-1' RETURN CODE - SET BY THE EXIT            05474800
+CPLST_MEMBER_SELECT  EQU 00    MEMBER SELECTED. MUST CALL AGAIN FOR    +05475600
+                               NEXT MEMBER.                             05476400
+CPLST_MEMBER_EXCLUDE EQU 04    MEMBER EXCLUDED. MUST CALL AGAIN FOR    +05477200
+                               NEXT MEMBER.                             05478000
+CPLST_MEMBER_SLCTALL EQU 08    MEMBER SELECTED INCLUDING ALL REMAINING +05478800
+                               MEMBERS IN THIS INPUT DATA SET. NO NEED +05479600
+                               TO CALL EXIT AGAIN FOR THIS DATA SET.    05480400
+CPLST_MEMBER_EXCLALL EQU 12    MEMBER EXCLUDED INCLUDING ALL REMAINING +05481200
+                               MEMBERS IN THIS INPUT DATA SET. NO NEED +05482000
+                               TO CALL EXIT AGAIN FOR THIS DATA SET.    05482800
+                     DC  XL4'00' RESERVED                               05483600
+CPLST_MEMBER_NAME_ADDR DC AD(0) SET BY IEBCOPY, DOUBLE WORD THAT       +05483700
+                               CONTAINS THE 31-BIT ADDRESS OF THE      +05483800
+                               MEMBER NAME AREA.  THE MEMBER NAME AREA +05483900
+                               BEGINS WITH A TWO BYTE NAME LENGTH      +05484000
+                               FIELD FOLLOWED BY THE MEMBER NAME.      +05484100
+                               CURRENTLY, THE LENGTH FIELD VALUE IS    +05484200
+                               SET TO EIGHT BYTES.                      05484300
+                     ORG CPLST_MEMBER_NAME_ADDR+4                       05484400
+CPLST_MEMBER_NAME_ADD  DC  A(CPLST_MEMBER_NAME_AREA) 31-BIT ADDRESS OF +05484500
+                               THE MEMBER NAME AREA.                    05484600
+CPLST_MEMBER_NEWNAME_ADDR DC AD(0) SET BY THE EXIT, DOUBLE WORD THAT   +05484700
+                               CONTAINS THE 31-BIT ADDRESS OF THE      +05484800
+                               MEMBER NEW NAME AREA. THE MEMBER NEW    +05484900
+                               NAME AREA BEGINS WITH A TWO BYTE NAME   +05485000
+                               LENGTH FIELD FOLLOWED BY THE NEW        +05485100
+                               MEMBER NAME. CURRENTLY, THE LENGTH      +05485200
+                               FIELD VALUE IS SET TO EIGHT BYTES.       05485300
+                     ORG CPLST_MEMBER_NEWNAME_ADDR+4                    05485400
+CPLST_MEMBER_NEWNAME_ADD DC A(CPLST_MEMBER_NEWNAME_AREA) 31-BIT ADDR OF+05485500
+                               THE NEW NAME AREA.                       05485600
+                     DC  XL4'00' RESERVED, for DW ALIGNMENT             05485800
+CPLST_MEMBER_DIR_ADDR DC AD(0) DOUBLE WORD THAT CONTAINS THE           +05486400
+                               31-BIT ADDRESS OF THE DIRECTORY ENTRY.  +05487000
+                               THE HIGH ORDER 33 BITS MUST BE ZERO.     05487600
+CPLST_MEMBER_DIR_ADD EQU CPLST_MEMBER_DIR_ADDR+4,4 31-BIT ADDR          05488400
+CPLST_MEMBER_DIR_LEN DC  F'0'  LENGTH OF DIRECTORY ENTRY                05489200
+                     DC  XL4'00' FILLER FOR DW ALIGNMENT, MUST BE ZERO  05490000
+                     DS  0D                                             05491600
+CPLST_MEMBER_NAME_AREA DS 0H   MINIMUM LENGTH MEMBER NAME AREA          05491700
+CPLST_MEMBER_NAME_LENG DC Y(L'CPLST_MEMBER_NAME) MEMBER NAME LENGTH     05491800
+CPLST_MEMBER_NAME      DC CL8' '                 MEMBER NAME            05491900
+*                                                                       05492000
+CPLST_MEMBER_NEWNAME_AREA DS 0H MINIMUM LENGTH NEW NAME AREA            05492100
+CPLST_MEMBER_NEWNAME_LENG DC Y(L'CPLST_MEMBER_NEWNAME) NEW NAME LENGTH  05492200
+CPLST_MEMBER_NEWNAME   DC CL8' '                       NEW NAME         05492300
+CPLST_MEMBER_ENTRY_LENGTH EQU *-CPLST_MEMBER_ENTRY LENGTH OF MEMBER    +05492400
+                                                           ARRAY ENTRY. 05494700
+                     ORG ,     END OF A SINGLE ENTRY ARRAY              05497000
+                     DS  0D                                             05499100
+CPLST_PARMLIST_LENGTH EQU *-CPLST_PARMLIST TOTAL LENGTH OF USER EXIT   +05501200
+                       PARAMETER LIST WITH A SINGLE MEMBER ENTRY ARRAY. 05503300
+**********************************************************************  05505800
+*                    END OF IEBCPLST                                 *  05516800
+**********************************************************************  05527800
+.Mend    MEND    ,   */                                                 05538800
+*%CPLSTPLX : ;                                                          05550000
+  %IF IEBCPLST_INCLUDE ^= 'DONE'                                        05560400
+    %THEN                                                               05570800
+      %DO;                                                              05581200
+        %IEBCPLST_INCLUDE = 'DONE';                                     05591600
+                                                                        05602000
+  %IF CPLST_BASE = '' %THEN                                             05612400
+    %CPLST_BASE = 'BASED';                                              05622800
+  %ELSE                                                                 05633200
+    %IF CPLST_BASE = 'NO' %THEN                                         05643600
+       %CPLST_BASE = '';                                                05654000
+    %ELSE %;                                                            05664400
+  %IF CPLST_COUNT = ''                                                  05674800
+    %THEN                                                               05685200
+      %IF CPLST_BASE = ''                                               05695600
+        %THEN                                                           05706000
+          %CPLST_COUNT = '1';                                           05716400
+        %ELSE                                                           05726800
+          %CPLST_COUNT = '*';                                           05737200
+  %ELSE %;                                                              05747600
+ DECLARE                                                                05758000
+   1 CPLST_Parmlist         CPLST_BASE BDY(DWORD),                      05808000
+    3 CPLST_Parmlist_Hdr    Char(16),  ]Header, set by IEBCOPY          05858000
+      5 CPLST_Parmlist_ID   Char(8),   ]IEBCPLST eyecatcher             05908000
+      5 CPLST_Parmlist_Len  Fixed(31)                                   05958000
+                            Bdy(byte), ]Length of control block         06008000
+      5 CPLST_Parmlist_Version                                          06058000
+                            Fixed(8),  ]Version number = 1              06108000
+      5 *                   Char(3),   ]Reserved, must be zero          06158000
+    3 CPLST_PARMLIST_DSNUMBER                                           06208000
+                            Fixed(31), ]Input DS number for current     06258000
+                                       ] copy operation (origin 1).     06308000
+    3 CPLST_PARMLIST_ENTRY_ADD                                          06358000
+                            Fixed(31), ]Address of the data record      06408000
+                                       ] control area or the            06458000
+                                       ] member entry array.            06508000
+    3 CPLST_Parmlist_Count  Fixed(31), ]Number of entries in the member 06558000
+                                       ] array, or a binary 1 for the   06608000
+                                       ] data record control area.      06658000
+                                       ] Set by IEBCOPY                 06708000
+    3 CPLST_Parmlist_RC     Fixed(31), ]Return code - set by exit       06758000
+    3 *                     Fixed(32), ]reserved, must be zero          06808000
+    3 CPLST_Parmlist_Flags  Fixed(32), ]Informational Flags set by      06858000
+                                       ] IEBCOPY and passed to exit.    06908000
+                                       ] underfined flags must be zero  06958000
+      5 CPLST_Parmlist_Control_Flags                                    07008000
+                            Fixed(8),  ]General exit control flags      07058000
+       7 CPLST_CONTROL_INIT Bit(1),    ]Open input statement file or    07108000
+                                       ] starting a new member list.    07158000
+       7 CPLST_CONTROL_DATA Bit(1),    ]Input statement/print record    07208000
+                                       ] user exit.                     07258000
+       7 CPLST_CONTROL_MEMBER Bit(1),  ]Member-Selection exit           07308000
+       7 CPLST_CONTROL_MAXRC Bit(1),   ]IEBCOPY RETURN and REASON       07328000
+                                       ] codes have been updated by     07348000
+                                       ] the exit.                      07368000
+       7 *                  Bit(4),    ]Reserved                        07388000
+                                                                        07408000
+      5 CPLST_Parmlist_InputDS_Flags                                    07458000
+                            Fixed(8),  ]Input data set flags            07508000
+       7 CPLST_Input_Seq    Bit(1),    ] Input data set is sequential   07558000
+       7 CPLST_Input_PDSE   Bit(1),    ] Input data set is a PDSE       07608000
+       7 CPLST_Input_PDS    Bit(1),    ] Input data set is a PDS        07658000
+       7 CPLST_Input_SMDE   Bit(1),    ] 1 = directory entry is SMDE    07708000
+                                       ] 0 = directory entry is PDS     07758000
+       7 *                  Bit(4),    ]Reserved                        07808000
+      5 CPLST_Member_Info_OutputDS_Flags                                07858000
+                            Fixed(8),  ]Output data set flags           07908000
+       7 CPLST_Output_Seq   Bit(1),    ] Output data set is sequential  07958000
+       7 CPLST_Output_PDSE  Bit(1),    ] Output data set is a PDSE      08008000
+       7 CPLST_Output_PDS   Bit(1),    ] Output data set is a PDS       08058000
+       7 *                  Bit(5),    ]Reserved                        08108000
+      5 *                   Fixed(8),  ]Reserved, must be zero          08158000
+    3 CPLST_Parmlist_Usr    Char(8),   ]User data initially copied      08208000
+                                       ] from IEBCOPY invocation        08258000
+    3 CPLST_ParmList_MAXRETC Fixed(32),]IEBCOPY return code - set by    08263000
+                                       ]  IEBCOPY and may be updated    08268000
+                                       ]  by the exit.                  08273000
+                                       ]  Valid codes are: 0, 4, 8 @P1A 08278000
+    3 CPLST_ParmList_MAXRSNC Fixed(64),]Reason code associated with     08283000
+                                       ]  the IEBCOPY Return code       08288000
+                                       ]  Set by IEBCOPY and may be     08293000
+                                       ]  updated by the exit.     @P1A 08298000
+    3 *                     Fixed(32), ]reserved, must be zero     @P1A 08303000
+    3 CPLST_Control_Area    Bdy(Dword) ]Exit control area               08308000
+                            Union,                                      08358000
+ /********************************************************************  08408000
+  The input data record exit control area contains the parameters       08458000
+  passed to the "control statement" user exit for either a SYSIN        08508000
+  control statement or a SYSPRINT report record. These values will      08558000
+  be used when the length field is validity checked by IEBCOPY.         08608000
+ ********************************************************************/  08658000
+    4 CPLST_RECORD_CONTROL Bdy(Dword), ]RECORD DATA CONTROL PARAMETERS  08708000
+                                                                        08758000
+      5 CPLST_CONTROL_OFLAGS Fixed(32),]Flags set by input control exit 08808000
+       7 CPLST_CONTROL_OFLAG1 Bit(8),  ]Exit informational flag one     08858000
+        9 CPLST_CONTROL_IN    Bit(1),  ]Input control statement record  08908000
+        9 CPLST_CONTROL_PRINT Bit(1),  ]Output print record             08958000
+        9 *                   Bit(6),  ]Reserved, must be zero          09008000
+       7 *                 Fixed(24),  ]Reserved                        09058000
+      5 CPLST_CONTROL_DATA_ADDR Char(8)                                 09108000
+                              Bdy(word), ]Double word that contains     09158000
+       7 *                 Fixed(32),    ] 31-bit address of the data   09208000
+       7 CPLST_CONTROL_DATA_ADD Ptr(31), ] record. The high order 33    09258000
+                                         ] bits must be zero.           09308000
+      5 CPLST_CONTROL_DATA_LEN  Fixed(31), ]Length of data record       09358000
+      5 *                  Char(0) Bdy(Dword), ]End of Record_Control   09408000
+                                                                        09458000
+ /********************************************************************  09508000
+  The member entry, created by IEBCOPY, contains a member name that     09558000
+  is passed to the "member-selection" user exit. Members are passed     09608000
+  to the exit in alphabetic order.                                      09658000
+  With CPLST_Parmlist_Version = 1, the count of one member entry        09708000
+  is set in the CPLST_PARMLIST_DSNUMBER field.                          09758000
+ ********************************************************************/  09808000
+    4 CPLST_MEMBER_ENTRY    Bdy(Dword),]One member entry                09858000
+     5 CPLST_MEMBER_OFLAGS  Char(4),   ]Flags, set by the Member        09908000
+                                       ] Selection exit.                09958000
+                                       ] undefined flags must be zero   10008000
+      7 CPLST_MEMBER_OFLAG1 Char(1),   ]Exit informational flag one     10058000
+       9 CPLST_MEMBER_REPLACE_ANY                                       10108000
+                              bit(1),  ]Replace primary or alias name   10158000
+       9 CPLST_MEMBER_RENAME  bit(1),  ]Use NEWNAME for output name     10208000
+      7 *                   Char(3),   ]reserved, must be zero          10258000
+     5 CPLST_MEMBER_RC      Fixed(32), ]Return code - set by the exit   10308000
+     5 *                    Char(4),   ]reserved                        10358000
+     5 CPLST_MEMBER_NAME_ADDR PTR(64), ]Set by IEBCOPY, contains the    10365500
+                                       ] 31-BIT address of the Member   10373000
+                                       ] Name Area. The Member Name     10380500
+                                       ] Area begins with a two byte    10388000
+                                       ] name length field followed by  10395500
+                                       ] the member name. Currently,    10403000
+                                       ] the length field value is set  10410500
+                                       ] to eight bytes.                10418000
+                                                                        10425500
+                                                                        10433000
+     5 CPLST_MEMBER_NEWNAME_ADDR PTR(64), ]Set by the exit, contains    10440500
+                                       ] 31-BIT address of the Member   10448000
+                                       ] Newname Area. The Member       10455500
+                                       ] Newname Area begins with a     10463000
+                                       ] two byte name length field     10470500
+                                       ] followed by the members new    10478000
+                                       ] name.  Currently, the new name 10485500
+                                       ] length field value is eight    10493000
+                                       ] bytes.                         10500500
+     5 *                    Char(4),   ]reserved for dw allignment      10508000
+     5 CPLST_MEMBER_DIR_ADDR Ptr(64),  ]Double word that contains the   10558000
+                                       ] 31-bit address of the          10608000
+                                       ] directory entry. The high      10658000
+                                       ] order 33 bits must be zero.    10708000
+     5 CPLST_MEMBER_DIR_LEN Fixed(31), ]Length of directory entry       10758000
+     5 *                    Char(4),   ]Reserved, must be zero          10808000
+     5 CPLST_MEMBER_NAME_AREA,         ]Minimum length member name area 10820500
+       7 CPLST_MEMBER_NAME_LENG Fixed(15), ]Member name length          10833000
+       7 CPLST_MEMBER_NAME      Char(8),   ]Member name                 10845500
+     5 CPLST_MEMBER_NEWNAME_AREA,      ]Minimum length new name area    10858000
+       7 CPLST_MEMBER_NEWNAME_LENG Fixed(15), ]New name length          10870500
+       7 CPLST_MEMBER_NEWNAME      Char(8),   ]New name                 10883000
+     5 *                    Char(0) Bdy(Dword); ]End of Member Entry    10895500
+                                                                        10908000
+ /****************************************************************      10958000
+    THE FOLLOWING ARE CONSTANT DECLARATIONS FOR THE IEBCPLST            11008000
+  ****************************************************************/     11058000
+ DECLARE                                                                11108000
+  CPLST_ID_CON     Char(8)  Constant('IEBCPLST'), ]Eyecatcher           11158000
+  CPLST_LEVEL_CON  Fixed(8) Constant(1); ]COPY Parmlist level number    11208000
+ /********************************************************************  11258000
+  The following equates define the range of valid lengths that can      11308000
+  be specified in the CPLST_CONTROL_DATA_LEN field for either an        11358000
+  input statement or print record.                                      11408000
+ ********************************************************************/  11458000
+ DECLARE                                                                11508000
+  CPLST_INPUT_STATEMENT_MINLEN Fixed(31)                                11558000
+                               Constant(72), ]Statement minimum length  11608000
+                                       ] including continuation         11658000
+                                       ] character in column 72.        11708000
+  CPLST_INPUT_STATEMENT_MAXLEN Fixed(31)                                11758000
+                               Constant(80), ]Statement maximum length  11808000
+  CPLST_PRINT_RECORD_MINLEN    Fixed(31)                                11858000
+                               Constant(60), ]Print record minimum      11908000
+                                       ] length, not including the      11958000
+                                       ] carriage control character.    12008000
+  CPLST_PRINT_RECORD_MAXLEN    Fixed(31)                                12058000
+                               Constant(120), ]Print record maximum     12108000
+                                       ] length, not including the      12158000
+                                       ] carriage control character.    12208000
+  CPLST_CONTROL_DATA_NONE      Fixed(31)                                12258000
+                               Constant(0); ]Omitted data record length 12308000
+ /******************************************************************/   12358000
+ /* Constants for the CPLST_MEMBER_RC                              */   12408000
+ /******************************************************************/   12458000
+ DECLARE                                                                12508000
+  CPLST_MEMBER_SELECT          Fixed(31) Constant(0), ]member selected  12558000
+                                         ] must call exit again for     12608000
+                                         ] the next member.             12658000
+                                                                        12708000
+  CPLST_MEMBER_EXCLUDE         Fixed(31) Constant(4), ]member excluded  12758000
+                                         ] must call exit again for     12808000
+                                         ] the next member.             12858000
+  CPLST_MEMBER_SLCTALL         Fixed(31) Constant(8), ]member selected  12908000
+                                         ] including all remaining      12958000
+                                         ] members in this input data   13008000
+                                         ] set. No need to call again   13058000
+                                         ] for this data set.           13108000
+  CPLST_MEMBER_EXCLALL         Fixed(31) Constant(12);]member excluded  13158000
+                                         ] including all remaining      13208000
+                                         ] members in this input data   13258000
+                                         ] set. No need to call again   13308000
+                                         ] for this data set.           13358000
+ /******************************************************************/   13408000
+ /*                                                                */   13458000
+ /*     END OF IEBCPLST                                            */   13508000
+ /*                                                                */   13558000
+ /******************************************************************/   13608000
+   %END;                                                                13658000

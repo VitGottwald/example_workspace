@@ -1,0 +1,169 @@
+*%/*                                                               @L2A 00025000
+         MACRO                                                          00050000
+&NAME    POINT &DCB,&LOC,&RPL=,&TYPE=REL,&MF=                      @H1C 00072200
+.* $MAC(POINT) :                                                        00094400
+.*PROPRIETARY V3 STATEMENT                                              00105900
+.*LICENSED MATERIALS - PROPERTY OF IBM                                  00117400
+.*"RESTRICTED MATERIALS OF IBM"                                         00128900
+.*5694-A01                                                              00142400
+.*COPYRIGHT 1984, 2011 IBM CORP.                                        00155900
+.*END PROPRIETARY V3 STATEMENT                                          00169400
+.*                                                                      00186900
+.* FUNCTION = Reposition in data set for BSAM, BPAM or EXCP (tape) @L3A 00192900
+.*                                                                 @L3A 00198900
+.* STATUS = z/OS 1.13 DFSMSdfp                                     @L4A 00200400
+.*                                                                 @L4A 00201900
+.* SYNTAX = One of these:                                          @L4A 00203400
+.*      POINT dcb,block-addr,TYPE=REL   Default if TYPE omitted    @L4A 00204900
+.*      POINT dcb,block-addr,TYPE=RELNEXT                          @L4A 00206400
+.*      POINT dcb,block-addr,TYPE=ABS   MF= also is supported      @L4A 00207900
+.*      POINT RPL=rpl                   For VSAM and subsystem     @L4A 00209400
+.*                                                                      00210900
+.* Notes = Reacts to the user coding SYSSTATE ARCHLVL=2, which     @L3A 00212200
+.*    means the macro will execute on a zArchitecture machine.     @L3A 00213500
+.*                                                                 @L3A 00214800
+.* CHANGE ACTIVITY =                                                    00216400
+.*                                                                      00221900
+.*$H1=3480,JDP1111,,STLPKH:  3480 SUPPORT                               00227600
+.*$01=OY43395,HDP3330,,SJPLGEC: CORRECT EXPANSION FOR BLKID IN     @01A 00228800
+.*                              REGISTER FORMAT FOR TYPE=ABS       @01A 00230000
+.*$L1=31BIT,JDZ1110,,SJPLRK:  INVOCABLE IN 31-BIT MODE             @L1A 00230600
+.*$02=OY65478,JDZ1110,930708,SJPLPS: FIX EXPANSION FOR BLKID REG0  @02A 00230900
+.*$L2=PLX  ,JDZ1110,930930,SJPLMET: PL/X SUPPORT                   @L2A 00231100
+.*$L3=LARGEDS,HDZ11K0,040107,SJPLWER: TYPE=RELNEXT for large DS    @L3A 00231200
+.*$L4=64BIT,JDZ1D10,20101116,SVLWER: 64 bit message                @L4A 00231400
+.*                                                                      00231600
+         GBLC  &SYSAM64    AMODE64=YES set by SYSSTATE macro       @L4A 00231900
+         GBLC  &SYSASCE    ASCENV=AR or ANY set by SYSSTATE macro  @L4A 00232200
+.* A GBLA instruction sets the value to 0 if it was not defined.   @L3A 00232500
+         GBLA  &SYSALVL    ARCHLVL value set by SYSSTATE macro     @L3A 00233700
+         LCLA  &LEN                                                @H1A 00235000
+         LCLC  &REG,&C                                             @L3C 00242500
+         LCLB  &NOGO                                                    00250000
+         SYSSTATE TEST     Test how macros are to expand           @L4A 00251600
+         AIF   ('&SYSAM64' NE 'YES').ChkAR  Go if not AMODE64=YES  @L4A 00253200
+.ERR4    IGGERMAC 203,POINT    The POINT macro does not support    @L4A 00254800
+&NOGO    SETB  1                 SYSSTATE AMODE64=YES                   00256400
+.ChkAR   AIF   (('&SYSASCE' EQ '') OR ('&SYSASCE' EQ 'P')).SetBAS  @L4A 00258000
+.ERR5    IGGERMAC 204,POINT    The POINT macro does not support    @L4A 00259600
+&NOGO    SETB  1                 SYSSTATE ASCENV=AR or ANY         @L4A 00261200
+.SetBAS  ANOP                                                      @L4A 00262800
+&BAS     SETC  'BAS'     Assume relative branching not available   @L3A 00265000
+         AIF   (&SYSALVL LT 2).NOTZ  Branch if before ARCHLVL=2    @L3A 00280000
+&BAS     SETC  'BRAS'    Change BAS instruction to relative branch @L3A 00295000
+.NOTZ    AIF   (&NOGO EQ 1).TERM                                   @L3C 00305000
+         AIF   ('&RPL' NE '').JES                                  @L3C 00315000
+         AIF   ('&MF' EQ 'L').SKIP     DCB & BLK NO NEED FOR LIST  @H1A 00325000
+         AIF   ('&DCB' EQ '').ERR1                                      00350000
+.R1      AIF   ('&LOC' EQ '').ERR2                                      00400000
+         AIF   (&NOGO EQ 1).TERM                                        00450000
+.SKIP    AIF   ('&TYPE' NE 'REL' AND '&TYPE' NE 'RELNEXT').NOTREL  @L3C 00460000
+         AIF   ('&MF' EQ '').RELOK        MF PARAMETER INVALID     @H1A 00470000
+         IGGERMAC 52                      MF PARM IGNORED FOR REL  @H1A 00480000
+.RELOK   ANOP                                                      @H1A 00490000
+&NAME    IHBINNRA &DCB,&LOC                                             00500000
+         SLR   15,15               CLEAR REGISTER                  @L1A 00521400
+         ICM   15,7,85(1)          LOAD POINT RTN ADDR             @L1C 00542800
+         AIF   ('&TYPE' EQ 'RELNEXT').RELNEXT                      @L3C 00564200
+         BAS   14,4(15,0)          CALL THE POINT ROUTINE          @L3C 00585600
+         MEXIT                                                     @L3A 00607000
+.RELNEXT BAS   14,16(15,0)         CALL POINT ROUTINE FOR NEXT BLK @L3A 00628400
+         MEXIT                                                          00650000
+.*                                                                      00651900
+.NOTREL  AIF   ('&TYPE' NE 'ABS').ERR3                             @H1A 00653800
+.*>>>> The user coded TYPE=ABS.  Handle the three MF forms.        @L3A 00656500
+         AIF   ('&MF' NE 'S' AND '&MF' NE '').ABSEX If not standrd @L3C 00659200
+         CNOP  0,4                 STANDARD FORM                   @L3C 00661900
+&NAME    &BAS  15,*+12                                             @L3C 00664600
+         DC    AL4(0)              BLOCK ID                        @H1A 00667300
+         DC    AL1(128)            SET HIGH ORDER BIT ON           @H1A 00670000
+         DC    AL3(0)                                              @H1A 00672800
+         AIF   ('&LOC'(1,1) EQ '(').STREG                          @H1A 00674900
+         MVC   0(4,15),&LOC        MOVE BLK ID IN PARM LIST        @H1A 00677000
+         AGO   .STON                                               @H1A 00679100
+.STREG   AIF   ('&LOC' NE '(0)').MVCREG                            @L3C 00679900
+         ST    &LOC(1),0(,15)      STORE LOCATION, NOT ADDR OF IT  @02A 00680700
+         AGO   .STON                                               @02A 00681500
+.MVCREG  MVC   0(4,15),0(&LOC(1))  STORE BLOCK ID IN PARM LIST     @02A 00683800
+.STON    IHBINNRA &DCB             PUT DCB ADDRESS IN REG 1        @H1A 00686100
+         LR    0,15                COPY THE PARAMETER LIST ADDRESS      00688400
+         LA    15,32               ROUTER CODE                     @H1A 00690700
+         SVC   109                 SUPERVISOR CALL                 @H1A 00693000
+         MEXIT                                                     @H1A 00695600
+.ABSEX   AIF   ('&MF' EQ 'L').ABSLS     LIST FORM                  @H1A 00695700
+         AIF   ('&MF(1)' NE 'E').EXERR  NOT EXECUTION FORM         @H1A 00695800
+.*>>>> The form is MF=(E,list) with TYPE=ABS.                      @L3A 00696900
+         AIF   (T'&MF(2) EQ 'O').EXERR  NO LIST ADDRESS GIVEN      @H1A 00698000
+         AIF   (N'&MF NE 2).EXERR  Go if not exactly two values    @L3A 00699100
+&C       SETC  '&NAME'             Copy to temporary variable      @L3A 00700200
+         AIF   ('&MF(2)'(1,1) EQ '(').EXREG  PARM ADRS IN REGISTER @H1A 00701300
+&NAME    LA    15,&MF(2)           LOAD PARAMETER LIST ADDRESS     @H1A 00702400
+&C       SETC  ''                  Prevent redefinition of label   @L3A 00703500
+         AGO   .EXON                                               @H1A 00704600
+.EXREG   AIF   ('&MF(2)' EQ '(15)').EXON  Go if R15 already loaded @L3C 00705700
+&LEN     SETA  K'&MF(2)-2                                          @H1A 00706800
+&REG     SETC  '&MF(2)'(2,&LEN)                                    @H1A 00707900
+&NAME    LR    15,&REG             LOAD PARAMETER LIST ADDRESS     @H1A 00709000
+&C       SETC  ''                  Prevent redefinition of label   @L3A 00710100
+.EXON    ANOP                                                      @H1A 00711200
+         AIF   ('&LOC'(1,1) EQ '(').EXLR   LOC PARM IN REGISTER    @H1A 00712300
+&C       MVC   0(4,15),&LOC        COPY BLOCK LOCATION             @H1A 00713400
+         AGO   .EXLON                                              @H1A 00714500
+.EXLR    AIF   ('&LOC'(1,3) NE '(0)').EXMVC                        @02C 00715600
+&C       ST    &LOC(1),0(,15)      STORE BLOCK LOCATION            @02A 00716700
+         AGO   .EXLON                                              @02A 00717800
+.EXMVC   ANOP                                                      @L3A 00718900
+&C       MVC   0(4,15),0(&LOC(1))  COPY BLOCK LOCATION             @L3C 00720000
+.EXLON   ANOP                                                      @H1A 00721100
+         XC    4(4,15),4(15)       ZERO OUT SECOND WORD IN PARM    @H1A 00722200
+         OI    4(15),X'80'         SET HIGH ORDER BIT              @H1A 00723300
+         IHBINNRA &DCB             PICK DCB ADDRESS IN REG 1       @H1A 00724400
+         LR    0,15                PARM LIST ADDR INTO REG 0       @H1A 00725500
+         LA    15,32               ROUTE CODE                      @H1A 00726600
+         SVC   109                 GO TO NOTE/POINT SVC            @H1A 00727700
+         MEXIT                                                     @H1A 00728800
+.EXERR   IGGERMAC 112                   INVALID PARAMETER FOR MF   @H1A 00729900
+         MEXIT                                                     @H1A 00731000
+.*>>>> The form is MF=L, the list form.                            @L3A 00732100
+.ABSLS   AIF    ('&LOC' EQ '').ABLOC    LIST FORM                  @H1A 00733200
+         AIF    ('&LOC'(1,1) EQ '(').ABLERR   REG FORM NOT FOR LIST@H1A 00734300
+&NAME    DC     A(&LOC)                 BLOCK ID SUPPLIED          @H1A 00735400
+         AGO    .ABLON                                             @H1A 00736500
+.ABLOC   ANOP                                                      @H1A 00737600
+&NAME    DC     A(0)                    SPACE FOR BLOCK ID         @H1A 00738700
+.ABLON   DC     AL1(128)                SET HIGH ORDER BIT FOR ABS @H1A 00739800
+         DC     AL3(0)                                             @H1A 00740900
+         MEXIT                                                     @H1A 00742000
+.ABLERR  IHBERMAC 69                    INVALID REG FORM FOR MF=L  @H1A 00743100
+         MEXIT                                                     @H1A 00744200
+.ERR1    IHBERMAC 6                                                     00745300
+&NOGO    SETB  1                                                        00750000
+         AGO   .R1                                                      00800000
+.ERR2    IHBERMAC 3                                                     00850000
+.TERM    ANOP                                                           00900000
+         MEXIT                                                          00950000
+.ERR3    IGGERMAC 111                   INVALID PARAMETER FOR TYPE @H1C 00966600
+         MEXIT                                                          00983200
+.JES     ANOP  ******************  RPL passed for an ACB                00997800
+         AIF   ('&MF' EQ '').JESOK       MF PARAMETER INVALID FOR  @H1A 01012500
+         IGGERMAC 52                     MF PARAMETER IGNORED      @H1A 01025000
+.JESOK   ANOP                                                      @H1A 01037500
+&C       SETC  '&NAME'             Copy to temporary variable      @L3A 01070000
+         AIF   ('&RPL'(1,1) EQ '(').RPLR  Go if in register             01102500
+&C       LA    1,&RPL              LOAD RPL ADDR                   @L3C 01135000
+&C       SETC  ''                  Prevent redefinition of label   @L3A 01167500
+         AGO   .AREG                                                    01200000
+.RPLR    AIF   ('&RPL' EQ '(1)').AREG  Go if already in register 1 @L3A 01250000
+&C       LR    1,&RPL(1)           LOAD RPL ADDRESS FROM REGISTER       01300000
+&C       SETC  ''                  Prevent redefinition of label   @L3A 01350000
+.AREG    ANOP                                                      @L3A 01400000
+&C       LA    0,X'03'             INDICATE POINT IN REG           @L3C 01450000
+         L     15,24(,1)           LOAD ACB ADDRESS FROM RPL            01500000
+         L     15,8(,15)           LOAD ACCESS METHOD ROUTINE ADDRESS   01550000
+         BASR  14,15               CALL INTERFACE ROUTINE               01600000
+         MEND                                                           01800000
+**/  POINT: MACRO KEYS(0:1(DCB_NAME,DCB_ADDR),                 /*@L2A*/ 01850000
+*             0:1(BLOCKID_NAME,BLOCKID_ADDR),RETCODE,RSNCODE,  /*@L2A*/ 01900000
+*           0:1(ABS_BLOCK,REL_BLOCK,BLOCKID_TYPE('RELATIVE')));/*@L2A*/ 01950000
+*ANS('? '!!MACLABEL!!' POINTP '!!MACKEYS!!';') RESCAN SKIP;    /*@L2A*/ 02000000
+* %END POINT;                                                  /*@L2A*/ 02050000

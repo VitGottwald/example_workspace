@@ -1,0 +1,2331 @@
+         MACRO -- IAZENOPR -- SPOOL Compress/Encrypt service            00010000
+&LABEL   IAZENOPR &OPER=,     Operation to be performed                C00020000
+               &OBJECT_PTR=, Pointer to encryption object              C00030000
+               &OBJECT_TYP=, Object type (put or get)                  C00040000
+               &DATA_MOD_TYPE=, Data modification type                 C00050000
+               &ENCR_METHOD=, Encryption method                @Z25LENZC00060000
+               &CCTL_OP=,     Carriage control options         @Z25LENZC00070000
+               &CARR_CNTL_CH=, Addr of Carriage contol char    @Z25LENZC00075000
+               &COMP_METHOD=, Compression method                       C00080000
+               &KEY_LABEL=,   DSKEYLBL                                 C00090000
+               &KEY_LABEL_LEN=, DSKEYLBL length                        C00100000
+               &KEY_VERIFY_IN=, Input 16 byte verification key         C00110000
+               &KEY_WRAP_ROUTINE=, Key wrap routine address            C00120000
+               &DEBUG_OPT=,  Debug option                              C00130000
+               &LASTB,        Oper=point last primed data blk  @Z25LENZC00131000
+               &SECURE_ICSF=, Use ICSF to verify key label     @Z25LENZC00132000
+               &ENCR_VER_TOK=, Encrypted verification token    @Z25LENZC00135000
+               &RECORD=,     Addr Data record                  @Z25LENZC00140000
+               &REC_AREA_LEN=, Length of area to deposit record        C00150000
+               &REC_INFO=,   Addr record cntrl info (LRC, etc) @Z25LENZC00160000
+               &REC_NUM=,    Record # of record to be                  C00170000
+               &REC_INFO_LEN=, Record control length                   C00180000
+               &REL_REC#=,   Relative record # (replrec)       @Z25LENZC00190000
+               &RTN_BLK_PTR=, Data block to return                     C00210000
+               &CALLER_KEY=,   Caller store key                        C00220000
+               &PRIM_BLK_PTR=, Data block to be checked in             C00230000
+               &POINT=,      Position cursor to this rec #             C00270000
+               &REC_LEN=,    Record length                     @Z25LENZC00280000
+               &RESET=NO,    Reset object before primeblk      @Z25LENZC00282000
+               &WHAT_FITS=   Fit what can                      @Z25LENZ 00285000
+.* **PROPRIETARY STATEMENT************************************          00290000
+.*                                                           *          00300000
+.*   LICENSED MATERIALS-PROPERTY OF IBM                      *          00310000
+.*   5650-ZOS COPYRIGHT IBM CORP 2019, 2021                  *          00320000
+.*                                                           *          00330000
+.*   STATUS = HBB77D0                                        *          00340000
+.*                                                           *          00350000
+.*01* EXTERNAL CLASSIFICATION:  None                         *          00360000
+.*01* END OF EXTERNAL CLASSIFICATION:                        *          00370000
+.*                                                           *          00380000
+.* **END-OF-PROPRIETARY-STATEMENT*****************************          00390000
+.*                                                           *          00400000
+.*  FUNCTION:                                                *          00410000
+.*                                                           *          00420000
+.*     SPOOL compression and/or encryption services.         *          00430000
+.*                                                           *          00440000
+.*  PARAMETERS:                                              *          00450000
+.*                                                           *          00460000
+.*    Note:                                                  *          00470000
+.*    Terminology                                            *          00480000
+.*                                                           *          00490000
+.*    . Logical block - uncompressed and/or unencrypted      *          00500000
+.*                      data.                                *          00510000
+.*                                                           *          00520000
+.*    . Data block    - compressed and/or encrypted data.    *          00530000
+.*                                                           *          00540000
+.*      Valid operations are:                                *          00550000
+.*       - objsiz                                            *          00560000
+.*       - setupe                                            * @Z25LENZ 00570000
+.*       - cleanup                                           *          00580000
+.*       - putrec                                            *          00590000
+.*       - getblk                                            *          00600000
+.*       - primeblk                                          *          00610000
+.*       - rtnblk                                            *          00620000
+.*       - getreco                                           *          00630000
+.*       - replrec                                           *          00640000
+.*       - query                                             *          00650000
+.*       - point                                             *          00660000
+.*       - endreq                                            *          00670000
+.*       - flush                                             *          00680000
+.*                                                           *          00690000
+.*  OPER= - What follows is definition of each operation     *          00700000
+.*          and the associated parameters in support of.     * @Z25LENZ 00710000
+.*                                                           *          00720000
+.*          objsiz  - Return required encryption object size *          00730000
+.*                    in Ks. Object must reside in 64 byte   *          00740000
+.*                    storage.                               *          00750000
+.*                                                           *          00760000
+.*                    Example:                               *          00770000
+.*                                                           *          00780000
+.*                    IAZENOPR OPER=OBJSIZ                   *          00790000
+.*                                                           *          00800000
+.*                    Required size in K(s) (1024) returned  *          00810000
+.*                    in R0. Caller responsibility to        *          00820000
+.*                    allocate and hand back on subsequent   *          00830000
+.*                    calls.                                 *          00840000
+.*                                                           *          00850000
+.*          setupe  - Initialize an encryption object in     * @Z25LENZ 00860000
+.*                    in support of compression and/or       *          00870000
+.*                    encryption service. Caller supplies    *          00880000
+.*                    a pointer to object storage. The       *          00890000
+.*                    size in Ks obtained via oper=objsiz.   *          00900000
+.*                    The compression/encryption environment * @Z25LENZ 00910000
+.*                    is setup and supplied key label is     * @Z25LENZ 00920000
+.*                    verified.                              * @Z25LENZ 00930000
+.*                                                           *          00940000
+.*                    Example:                               *          00950000
+.*                                                           *          00960000
+.*                    IAZENOPR OPER=SETUPE,                  * @Z25LENZ 00970000
+.*                          OBJECT_PTR=(ptr_to_enc_object).  *          00980000
+.*                          OBJECT_TYP= (put!get),           *          00990000
+.*                          DATA_MOD_TYPE= (comp!encry!both! * @Z25LENZ 01000000
+.*                                          clear),          * @Z25LENZ 01005000
+.*                          ENCR_METHOD=(),                  *          01010000
+.*                          COMP_METHOD=(),                  *          01020000
+.*                          KEY_LABEL=(DSKEYLBL),            *          01030000
+.*                          KEY_LABEL_LEN=(DSKEYLBL length), *          01040000
+.*                          KEY_VERIFY_IN(),                 *          01050000
+.*                          KEY_WRAP_ROUTINE(),              *          01060000
+.*                          SECURE_ICSF= (Yes!No),           * @Z25LENZ 01062000
+.*                          ENCR_VER_TOK=(),                 * @Z25LENZ 01065000
+.*                          DEBUG_OPT (OFF!ON) optional      *          01070000
+.*                                                           *          01080000
+.*                    Note: Storage for Object_PTR must      *          01090000
+.*                    be supplied by caller. This storage    *          01100000
+.*                    must reside in 64K storage and should  * @Z25LENZ 01110000
+.*                    be fetch protected.                    * @Z25LENZ 01120000
+.*                                                           *          01130000
+.*          cleanup - Cleanup and free any storage           *          01140000
+.*                    obtained by the encrypt service.       *          01150000
+.*                    Does not include storage supplied      *          01160000
+.*                    by caller on setup. Caller is          *          01170000
+.*                    responsible for freeing.               * @Z25LBAS 01180000
+.*                                                           *          01220000
+.*                    Any compression/encryption environment *          01230000
+.*                    is taken down.                         *          01240000
+.*                                                           *          01250000
+.*                    Example:                               *          01260000
+.*                                                           *          01270000
+.*                    IAZENOPR OPER=CLEANUP,                 *          01280000
+.*                          OBJECT_PTR=(ptr_to_enc_object)   *          01290000
+.*                                                           *          01300000
+.*          OPER=                                            *          01310000
+.*          putrec  - put logical record to logical block.   * @Z25LENZ 01320000
+.*                    The only optional parameter            * @Z25LENZ 01350000
+.*                    is:                                    * @Z25LENZ 01360000
+.*                      -- CARR_CNTL_CH()                    *          01380000
+.*                                                           *          01390000
+.*                    Note:                                  *          01400000
+.*                      Record control information is        * @Z25LENZ 01410000
+.*                      defined as:                          * @Z25LENZ 01420000
+.*                                                           *          01430000
+.*                       - REC_INFO()                        *          01440000
+.*                         --  addr record info (LRC, etc).  * @Z25LENZ 01450000
+.*                                                           *          01460000
+.*                       - REC_INFO_LEN()                    *          01470000
+.*                         --  record info length            *          01480000
+.*                                                           *          01490000
+.*                    Example:                               *          01500000
+.*                                                           *          01510000
+.*                    IAZENOPR OPER=PUTREC,                  * @Z25LENZ 01520000
+.*                          OBJECT_PTR=(ptr_to_enc_object),  *          01530000
+.*                          CALLER_KEY=(),                   *          01540000
+.*                          REC_NUM=(), 8 byte number        * @Z25LENZ 01550000
+.*                          RECORD=(),                       *          01560000
+.*                          REC_LEN=(),                      *          01570000
+.*                          REC_INFO=(),                     *          01580000
+.*                          REC_INFO_LEN=(),                 *          01590000
+.*                          CARR_CNTL_CH=()  (optional)      *          01600000
+.*                                                           *          01610000
+.*                     -Return code R15=0 denotes            *          01620000
+.*                      that record has been added           *          01630000
+.*                      to the logical block. R1 will hold   * @Z25LENZ 01640000
+.*                      the dataset record number associated * @Z25LENZ 01650000
+.*                      with the record.                     * @Z25LENZ 01653000
+.*                                                           * @Z25LENZ 01656000
+.*                      Return code 4 denotes error. See     * @Z25LENZ 01660000
+.*                      reason code explanations below.      * @Z25LENZ 01670000
+.*                                                           *          01680000
+.*                      Return code R15=8.                   *          01690000
+.*                                                           * @Z25LENZ 01695000
+.*                      The record put was accepted and      *          01700000
+.*                      a data block has been returned       * @Z25LENZ 01710000
+.*                      in register R0.                      * @Z25LENZ 01715000
+.*                                                           * @Z25LENZ 01720000
+.*                      Note: this is a 64 bit pointer to    * @Z25LENZ 01722000
+.*                      a data block. Caller must process    * @Z25LENZ 01725000
+.*                      this and return the data block via   * @Z25LENZ 01730000
+.*                      oper=rtnblk(). No oper=putrecs()     * @Z25LENZ 01735000
+.*                      are allowed until data block is      * @Z25LENZ 01740000
+.*                      returned.                            * @Z25LENZ 01770000
+.*                                                           * @Z25LENZ 01770300
+.*                      Return code R15=12.                  * @Z25LENZ 01770600
+.*                                                           * @Z25LENZ 01771200
+.*                      The record put was accepted and      * @Z25LENZ 01771800
+.*                      TWO data blocks are scheduled to     * @Z25LENZ 01772400
+.*                      be returned. Upon returning          * @Z25LENZ 01773000
+.*                      from oper=putrec R0 will contain     * @Z25LENZ 01773600
+.*                      address to first data block.         * @Z25LENZ 01774200
+.*                      Caller will process and return the   * @Z25LENZ 01774800
+.*                      first data block via oper=rtnblk().  * @Z25LENZ 01775400
+.*                      The oper=rtnblk will return in R0    * @Z25LENZ 01776000
+.*                      the second data block. Once          * @Z25LENZ 01776600
+.*                      processed this data block must also  * @Z25LENZ 01777200
+.*                      be returned via oper=rtnblk().       * @Z25LENZ 01777800
+.*                                                           * @Z25LENZ 01778400
+.*      Internal view of a record in logical block. May span *          01780000
+.*      logical blocks.                                      *          01790000
+.*                                                           * @Z25LENZ 01800000
+.*            L                                              * @Z25LENZ 01800400
+.*            E                                              * @Z25LENZ 01801100
+.*            N                                              * @Z25LENZ 01801800
+.*                T                                          * @Z25LENZ 01802500
+.*            O   O                                          * @Z25LENZ 01803200
+.*            F   T                                          * @Z25LENZ 01803900
+.*     E          A                                          * @Z25LENZ 01804600
+.*     Y      F   L                                          * @Z25LENZ 01805300
+.*     E      I                                              * @Z25LENZ 01806000
+.*            R   R                                          * @Z25LENZ 01806700
+.*     C      S   E                                          * @Z25LENZ 01807400
+.*     A      T   C                                          * @Z25LENZ 01808100
+.*     T                                                     * @Z25LENZ 01810000
+.*     C   F  S   L                                          * @Z25LENZ 01820000
+.*     H   L  P   E                                          * @Z25LENZ 01830000
+.*     E   A  A   N                                          * @Z25LENZ 01840000
+.*   ! R ! G !N ! G ! INFO_LEN !   REC_INFO    ! Record data!* @Z25LENZ 01850000
+.*   !___!___!__!___!__________!_______________!____________!* @Z25LENZ 01860000
+.*     1   1  2   2    1 byte    caller defined    1-32768   * @Z25LENZ 01870000
+.*   !                         !                             * @Z25LENZ 01880000
+.*   !                         !                             * @Z25LENZ 01890000
+.*   <--------Record header----><---Record Data------------> * @Z25LENZ 01900000
+.*                                                           *          01910000
+.*       See ENRECHDR dsect in IAZENOBJ                      * @Z25LENZ 01920000
+.*                                                           *          01930000
+.*      Caller defined information size can be up to 16      *          01940000
+.*      bytes long. See ENRECDES dsect in IAZENOBJ.          *          01950000
+.*                                                           *          01960000
+.*                                                           *          01970000
+.*      View of compression/encryption data block handed     *          01980000
+.*      back to caller in R0. The entire block should be     *          01990000
+.*      written to the I/O subsystem.                        * @Z25LENZ 02000000
+.*                                                           *          02010000
+.*                                                           *          02020000
+.*                                                           *          02030000
+.*      ! Data BLK ! Compressed and/or encrypted record(s) ! *          02040000
+.*      ! header   !                                       ! *          02050000
+.*      !__________!_______________________________________! *          02060000
+.*                                                           *          02070000
+.*                                                           *          02080000
+.*      See ENBLKHDR dsect IAZENOBJ for data blk header.     * @Z25LENZ 02090000
+.*                                                           *          02100000
+.*          OPER=                                            *          02110000
+.*          rtnblk   - return data block to object. No       *          02120000
+.*                    action occurs other than previously    *          02130000
+.*                    checked out data block is checked back *          02140000
+.*                    in. Example of how this may be used.   *          02150000
+.*                                                           *          02160000
+.*                     -- putrec fills logical block and     *          02170000
+.*                        data block is created and          *          02180000
+.*                        returned to caller.                *          02190000
+.*                     -- Caller writes data block to        * @Z25LENZ 02200000
+.*                        I/O subsystem.                     * @Z25LENZ 02210000
+.*                     -- Caller calls oper=rtnblk to        *          02220000
+.*                        return (checkin) block to          * @Z25LENZ 02230000
+.*                        service/object.                    * @Z25LENZ 02240000
+.*                                                           *          02250000
+.*                    Note: Caller must be aware that        *          02260000
+.*                        that another data block (just 1)   *          02270000
+.*                        may be returned and needs to be    *          02280000
+.*                        handled by caller. See return      *          02290000
+.*                        code rc = 8. Data block (if        * @Z25LENZ 02300000
+.*                        returned) is in R0.                * @Z25LENZ 02310000
+.*                                                           * @Z25LENZ 02315000
+.*                    Operation valid for get or put object. * @Z25LENZ 02320000
+.*                                                           *          02340000
+.*                    Example:                               *          02350000
+.*                                                           *          02360000
+.*                    IAZENOPR OPER=RTNBLK,                  *          02370000
+.*                          OBJECT_PTR=(ptr_to_enc_object),  *          02380000
+.*                          RTN_BLK_PTR=()                   *          02390000
+.*                                                           * @Z25LENZ 02395000
+.*          OPER=                                            *          02400000
+.*          getblk  - get 64 bit ptr to free 32K             *          02410000
+.*                    data block. Caller may prime this      *          02420000
+.*                    this block with compressed and/or      *          02430000
+.*                    encrypted data. Operation primeblk     *          02440000
+.*                    may then be used to register it        *          02450000
+.*                    with the service. Operation is valid   * @Z25LENZ 02460000
+.*                    with get or put object.                * @Z25LENZ 02470000
+.*                                                           *          02480000
+.*                    Example:                               *          02490000
+.*                                                           *          02500000
+.*                    IAZENOPR OPER=GETBLK,                  *          02510000
+.*                          OBJECT_PTR=(ptr_to_enc_object)   *          02520000
+.*                                                           *          02530000
+.*                    With success (RC=0) - data block is    * @Z25LENZ 02540000
+.*                    returned in R0.                        * @Z25LENZ 02545000
+.*                                                           *          02550000
+.*                    Caller will fill the data block and    * @Z25LENZ 02560000
+.*                    hand back to caller via                * @Z25LENZ 02570000
+.*                    oper=primeblk().                       * @Z25LENZ 02580000
+.*                                                           *          02620000
+.*      ! Data BLK ! Compressed and/or encrypted record(s) ! *          02630000
+.*      ! header   !                                       ! *          02640000
+.*      !__________!_______________________________________! *          02650000
+.*                                                           *          02660000
+.*      See ENBLKHDR dsect IAZENOBJ                          *          02670000
+.*                                                           *          02680000
+.*          OPER=                                            *          02690000
+.*          primeblk - prime object with data block.         *          02700000
+.*                    Data block may be in the clear or      *          02710000
+.*                    compressed and/or encrypted. This      *          02720000
+.*                    state is located within the block      *          02730000
+.*                    header and is soley maintained by      *          02740000
+.*                    this service. If data block is         *          02750000
+.*                    compressed and/or encrypted then the   *          02760000
+.*                    service will perform decompression     *          02770000
+.*                    - unencryption and inclusion into      * @Z25LENZ 02780000
+.*                    the object in logical format.          * @Z25LENZ 02790000
+.*                                                           *          02800000
+.*                    PRIMEBLK is valid for get and put      *          02820000
+.*                    objects. RESET parm allows caller to   *          02830000
+.*                    reset object to empty before           *          02840000
+.*                    applying the supplied block. The       * @Z25LENZ 02850000
+.*                    default is RESET=NO.                   * @Z25LENZ 02860000
+.*                                                           * @Z25LENZ 02865000
+.*                   PUT OBJ- point is not required - if     * @Z25LENZ 02870000
+.*                            not specified then cursor      * @Z25LENZ 02870100
+.*                            will be positioned             * @Z25LENZ 02870400
+.*                            after last existing record     * @Z25LENZ 02871000
+.*                            in supplied block. If last     * @Z25LENZ 02872000
+.*                            record is spanner then RC=4    * @Z25LENZ 02873000
+.*                            and reason code =              * @Z25LENZ 02874000
+.*                            ENPRMPUT - Last record in      * @Z25LENZ 02875000
+.*                            logical block is a spanner     * @Z25LENZ 02876000
+.*                            - cannot point beyond this.    * @Z25LENZ 02877000
+.*                                                           * @Z25LENZ 02878000
+.*                            Point = 1 then cursor          * @Z25LENZ 02879000
+.*                            is positioned to first rec in  * @Z25LENZ 02880000
+.*                            supplied block and there will  * @Z25LENZ 02880500
+.*                            be no records (empty).         * @Z25LENZ 02881000
+.*                                                           * @Z25LENZ 02883000
+.*                            Point > 1 and < than last      * @Z25LENZ 02884000
+.*                            record in block. Cursor is     * @Z25LENZ 02885000
+.*                            set to record and number       * @Z25LENZ 02886000
+.*                            records adjusted accordingly.  * @Z25LENZ 02887000
+.*                                                           * @Z25LENZ 02888000
+.*                            Point set to last record then  * @Z25LENZ 02889000
+.*                            cursor will be set to last rec * @Z25LENZ 02890000
+.*                            in block. Number of records    * @Z25LENZ 02892000
+.*                            will be one less than before   * @Z25LENZ 02894000
+.*                            oper=primeblk. If last record  * @Z25LENZ 02895000
+.*                            was a spanner then it is       * @Z25LENZ 02896000
+.*                            spanner no more. Next oper=    * @Z25LENZ 02898000
+.*                            putrec will determine last     * @Z25LENZ 02900000
+.*                            record spanner state.          * @Z25LENZ 02902000
+.*                                                           * @Z25LENZ 02904000
+.*                                                           * @Z25LENZ 02906000
+.*                   GET Obj- Point is optional. The point   * @Z25LENZ 02910000
+.*                            pertains only to a record      *          02920000
+.*                            within the supplied block.     *          02930000
+.*                                                           *          02940000
+.*                      ---------------------------          *          02950000
+.*                      What follows are GET object          *          02960000
+.*                      examples:  Should be noted that      *          02970000
+.*                      a put object contains at most        *          02980000
+.*                      one active 32 K logical block.       *          02990000
+.*                      On the other hand a get object       *          03000000
+.*                      may contain two active 32 K          *          03010000
+.*                      blocks.                              *          03020000
+.*                                                           *          03030000
+.*                                                           *          03040000
+.*                      GET - If two active logical blocks   *          03050000
+.*                            then the oldest block goes     *          03060000
+.*                            away and supplied block        *          03070000
+.*                            becomes 2nd logical block.     *          03080000
+.*                                                           *          03090000
+.*                      ---------------------------          *          03100000
+.*                            Examples #1                    *          03110000
+.*                            Before primeblk of XYZ         *          03120000
+.*                                                           *          03130000
+.*                               No active logical blocks    * @Z25LENZ 03140000
+.*                                                           *          03150000
+.*                            After primeblk XYZ             *          03160000
+.*                                                           *          03170000
+.*                                Active 1 -> XYZ            *          03180000
+.*                                                           *          03190000
+.*                                                           *          03200000
+.*                            Since no point= specified      *          03210000
+.*                            then cursor set to first       *          03220000
+.*                            record in logical block.       * @Z25LENZ 03230000
+.*                                                           *          03240000
+.*                      ---------------------------          *          03250000
+.*                            Examples #2                    *          03260000
+.*                            Before primeblk of data block  * @Z25LENZ 03270000
+.*                            ABC.                           * @Z25LENZ 03280000
+.*                                                           * @Z25LENZ 03282000
+.*                               Logical block               * @Z25LENZ 03285000
+.*                               Active 1 -> XYZ             *          03290000
+.*                                                           *          03300000
+.*                               Cursor current set to       *          03310000
+.*                               record 10 from start of     *          03320000
+.*                               logical block XYZ.          * @Z25LENZ 03330000
+.*                                                           *          03340000
+.*                            After primeblk ABC             *          03350000
+.*                                                           *          03360000
+.*                                Active 1 -> XYZ            *          03370000
+.*                                Active 2 -> ABC            *          03380000
+.*                                                           *          03390000
+.*                                Since point not            *          03400000
+.*                                specified - cursor still   *          03410000
+.*                                set to XYZ:10. Note that   *          03420000
+.*                                OPER=point could be        *          03430000
+.*                                used to reposition         *          03440000
+.*                                cursor to any record in    *          03450000
+.*                                logical block 1 or 2.      *          03460000
+.*                                Also oper=query will       *          03470000
+.*                                return 1st record number   *          03480000
+.*                                in get object and the      *          03490000
+.*                                total number of record(s). *          03500000
+.*                                                           *          03510000
+.*                      ---------------------------          *          03520000
+.*                            Examples #3                    *          03530000
+.*                            Before primeblk of DEF         *          03540000
+.*                                                           *          03550000
+.*                                Logical block              * @Z25LENZ 03555000
+.*                                Active 1 -> XYZ            *          03560000
+.*                                Active 2 -> ABC            *          03570000
+.*                                                           *          03580000
+.*                                Cursor set to XYZ:10       * @Z25LENZ 03590000
+.*                                                           *          03600000
+.*                            After primeblk DEF             *          03610000
+.*                                                           *          03620000
+.*                                Active 1 -> ABC            *          03630000
+.*                                Active 2 -> DEF            *          03640000
+.*                                                           *          03650000
+.*                            Point was not specified - so   *          03660000
+.*                            cursor is set to first record  *          03670000
+.*                            in ABC. If there is no first   *          03680000
+.*                            record in ABC (which could     *          03690000
+.*                            happen with 32K records) --    *          03700000
+.*                            then position to first record  *          03710000
+.*                            in DEF.                        *          03720000
+.*                                                           *          03730000
+.*                                                           *          03740000
+.*                      ---------------------------          *          03750000
+.*                            Examples #4                    *          03760000
+.*                            Before primeblk of GHI data    * @Z25LENZ 03770000
+.*                            block.                         * @Z25LENZ 03780000
+.*                                                           * @Z25LENZ 03783000
+.*                             Logical blocks                * @Z25LENZ 03786000
+.*                                Active 1 -> ABC            *          03790000
+.*                                Active 2 -> DEF            *          03800000
+.*                                                           *          03810000
+.*                                Cursor set to spanner      * @Z25LENZ 03820000
+.*                                record 30 in DEF           *          03830000
+.*                                                           *          03840000
+.*                            After primeblk GHI             *          03850000
+.*                                                           *          03860000
+.*                                Active 1 -> DEF            *          03870000
+.*                                Active 2 -> GHI            *          03880000
+.*                                                           *          03890000
+.*                            Cursor still set to DEF:30.    *          03900000
+.*                            Point was not specified.       *          03910000
+.*                            Now getrec of spanner          *          03920000
+.*                            record 30 will succeed since   *          03930000
+.*                            2nd span is in GHI.            *          03940000
+.*                                                           *          03950000
+.*                      ---------------------------          *          03960000
+.*                            Examples #5                    *          03970000
+.*                                                           *          03980000
+.*                            Before primeblk of JKL data blk* @Z25LENZ 03990000
+.*                            with point 10 specified. Point *          04000000
+.*                            only pertains to a record      *          04010000
+.*                            within block supplied by this  *          04020000
+.*                            primeblk.                      *          04030000
+.*                                                           *          04040000
+.*                            Logical blocks                 * @Z25LENZ 04045000
+.*                                Active 1 -> DEF            *          04050000
+.*                                Active 2 -> GHI            *          04060000
+.*                                                           *          04070000
+.*                            Cursor set to DEF:30           *          04080000
+.*                                                           *          04090000
+.*                            After primeblk JKL             *          04100000
+.*                                                           *          04110000
+.*                                Active 1 -> GHI            *          04120000
+.*                                Active 2 -> JKL            *          04130000
+.*                                                           *          04140000
+.*                            Cursor set to the 10th         *          04150000
+.*                            record in JKL. Another         *          04160000
+.*                            option her is specify no       *          04170000
+.*                            point on primeblk - but        *          04180000
+.*                            after primeblk perform a       *          04190000
+.*                            OPER=query and then            *          04200000
+.*                            OPER=point to set cursor.      *          04210000
+.*                                                           *          04220000
+.*                      ---------------------------          *          04230000
+.*                            Examples #6                    *          04240000
+.*                                                           *          04250000
+.*                            Before primeblk of MNO data blk* @Z25LENZ 04260000
+.*                            with point 2 specified. Point  *          04270000
+.*                            only pertains to a record      *          04280000
+.*                            within block supplied by this  *          04290000
+.*                            primeblk. Also parameter       *          04300000
+.*                            RESET=YES has been supplied.   * @Z25LENZ 04310000
+.*                                                           *          04320000
+.*                            Before primeblk MNO            *          04330000
+.*                            Logical blocks                 * @Z25LENZ 04340000
+.*                                Active 1 -> GHI            *          04350000
+.*                                Active 2 -> JKL            *          04360000
+.*                                                           *          04370000
+.*                            Cursor set to the 10th record  *          04380000
+.*                            in JKL.                        *          04390000
+.*                                                           *          04400000
+.*                            After primeblk MNO with        *          04410000
+.*                            point=2 and parm RESET=YES.    * @Z25LENZ 04420000
+.*                                                           *          04430000
+.*                                Active 1 -> MNO            *          04440000
+.*                                                           *          04450000
+.*                            Cursor set to the 2nd          *          04460000
+.*                            record in MNO.                 *          04470000
+.*                                                           *          04480000
+.*                    Example:                               *          04490000
+.*                                                           *          04500000
+.*                    IAZENOPR OPER=PRIMEBLK,                *          04510000
+.*                          OBJECT_PTR=(ptr_to_enc_object),  *          04520000
+.*                          PRIM_BLK_PTR=(),                 *          04530000
+.*                          POINT=(), (optional)             * @Z25LENZ 04540000
+.*                          RESET=YES!NO  (optional for get  * @Z25LENZ 04550000
+.*                                         object)           * @Z25LENZ 04560000
+.*                                                           *          04570000
+.*          OPER=                                            *          04580000
+.*          getreco - get next logical record from           *          04590000
+.*                    current cusror position. Operation     *          04600000
+.*                    only valid for object type - get.      *          04610000
+.*                                                           *          04620000
+.*                    Example:                               *          04630000
+.*                                                           *          04640000
+.*                    IAZENOPR OPER=GETRECO,                 *          04650000
+.*                          OBJECT_PTR=(ptr_to_enc_object),  *          04660000
+.*                          CALLER_KEY=(),                   *          04670000
+.*                          RECORD=(),                       *          04680000
+.*                          REC_AREA_LEN,                    *          04690000
+.*                          WHAT_FITS=(YES!NO)   (optional)  * @Z25LENZ 04695000
+.*                          REC_INFO=(),                     * @Z25LENZ 04700000
+.*                          CCTL_OP=(ASIS,ALWAYS,NEVER)      * @Z25LENZ 04710000
+.*                                  optional - default ASIS  * @Z25LENZ 04713000
+.*                                                           * @Z25LENZ 04716000
+.*                     If return code = 0 then               *          04720000
+.*                                                           *          04730000
+.*                     RECORD  - Record contains next record *          04740000
+.*                               with any carriage control   * @Z25LENZ 04750000
+.*                               prepended if it exists.     * @Z25LENZ 04755000
+.*                               Return length -- GETRECL -- * @Z25LENZ 04760000
+.*                               contains 1 byte (for        * @Z25LENZ 04770000
+.*                               carriage control if it      * @Z25LENZ 04780000
+.*                               exists) plus length         * @Z25LENZ 04780200
+.*                               of data record. Picture of  * @Z25LENZ 04780800
+.*                               this.                       * @Z25LENZ 04781400
+.*                                                           * @Z25LENZ 04782000
+.*                     Example:                              * @Z25LENZ 04782600
+.*                                                           * @Z25LENZ 04783200
+.*                     Returned in RECORD= buffer            * @Z25LENZ 04783800
+.*                     ___________________________           * @Z25LENZ 04784400
+.*                     ! CC ! Data Record        !           * @Z25LENZ 04785000
+.*                     !____!____________________!           * @Z25LENZ 04785600
+.*                     !                         !           * @Z25LENZ 04786200
+.*                     !-->      GETRECL      <--!           * @Z25LENZ 04786800
+.*                     ---------------------------           * @Z25LENZ 04787400
+.*                                                           * @Z25LENZ 04788000
+.*                                                           * @Z25LENZ 04788600
+.*                     REC_INFO  Will contain                *          04790000
+.*                               REC_INFO supplied on PUTREC *          04800000
+.*                               and output value GETINFOL   *          04810000
+.*                               contains length of returned *          04820000
+.*                               REC_INFO.                   *          04830000
+.*                                                           *          04831000
+.*                     GETRECL   Length of record data       * @Z25LENZ 04832000
+.*                               returned. May include CCTL  * @Z25LENZ 04833000
+.*                               - see CCTL_OP= parm. If     * @Z25LENZ 04834000
+.*                               record does fit into output * @Z25LENZ 04835000
+.*                               buffer then this is how     * @Z25LENZ 04836000
+.*                               big buffer must be. Partial * @Z25LENZ 04837000
+.*                               results are returned.       * @Z25LENZ 04838000
+.*                                                           * @Z25LENZ 04838200
+.*                     GETINFOL  Length of REC_INFO returned * @Z25LENZ 04838400
+.*                                                           * @Z25LENZ 04838600
+.*                     GETREC#   Dataset record number assoc * @Z25LENZ 04838800
+.*                               with returned record.       * @Z25LENZ 04839000
+.*                               Relative from start of data * @Z25LENZ 04839200
+.*                               set starting with 1.        * @Z25LENZ 04839400
+.*                                                           * @Z25LENZ 04839600
+.*                     GETRFLG -> GETRFRST                   * @Z25LENZ 04839800
+.*                               If on then -- record        * @Z25LENZ 04840000
+.*                               returned was first record   * @Z25LENZ 04840200
+.*                               within contained logical    * @Z25LENZ 04840400
+.*                               block.                      * @Z25LENZ 04840600
+.*                                                           * @Z25LENZ 04840800
+.*                     GETRFLG -> GETRECTL                   * @Z25LENZ 04841000
+.*                              If on then --  Record as     * @Z25LENZ 04841200
+.*                              stored in object had/has     * @Z25LENZ 04841400
+.*                              carriage control.            * @Z25LENZ 04841600
+.*                                                           * @Z25LENZ 04841800
+.*                     Also 64 bit register 1 will contain   * @Z25LENZ 04842000
+.*                     the dataset record number for the     * @Z25LENZ 04842200
+.*                     record returned. This can be used     * @Z25LENZ 04843000
+.*                     to find data block with associated    * @Z25LENZ 04844000
+.*                     record.                               * @Z25LENZ 04845000
+.*                                                           * @Z25LENZ 04845200
+.*                     If return code = 4 and reason code    * @Z25LENZ 04845400
+.*                     ENNTOSHO (output buffer to small)     * @Z25LENZ 04845600
+.*                     then returned are:                    * @Z25LENZ 04846000
+.*                                                           * @Z25LENZ 04846400
+.*                     GETRECL -> Supplied record buffer     * @Z25LENZ 04846800
+.*                               must be this big.           * @Z25LENZ 04847200
+.*                                                           * @Z25LENZ 04847600
+.*                     GETRFLG -> GETRECTL                   * @Z25LENZ 04848000
+.*                              If on then --  record as     * @Z25LENZ 04848400
+.*                              stored in object had/has     * @Z25LENZ 04848800
+.*                              carriage control.            * @Z25LENZ 04849200
+.*                                                           * @Z25LENZ 04849600
+.*                     What can fit in supplied buffer is    * @Z25LENZ 04849700
+.*                     returned.                             * @Z25LENZ 04849800
+.*                                                           * @Z25LENZ 04849900
+.*          OPER=     NOTE: NOT SUPPORTED AT THIS TIME ]]]   * @Z25LENZ 04850000
+.*          replrec - Replace record within logical          *          04860000
+.*                    data block (valid for both get and     *          04870000
+.*                    put type objects). Record length       *          04880000
+.*                    suppled must match length of           *          04890000
+.*                    record within logical block. Note      *          04900000
+.*                    REC_INFO (LRC, etc) is not updated.    *          04910000
+.*                                                           *          04920000
+.*                    Example:                               *          04930000
+.*                                                           *          04940000
+.*                    IAZENOPR OPER=REPLREC,                 *          04950000
+.*                          OBJECT_PTR=(ptr_to_enc_object),  *          04960000
+.*                          RECORD=(),                       *          04970000
+.*                          REC_LEN=(),                      *          04980000
+.*                          CALLER_KEY=(),                   *          04990000
+.*                          REL_REC#=(),                     * @Z25LENZ 05000000
+.*                          CARR_CNTL_CH=()  (optional)      *          05010000
+.*                                                           *          05020000
+.*                    Note: Upon record replacement tne      *          05030000
+.*                          cursor is set as not positioned. *          05040000
+.*                                                           *          05050000
+.*          OPER=                                            *          05060000
+.*          query   - Given object address return the        *          05070000
+.*                    following information. See return      *          05080000
+.*                    information below.                     *          05090000
+.*                                                           *          05100000
+.*                    Example:                               *          05110000
+.*                                                           *          05120000
+.*                    IAZENOPR OPER=QUERY,                   *          05130000
+.*                          OBJECT_PTR=(ptr_to_enc_object)   *          05140000
+.*                                                           *          05150000
+.*                    If return code (R15=0) then the        *          05160000
+.*                    following fields are set: See IAZENOBJ *          05170000
+.*                    and search for "oper= query".          *          05180000
+.*                                                           *          05190000
+.*                                                           *          05200000
+.*                    ENGQTYPE                               *          05210000
+.*                    Type of object                         *          05220000
+.*                                  0 -> Put                 *          05230000
+.*                                  1 -> Get                 *          05240000
+.*                                                           *          05250000
+.*                    ENGQCURP                               *          05260000
+.*                    Cursor positioned                      *          05270000
+.*                                  0 -> No                  *          05280000
+.*                                  1 -> Yes                 *          05290000
+.*                                                           *          05300000
+.*                    When cursor is not positioned then     *          05310000
+.*                    the following fields are 0. ENCQCUR#   *          05320000
+.*                    and ENGQNUMR (get object).             *          05330000
+.*                                                           *          05340000
+.*                                                           *          05350000
+.*                    ENGQ1ST#                               *          05360000
+.*                    First record # in logical block or in  *          05370000
+.*                    the case of get object may be blocks.  *          05380000
+.*                    # is relative to start of data set     *          05390000
+.*                    first being 1. This is an 8 byte       * @Z25LENZ 05400000
+.*                                                           *          05410000
+.*                                                           * @Z25LENZ 05415000
+.*                    ENGQNUMR                               *          05420000
+.*                    Put object - number of records which   *          05430000
+.*                    have been put via putrec.              *          05440000
+.*                    put via putrec.                        *          05450000
+.*                                                           *          05460000
+.*                    Get object - number of record left to  *          05470000
+.*                    get via getrec.                        *          05480000
+.*                                                           *          05490000
+.*                    ENCQCUR#                               *          05500000
+.*                    Cursor position -> rec#.               *          05510000
+.*                    Relative record number of next record  *          05520000
+.*                    to put or next to get. Relative        *          05530000
+.*                    or next to get. Relative starting from *          05540000
+.*                    1st record in object (ENGR1STR). Range *          05550000
+.*                    is 1 to cursor value.                  * @Z25LENZ 05560000
+.*                                                           *          05580000
+.*                    ENCQTOTR                               * @Z25LENZ 05590000
+.*                    Get object - Total number of records   *          05600000
+.*                    in object illregardless of cursor      *          05610000
+.*                    position. OPER=point is valid to any   *          05620000
+.*                    one of these records.                  * @Z25LENZ 05630000
+.*                                                           * @Z25LENZ 05630500
+.*                    ENQQFLG1 (Flag)                        * @Z25LENZ 05631000
+.*                    Only valid if get object (ENGQTYPE=1)  * @Z25LENZ 05631500
+.*                    and cursor positioned (ENGQCURP=1).    * @Z25LENZ 05632000
+.*                                                           * @Z25LENZ 05632500
+.*                      ENQQFLG1 -> ENFL1SPN                 * @Z25LENZ 05633000
+.*                        Cursor positioned at SPANNER and   * @Z25LENZ 05633500
+.*                        2nd span is not contained within   * @Z25LENZ 05634000
+.*                        object. In this scenario an oper=  * @Z25LENZ 05634500
+.*                        getreco() would RTN=8.             * @Z25LENZ 05635000
+.*                                                           * @Z25LENZ 05635500
+.*                      ENQQFLG1 -> ENFL1CTL                 * @Z25LENZ 05636000
+.*                        Cursor positioned (may or may not  * @Z25LENZ 05636500
+.*                        be spanner) - and record has       * @Z25LENZ 05637000
+.*                        carriage control. Variable         * @Z25LENZ 05637500
+.*                        ENCQCCTL contains carriage control * @Z25LENZ 05638000
+.*                        character.                         * @Z25LENZ 05638500
+.*                                                           *          05640000
+.*                    ENCQCCTL - Only valid if               * @Z25LENZ 05640600
+.*                        ENQQFLG1 -> ENFL1CTL. Contains     * @Z25LENZ 05641200
+.*                        CCTL (1 byte).                     * @Z25LENZ 05641800
+.*                                                           * @Z25LENZ 05642400
+.*                                                           * @Z25LENZ 05643000
+.*                    ENQRECIN (Contains REC info contents)  * @Z25LENZ 05643600
+.*                     Only valid if get object (ENGQTYPE=1) * @Z25LENZ 05644200
+.*                     and cursor positioned (ENGQCURP=1).   * @Z25LENZ 05644800
+.*                     1 to 16 bytes in length.              * @Z25LENZ 05645400
+.*                                                           * @Z25LENZ 05646000
+.*                    ENQRECLN (Rec info length)             * @Z25LENZ 05646600
+.*                     Only valid if get object (ENGQTYPE=1) * @Z25LENZ 05647200
+.*                     and cursor positioned (ENGQCURP=1).   * @Z25LENZ 05647800
+.*                                                           * @Z25LENZ 05648400
+.*          OPER=                                            *          05650000
+.*          point   - Given logical block of records --      *          05660000
+.*                                                           * @Z25LENZ 05661000
+.*                    GET OBJECT ...                         * @Z25LENZ 05664000
+.*                    Postion to supplied record relative    * @Z25LENZ 05670000
+.*                    from 1 to number of records in block(s)* @Z25LENZ 05680000
+.*                    Point is required for a get object.    * @Z25LENZ 05680800
+.*                                                           * @Z25LENZ 05681200
+.*                    PUT OBJECT ...                         * @Z25LENZ 05681700
+.*                    If point supplied then position to     * @Z25LENZ 05682600
+.*                    record  from 1 to number of records    * @Z25LENZ 05683500
+.*                    in block + 1.                          * @Z25LENZ 05684400
+.*                                                           * @Z25LENZ 05685300
+.*                    If point not specified then position   * @Z25LENZ 05686200
+.*                    tenative record after last record in   * @Z25LENZ 05687100
+.*                    block.                                 * @Z25LENZ 05688000
+.*                                                           * @Z25LENZ 05688900
+.*                    Next putrec or getrec will start at    *          05690000
+.*                    that location. Basically object        *          05700000
+.*                    cursor is reset. Valid for both        *          05710000
+.*                    get and put type objects.              *          05720000
+.*                                                           *          05730000
+.*                    Example:                               *          05740000
+.*                                                           *          05750000
+.*                    IAZENOPR OPER=POINT,                   *          05760000
+.*                          OBJECT_PTR=(ptr_to_enc_object),  *          05770000
+.*                          POINT=()                         *          05780000
+.*                                                           * @Z25LENZ 05782000
+.*                    IAZENOPR OPER=POINT,                   * @Z25LENZ 05784000
+.*                          OBJECT_PTR=(ptr_to_enc_object),  * @Z25LENZ 05786000
+.*                          POINT=(),                        * @Z25LENZ 05790000
+.*                          LASTB                            * @Z25LENZ 05793000
+.*                                                           * @Z25LENZ 05796000
+.*                    Get object - Default range is simply   * @Z25LENZ 05800000
+.*                    the number of records within block(s)  * @Z25LENZ 05810000
+.*                    illregardless of where cursor is       *          05820000
+.*                    positioned to. 1 to number of records. *          05830000
+.*                                                           * @Z25LENZ 05831000
+.*                    If LASTB option specified then point   * @Z25LENZ 05832000
+.*                    pertains to last block primed (oper=   * @Z25LENZ 05833000
+.*                    primeblk). The point value is relative * @Z25LENZ 05834000
+.*                    (starting with 1) within that block.   * @Z25LENZ 05835000
+.*                    LASTB only valid for a GET object -    * @Z25LENZ 05836000
+.*                    though it will be accepted for a put   * @Z25LENZ 05840000
+.*                    object - but ignored.                  * @Z25LENZ 05841000
+.*                                                           * @Z25LENZ 05844000
+.*                    Put object - Position cursor to lone   * @Z25LENZ 05850000
+.*                                 logical block.            * @Z25LENZ 05860000
+.*                                                           * @Z25LENZ 05870400
+.*                      PUT - point is optional and          * @Z25LENZ 05870600
+.*                            cursor wil be set as           * @Z25LENZ 05870800
+.*                            follows.                       * @Z25LENZ 05871000
+.*                                                           * @Z25LENZ 05871200
+.*                            Not specified - Cursor is set  * @Z25LENZ 05871400
+.*                            after last existing record     * @Z25LENZ 05871600
+.*                            in supplied block. If last     * @Z25LENZ 05871800
+.*                            record is spanner then RC=4    * @Z25LENZ 05872000
+.*                            and reason code =              * @Z25LENZ 05872200
+.*                            ENPRMPUT - Last record in      * @Z25LENZ 05872400
+.*                            logical block is a spanner     * @Z25LENZ 05872600
+.*                            - cannot point beyond this.    * @Z25LENZ 05872800
+.*                                                           * @Z25LENZ 05873000
+.*                            Point = 1 or first             * @Z25LENZ 05873200
+.*                            record in block. Object set    * @Z25LENZ 05873400
+.*                            as EMPTY and cursor at         * @Z25LENZ 05873600
+.*                            first record in block.         * @Z25LENZ 05873800
+.*                                                           * @Z25LENZ 05874000
+.*                            Point > 1 and < than last      * @Z25LENZ 05874200
+.*                            record in block. Cursor is     * @Z25LENZ 05874400
+.*                            set to record and number       * @Z25LENZ 05874600
+.*                            records adjusted accordingly.  * @Z25LENZ 05874800
+.*                                                           * @Z25LENZ 05875000
+.*                            Point set to last record in    * @Z25LENZ 05875200
+.*                            block. Numbers of record       * @Z25LENZ 05875400
+.*                            should be one less than        * @Z25LENZ 05875600
+.*                            before primeblk. If last       * @Z25LENZ 05875800
+.*                            was spanner then it is         * @Z25LENZ 05876000
+.*                            spanner no more. Next oper=    * @Z25LENZ 05876200
+.*                            putrec will determine spanner  * @Z25LENZ 05876400
+.*                            or not state.                  * @Z25LENZ 05876600
+.*                                                           * @Z25LENZ 05876800
+.*                                                           * @Z25LENZ 05877000
+.*          OPER=                                            *          05880000
+.*          endreq  - Compress and/or encrypt current        *          05890000
+.*                    logical block and return address       *          05900000
+.*                    of data block in R0. If R0 is zero     *          05910000
+.*                    then no records to return. Note:       *          05920000
+.*                    Record(s) in logical block stay in     *          05930000
+.*                    tack (pending). Returned data block is *          05940000
+.*                    marked as checked out. Must be         *          05950000
+.*                    returned via rtnblk. Data block        *          05960000
+.*                    header contains length of compressed   *          05970000
+.*                    and/or encrypted data. See DSECT       *          05980000
+.*                    ENDATHDR in IAZENOBJ. Note after       *          05990000
+.*                    operation the logical block is         *          06000000
+.*                    still active. This differs from        *          06010000
+.*                    OPER=flush.                            *          06020000
+.*                                                           *          06030000
+.*                    Only valid on "put" type object.       *          06040000
+.*                                                           *          06050000
+.*                    Example:                               *          06060000
+.*                                                           *          06070000
+.*                    IAZENOPR OPER=ENDREQ,                  *          06080000
+.*                          OBJECT_PTR=(ptr_to_enc_object)   *          06090000
+.*                                                           *          06100000
+.*                                                           *          06110000
+.*          OPER=                                            *          06120000
+.*          flush   - Compress and/or OR encrypt current     *          06130000
+.*                    logical block and return address       *          06140000
+.*                    of data block in R0. If R0 is zero     *          06150000
+.*                    then no records to return. The         *          06160000
+.*                    logical block is reset - emptied.      *          06170000
+.*                                                           *          06180000
+.*                    Only valid on "put" type object.       *          06190000
+.*                                                           *          06200000
+.*                    Example:                               *          06210000
+.*                                                           *          06220000
+.*                    IAZENOPR OPER=FLUSH,                   *          06230000
+.*                          OBJECT_PTR=(ptr_to_enc_object)   *          06240000
+.*                                                           *          06250000
+.* --------------------------------------------------------- * @Z25LENZ 06252000
+.*                                                           * @Z25LENZ 06255000
+.*  Macro keyword definitions follow:                        * @Z25LENZ 06260000
+.*                                                           *          06270000
+.*                                                           *          06280000
+.*  OBJECT_PTR= Pointer to SPOOL Encryption object. Required *          06290000
+.*              on all operations. This must be a register   * @Z25LENZ 06300000
+.*              since it is used to base object structure.   * @Z25LENZ 06305000
+.*              Object size required can be obtained via     * @Z25LENZ 06310000
+.*              oper=objsize.                                *          06320000
+.*                                                           *          06330000
+.*  OBJECT_TYP= Type of SPOOL Encryption object. Only        *          06340000
+.*              valid on oper=setupe.                        * @Z25LENZ 06350000
+.*                                                           *          06360000
+.*        put   -> Used to put data. Takes logical data and  *          06370000
+.*                 eventually returns compressed and/or      *          06380000
+.*                 encrypted data block.                     * @Z25LENZ 06390000
+.*                                                           *          06400000
+.*        get   -> Used to get data. Takes compressed        *          06410000
+.*                 and/or encrypted and returns logical      *          06420000
+.*                 data which caller may access via          *          06430000
+.*                 oper=getreco.                             * @Z25LENZ 06440000
+.*                                                           * @Z25LENZ 06441000
+.*        Rules:                                             * @Z25LENZ 06442000
+.*        OBJECT_TYP required for oper=setupe. May pass      * @Z25LENZ 06443000
+.*        equated value PUT or GET or reference to one       * @Z25LENZ 06444000
+.*        byte value matching the equated values.            * @Z25LENZ 06445000
+.*                                                           *          06450000
+.*  DATA_MOD_TYPE= Type of data modification for this        *          06460000
+.*                 object. Only valid on oper=setupe.        * @Z25LENZ 06470000
+.*                                                           *          06480000
+.*        comp    -> compression only.                       *          06490000
+.*        encrypt -> encryption only.                        *          06500000
+.*        both    -> compression and encryption.             *          06510000
+.*        clear   -> send data in the clear                  * @Z25LENZ 06520000
+.*                                                           *          06530000
+.*        Rules:                                             * @Z25LENZ 06531000
+.*        DATA_MOD_TYPE required for oper=setupe. May pass   * @Z25LENZ 06532000
+.*        equated value COMP, ENCRY, BOTH or CLEAR. Also     * @Z25LENZ 06533000
+.*        may pass register with equated values. Register    * @Z25LENZ 06534000
+.*        denoted by ().                                     * @Z25LENZ 06535000
+.*                                                           * @Z25LENZ 06536000
+.*                                                           * @Z25LENZ 06537000
+.*  ENCR_METHOD = Encryption method obtained from            *          06540000
+.*              associated PDDB. Only valid on oper=setupe.  * @Z25LENZ 06550000
+.*              2 byte value.                                * @Z25LENZ 06560000
+.*                                                           * @Z25LENZ 06561000
+.*        Rules:                                             * @Z25LENZ 06562000
+.*        If value enclosed by () then register contains     * @Z25LENZ 06563000
+.*        address to 2 byte encryption method. If not ()     * @Z25LENZ 06564000
+.*        then we take address of and move pointed value     * @Z25LENZ 06565000
+.*        (2 byte encryption method) into parameter list.    * @Z25LENZ 06566000
+.*                                                           *          06570000
+.*  COMP_METHOD = Compression method obtained from           *          06580000
+.*              associated PDDB. Only valid on oper=setupe.  * @Z25LENZ 06590000
+.*              2 byte method.                               * @Z25LENZ 06600000
+.*                                                           * @Z25LENZ 06601000
+.*        Rules:                                             * @Z25LENZ 06602000
+.*        If value enclosed by () then register contains     * @Z25LENZ 06603000
+.*        address to 2 byte compression method. If not ()    * @Z25LENZ 06604000
+.*        then we take address of and move pointed value     * @Z25LENZ 06605000
+.*        (2 byte compression method) into parameter list.   * @Z25LENZ 06606000
+.*                                                           *          06610000
+.*  KEY_LABEL = DSKEYLBL from associated PDDB. Only valid    *          06620000
+.*              on oper=setupe. Up to 16 byte value.         * @Z25LENZ 06630000
+.*                                                           * @Z25LENZ 06631000
+.*        Rules:                                             * @Z25LENZ 06632000
+.*        If value enclosed by () then register contains     * @Z25LENZ 06633000
+.*        address to up to 16 byte key label. If not ()      * @Z25LENZ 06634000
+.*        then we take address of and move pointed value     * @Z25LENZ 06635000
+.*        (up to 16 byte key label) into parameter list.     * @Z25LENZ 06636000
+.*                                                           *          06640000
+.*  KEY_LABEL_LEN = DSKEYLBL length from associated PDDB.    *          06650000
+.*              Only valid on oper=setupe.  Only valid on    * @Z25LENZ 06660000
+.*              oper=setupe.                                 * @Z25LENZ 06670000
+.*                                                           * @Z25LENZ 06671000
+.*        Rules:                                             * @Z25LENZ 06672000
+.*        If value enclosed by () then register contains     * @Z25LENZ 06673000
+.*        address to up to 2 byte key label length. If not ()* @Z25LENZ 06674000
+.*        then we take address of and move pointed value     * @Z25LENZ 06675000
+.*        (2 byte key label length) into parameter list.     * @Z25LENZ 06676000
+.*                                                           *          06680000
+.*  KEY_VERIFY_IN = 16 byte key value to be verified.        * @Z25LENZ 06690000
+.*             Only valid on oper=setupe.                    * @Z25LENZ 06710000
+.*        Rules:                                             * @Z25LENZ 06712000
+.*        If value enclosed by () then register contains     * @Z25LENZ 06714000
+.*        address to up to 16 byte key verification value.   * @Z25LENZ 06716000
+.*        If not () then we take address of and move         * @Z25LENZ 06718000
+.*        pointed value (16 byte key verification value)     * @Z25LENZ 06720000
+.*        into parameter list.                               * @Z25LENZ 06722000
+.*                                                           *          06730000
+.*  KEY_WRAP_ROUTINE = 64 bit pointer to key wrap routine.   *          06740000
+.*             A key wrap routine given a key label will rtn *          06750000
+.*             the associated key wrap. This key wrap can be *          06760000
+.*             used to encrypt and decrypt data. Only valid  *          06770000
+.*             on oper=setupe and only if encryption has     * @Z25LENZ 06780000
+.*             been specified.                               * @Z25LENZ 06781000
+.*                                                           * @Z25LENZ 06782000
+.*        Rules:                                             * @Z25LENZ 06783000
+.*        If value enclosed by () then treated as a 8 byte   * @Z25LENZ 06783700
+.*        address. If not () then we take address of and     * @Z25LENZ 06784400
+.*        move pointed value (8 bytes address) into          * @Z25LENZ 06785100
+.*        parameter list.                                    * @Z25LENZ 06786000
+.*                                                           * @Z25LENZ 06786200
+.*  LASTB      If specified on oper=point then point         * @Z25LENZ 06786400
+.*             pertains to last block primed (oper=primeblk).* @Z25LENZ 06786600
+.*             The point value is relative (starting with 1) * @Z25LENZ 06786800
+.*             within that block. LASTB only valid for a     * @Z25LENZ 06787000
+.*             GET object - though it will be accepted for   * @Z25LENZ 06787200
+.*             a put object - but ignored.                   * @Z25LENZ 06787400
+.*                                                           * @Z25LENZ 06788000
+.*  SECURE_ICSF= (Yes!No)                                    * @Z25LENZ 06790000
+.*             If "Yes" then service will inform ICSF to     * @Z25LENZ 06790200
+.*             verify callers authority to use supplied      * @Z25LENZ 06790800
+.*             key label. If "No" specified - then it is up  * @Z25LENZ 06791400
+.*             to caller to assure proper access to key      * @Z25LENZ 06792000
+.*             label. The default is yes. Only valid on      * @Z25LENZ 06792600
+.*             oper=setupe and only valid if encryption      * @Z25LENZ 06793200
+.*             has been specifed.                            * @Z25LENZ 06793800
+.*                                                           * @Z25LENZ 06794100
+.*  ENCR_VER_TOK= On oper=setupe if an encrypted verification* @Z25LENZ 06794400
+.*             key token is not supplied then one will be    * @Z25LENZ 06795000
+.*             returned. If a encrypted verification key     * @Z25LENZ 06795100
+.*             token is supplied then it shall be verified.  * @Z25LENZ 06795200
+.*             The goal is to make sure both put and         * @Z25LENZ 06795300
+.*             get - given verification key will --          * @Z25LENZ 06795600
+.*             materialize the same encrypted value. This    * @Z25LENZ 06796200
+.*             is referred to as canary value and assures    * @Z25LENZ 06796800
+.*             wrapped key is valid. Only valid on           * @Z25LENZ 06797100
+.*             oper=setupe and only valid if encryption has  * @Z25LENZ 06797400
+.*             been specified.                               * @Z25LENZ 06798600
+.*                                                           * @Z25LENZ 06798800
+.*        Rules:                                             * @Z25LENZ 06799000
+.*        16 byte value is passed via this keyword parm.     * @Z25LENZ 06799200
+.*                                                           * @Z25LENZ 06799400
+.*  DEBUG_OPT=(RX) optional parm specify debug option.       * @Z25LENZ 06800000
+.*             If specified then DEBUG_OPT= must be in Rx    * @Z25LENZ 06810000
+.*             form, Cannot specify R14. When specifying     * @Z25LENZ 06820000
+.*             this option constants DEBUGON                 * @Z25LENZ 06820500
+.*             and DEBUGOFF should be used. Default          * @Z25LENZ 06821000
+.*             is DEBUGOFF. Currently DEGUGON enables the    * @Z25LENZ 06821500
+.*             following:                                    * @Z25LENZ 06822000
+.*                                                           * @Z25LENZ 06822500
+.*               -- Data block (including header) is         * @Z25LENZ 06823000
+.*                  checksumed before being handed back to   * @Z25LENZ 06823500
+.*                  caller. This 4 byte checksum value is    * @Z25LENZ 06824000
+.*                  recorded in data block header.  On       * @Z25LENZ 06824500
+.*                  oper=primeblk - if checksum value not    * @Z25LENZ 06825000
+.*                  hex 0 and DEBUGON then checksum will be  * @Z25LENZ 06825500
+.*                  derived again and checked for equality   * @Z25LENZ 06826000
+.*                  with value stored in data block header.  * @Z25LENZ 06826500
+.*                  If equal then OK - otherwise ABEND - 02A * @Z25LENZ 06827000
+.*                  reason code - ENBADSUM x'F8'.            * @Z25LENZ 06827500
+.*             Only valid on oper=setupe.                    * @Z25LENZ 06828000
+.*                                                           *          06830000
+.*  RECORD     Record address in support of oper=getrec or   * @Z25LENZ 06840000
+.*             putrec or replrec. Record is gotten or        *          06850000
+.*             put to this area. Only valid on               *          06860000
+.*             oper=putrec!getrec!replrec.                   *          06870000
+.*                                                           * @Z25LENZ 06871000
+.*        Rules:                                             * @Z25LENZ 06872000
+.*        If value enclosed by () then treated as a 8 byte   * @Z25LENZ 06873000
+.*        address of a record. If not () then we take        * @Z25LENZ 06874000
+.*        address of and move that address into the          * @Z25LENZ 06874500
+.*        parameter list.                                    * @Z25LENZ 06875000
+.*                                                           * @Z25LENZ 06876000
+.*                                                           *          06880000
+.*  REC_AREA_LEN - Length of area to deposit record. Only    *          06890000
+.*             valid on oper=getrec. 4 byte value.           *          06900000
+.*                                                           *          06910000
+.*        Rules:                                             * @Z25LENZ 06911000
+.*        If value enclosed by () then register contains     * @Z25LENZ 06912000
+.*        length. If not () then we take address of and      * @Z25LENZ 06913000
+.*        move pointed value (fixed) into parmameter list.   * @Z25LENZ 06914000
+.*                                                           * @Z25LENZ 06915000
+.*  CALLER_KEY =  Caller store key used on getrec,           * @Z25LENZ 06920000
+.*             putrec and replrec to reference supplied      * @Z25LENZ 06930000
+.*             record Only valid on oper=putrec!getrec!      * @Z25LENZ 06940000
+.*             replrec. For example, given key 1 then        * @Z25LENZ 06945000
+.*             recommended format should be:                 * @Z25LENZ 06950000
+.*             CALLER_KEY==AL1(1*16).                        * @Z25LENZ 06951000
+.*                                                           * @Z25LENZ 06951500
+.*        Rules:                                             * @Z25LENZ 06952000
+.*        If value enclosed by () then register contains     * @Z25LENZ 06953000
+.*        address to callers key. If not () then we take     * @Z25LENZ 06954000
+.*        address of and move pointed value (1 byte key)     * @Z25LENZ 06955000
+.*        into parameter list.                               * @Z25LENZ 06960000
+.*                                                           * @Z25LENZ 06965000
+.*  REC_INFO   = Address of REC_INFO (LRC, ETC) to           * @Z25LENZ 06970000
+.*             be prepended to the front of the record.      *          06980000
+.*             See DSECT -> ENRECDES in IAZENOBJ. The        *          06990000
+.*             record information content is up to the       *          07000000
+.*             caller and actual length must be supplied     *          07010000
+.*             in parm REC_INFO_LEN. Only valid on           *          07020000
+.*             oper=putrec and getrec. Up to 16 byte value.  *          07030000
+.*                                                           *          07040000
+.*        Rules:                                             * @Z25LENZ 07041000
+.*        If value enclosed by () then treated as a 8 byte   * @Z25LENZ 07042000
+.*        address. If not () then we take address of and     * @Z25LENZ 07043000
+.*        store that address into parameter list.            * @Z25LENZ 07044000
+.*                                                           * @Z25LENZ 07045000
+.*                                                           *          07050000
+.*  REC_INFO_LEN = Length of data in REC_INFO. Only valid    *          07060000
+.*             on oper=putrec. 4 byte value.                 *          07070000
+.*                                                           * @Z25LENZ 07071000
+.*        Rules:                                             * @Z25LENZ 07074000
+.*        If value enclosed by () then register contains     * @Z25LENZ 07077000
+.*        to 4 byte record info length. If not () then we    * @Z25LENZ 07080000
+.*        take address of and move pointed value (4 bytes)   * @Z25LENZ 07081000
+.*        into parmameter list.                              * @Z25LENZ 07083000
+.*                                                           * @Z25LENZ 07086000
+.*  CARR_CNTL_CH = Addr of Carriage control character to     * @Z25LENZ 07090000
+.*             be prepended to front of the record.          * @Z25LENZ 07100000
+.*             Optional parameter for putrec and replrec.    *          07120000
+.*             For replrec it is required if record to       *          07130000
+.*             replace has a carriage control record.        *          07140000
+.*                                                           * @Z25LENZ 07141000
+.*        Rules:                                             * @Z25LENZ 07142000
+.*        If value enclosed by () then treated as a 8 byte   * @Z25LENZ 07143000
+.*        address. If address is NULL (zero) then treated    * @Z25LENZ 07144000
+.*        as no carriage control. If not () then we take     * @Z25LENZ 07144200
+.*        address of and move pointed value (an address)     * @Z25LENZ 07144500
+.*        into the parameter list. Note: we must use         * @Z25LENZ 07145000
+.*        supplied key when moving actual carriage control.  * @Z25LENZ 07146000
+.*                                                           * @Z25LENZ 07146500
+.*  CCTL_OP      = Carriage control option. Only valid       * @Z25LENZ 07147000
+.*                 on oper=getrec. Optional value with       * @Z25LENZ 07147500
+.*                 default "ASIS".                           * @Z25LENZ 07148000
+.*                                                           * @Z25LENZ 07148500
+.*        ASIS    -> Return carriage control as stored       * @Z25LENZ 07149000
+.*                   in object record. This is the default.  * @Z25LENZ 07149500
+.*                                                           * @Z25LENZ 07150000
+.*        ALWAYS  -> Always return carraige control as       * @Z25LENZ 07150500
+.*                   first character in record data. If      * @Z25LENZ 07151000
+.*                   object record contains carriage         * @Z25LENZ 07151500
+.*                   control then return that value. If it   * @Z25LENZ 07152000
+.*                   does not -- then return '00'x.          * @Z25LENZ 07152500
+.*                                                           * @Z25LENZ 07153000
+.*        NEVER   -> Never return carraige control in        * @Z25LENZ 07153500
+.*                   record data. Even if object record      * @Z25LENZ 07154000
+.*                   has CCTL - it shall not be returned.    * @Z25LENZ 07154500
+.*                                                           * @Z25LENZ 07155000
+.*        Rules:                                             * @Z25LENZ 07155500
+.*        CCTL_OP is optional for oper=getrec.  May pass     * @Z25LENZ 07156000
+.*        equated value GETASIS, GETALWAY or GETNEVERl. May  * @Z25LENZ 07156500
+.*        pass register with equated value loaded. Register  * @Z25LENZ 07157000
+.*        denoted by (). If not suppled then ASIS is the     * @Z25LENZ 07157500
+.*        default.                                           * @Z25LENZ 07158000
+.*                                                           * @Z25LENZ 07158500
+.*  PRIM_BLK_PTR = Pointer to data block to be returned.     *          07160000
+.*             Contents will undergo compression             *          07170000
+.*             and/or encryption and result loaded in        *          07180000
+.*             active logical block. Only valid on           *          07190000
+.*             oper=primeblk.                                *          07200000
+.*                                                           * @Z25LENZ 07203000
+.*        Rules:                                             * @Z25LENZ 07206000
+.*        If value enclosed by () then treated as a 8 byte   * @Z25LENZ 07209000
+.*        address. If not () then we take address of and     * @Z25LENZ 07210000
+.*        move pointed value (address) into parmameter list. * @Z25LENZ 07212000
+.*                                                           * @Z25LENZ 07215000
+.*                                                           *          07220000
+.*  REC_NUM     = Addr of Record num related to              * @Z25LENZ 07230000
+.*                record to put. Only valid on oper=         * @Z25LENZ 07240000
+.*                putrec. 8 byte value.                      * @Z25LENZ 07250000
+.*                                                           * @Z25LENZ 07251000
+.*        Rules:                                             * @Z25LENZ 07252000
+.*        If value enclosed by () then register contains     * @Z25LENZ 07253000
+.*        8 byte record number. This record number           * @Z25LENZ 07254000
+.*        is moved to paramter list. If not () then we       * @Z25LENZ 07255000
+.*        take address of and move pointed value             * @Z25LENZ 07256000
+.*        (8 byte record number) into paramter list.         * @Z25LENZ 07257000
+.*                                                           * @Z25LENZ 07260000
+.*  REC_LEN     = Record length - actual record length not   *          07270000
+.*                including rec_info. Only valid on          *          07280000
+.*                oper=replrec or putrec. 4 byte value.      *          07290000
+.*                                                           * @Z25LENZ 07291000
+.*        Rules:                                             * @Z25LENZ 07292000
+.*        If value enclosed by () then register contains     * @Z25LENZ 07293000
+.*        4 bye record length. This rec length is moved to   * @Z25LENZ 07294000
+.*        parameter list. If not () then we take address of  * @Z25LENZ 07295000
+.*        and move pointed value (4 byte record length) into * @Z25LENZ 07296000
+.*        paramter list.                                     * @Z25LENZ 07297000
+.*                                                           * @Z25LENZ 07298000
+.*                                                           *          07300000
+.*  RTN_BLK_PTR = Pointer to data block to return.           *          07310000
+.*             Only valid on oper=rtnblk.                    *          07320000
+.*                                                           * @Z25LENZ 07321000
+.*        Rules:                                             * @Z25LENZ 07322000
+.*        If value enclosed by () then treated as a 8 byte   * @Z25LENZ 07323000
+.*        address. If not () then we take address of and     * @Z25LENZ 07324000
+.*        move pointed value (address) into parmameter list. * @Z25LENZ 07325000
+.*                                                           *          07330000
+.*  REL_REC#    = Relative record # to replace. Relative     * @Z25LENZ 07340000
+.*             from first record in object starting with     *          07350000
+.*             1. Only valid on oper=replrec. 4 byte value.  *          07360000
+.*                                                           *          07370000
+.*        Rules:                                             * @Z25LENZ 07371000
+.*        If value enclosed by () then value in register     * @Z25LENZ 07372000
+.*        is four byte record number. This record number     * @Z25LENZ 07373000
+.*        is moved to paramter list. If not () then we       * @Z25LENZ 07374000
+.*        take address of and move pointed value             * @Z25LENZ 07375000
+.*        (4 byte record number) into paramter list.         * @Z25LENZ 07376000
+.*                                                           *          07380000
+.*  POINT      = Set cursor to this record within            * @Z25LENZ 07390000
+.*             logical block(s). Only valid on oper=(point!  * @Z25LENZ 07400000
+.*             !primeblk). Required on oper=point. For       *          07410000
+.*             oper=primeblk point is required for put       *          07420000
+.*             object, but optional for get objects. 4 byte  *          07430000
+.*             value.                                        *          07440000
+.*                                                           * @Z25LENZ 07441000
+.*        Rules:                                             * @Z25LENZ 07442000
+.*        If value enclosed by () then register contains     * @Z25LENZ 07443000
+.*        4 byte point number. This record number            * @Z25LENZ 07444000
+.*        is moved to paramter list. If not () then we       * @Z25LENZ 07445000
+.*        take address of and move pointed value             * @Z25LENZ 07446000
+.*        (4 byte record number) into paramter list.         * @Z25LENZ 07448000
+.*                                                           *          07450000
+.*                                                           * @Z25LENZ 07450400
+.*  WHAT_FITS  This parameter only relevant for oper=getreco.* @Z25LENZ 07450800
+.*             getreco caller supplies buffer and buffer     * @Z25LENZ 07451200
+.*             length for returned data. That buffer         * @Z25LENZ 07451600
+.*             must be large enough to contain the data      * @Z25LENZ 07452000
+.*             record. If not large enough - then RC=4 is    * @Z25LENZ 07452400
+.*             returned along with following reason code:    * @Z25LENZ 07452800
+.*             ENNTOSHO -> Supplied deposit area too small   * @Z25LENZ 07453200
+.*                         to contain data record.           * @Z25LENZ 07453600
+.*             We should note the service will return as     * @Z25LENZ 07454000
+.*             data as possible before returning the error.  * @Z25LENZ 07454400
+.*                                                           * @Z25LENZ 07454800
+.*                                                           * @Z25LENZ 07455200
+.*             The WHAT_FITS allows one to override this     * @Z25LENZ 07455600
+.*             behavior and return just what fits in         * @Z25LENZ 07456000
+.*             supplied buffer AND cursor is incremented (RC * @Z25LENZ 07456400
+.*             =0). The format is WHAT_FITS=YES!NO. The      * @Z25LENZ 07456800
+.*             default is NO.                                * @Z25LENZ 07457200
+.*                                                           * @Z25LENZ 07457600
+.*        Rules:                                             * @Z25LENZ 07458000
+.*        Keyword is supplied or not.                        * @Z25LENZ 07458400
+.*                                                           * @Z25LENZ 07458800
+.*  ENVIRONMENT:                                             *          07460000
+.*                                                           *          07470000
+.*       JES2 main task, FSS, subtask and user environment.  *          07480000
+.*       Assumes AMODE64.                                    *          07490000
+.*                                                           *          07500000
+.*  REGISTER USAGE (ENTRY/EXIT):                             *          07510000
+.*                                                           *          07520000
+.*   REG       VALUE ON ENTRY             VALUE ON EXIT      *          07530000
+.*             TO MACRO                   FROM MACRO         *          07540000
+.*                                                           *          07550000
+.*   R0        n/a                        Reason code -      *          07560000
+.*                                        see IAZENOBJ for   *          07570000
+.*                                        details            * @Z25LENZ 07580000
+.*   R1        n/a                        destroyed          *          07590000
+.*   R2-R10    n/a                        unchanged          *          07600000
+.*   R11       n/a                        unchanged          *          07610000
+.*   R12       n/a                        unchanged          *          07620000
+.*   R13       PCE base/save area addr    unchanged          *          07630000
+.*   R14       n/a                        destroyed          *          07640000
+.*   R15       n/a                        return code        *          07650000
+.*                                                           *          07660000
+.*   RETURN CODES by oper= (R15 ON EXIT):)                   * @Z25LENZ 07670000
+.*                                                           *          07680000
+.*      0 - Success                                          *          07690000
+.*      4 - Error - see reason code in R0. Reason codes are  * @Z25LENZ 07700000
+.*          defined in IAZENOBJ. Search for Reason codes.    * @Z25LENZ 07710000
+.*      8 - oper=rtnblk                                      *          07720000
+.*          The data block was successfully returned and     *          07730000
+.*          another data block has been returned             * @Z25LENZ 07740000
+.*          to the caller. Data block address                * @Z25LENZ 07750000
+.*          can be found in 64 bit register R0.              * @Z25LENZ 07760000
+.*          Caller must process block and return via rtnblk. *          07770000
+.*          This is rare - but can happen with very large    *          07780000
+.*          32K records. No putrecs are allowed until        *          07790000
+.*          block is processed and returned by caller.       *          07800000
+.*                                                           * @Z25LENZ 07815000
+.*         -oper=putrec                                      *          07820000
+.*          The record put was accepted and a                * @Z25LENZ 07830000
+.*          data block 64 bit pointer is returned in         * @Z25LENZ 07840000
+.*          R0. Caller must process and return via rtnblk.   * @Z25LENZ 07850000
+.*          Until returned no putrecs are allowed.           * @Z25LENZ 07860000
+.*                                                           *          07880000
+.*         -oper=getrec                                      *          07890000
+.*          Next record is a spanner and the second portion  *          07900000
+.*          of the record is not available. Caller must      *          07910000
+.*          GETBLK a data block - fill it - and PRIMEBLK.    *          07920000
+.*                                                           *          07930000
+.*         -oper=replrec  CURRENTLY NOT SUPPORTED            * @Z25LENZ 07940000
+.*          Get object and the record to replace is a        *          07950000
+.*          spanner and 2nd span not availble. Caller must   *          07960000
+.*          GETBLK a data block - fill it - and PRIMEBLK.    *          07970000
+.*          Then proceed to redo the replace record.         *          07980000
+.*                                                           *          07990000
+.*         -oper=setupe                                      * @Z25LENZ 07991000
+.*          Supplied key label is not properly registered    * @Z25LENZ 07992000
+.*          with the ICSF service. Wrapped key could not be  * @Z25LENZ 07993000
+.*          obtained. R0 contains the ICSF reason code.      * @Z25LENZ 07994000
+.*          See ICSF reason code documentation.              * @Z25LENZ 07994500
+.*                                                           * @Z25LENZ 07994600
+.*     12 - oper=setupe                                      * @Z25LENZ 07995000
+.*          Caller supplied encrypted key verification value.* @Z25LENZ 07995200
+.*          The obtained encrypted value obtained            * @Z25LENZ 07995400
+.*          with verification key (supplied on setup) did    * @Z25LENZ 07995600
+.*          not match. Canary problem.                       * @Z25LENZ 07995800
+.*                                                           * @Z25LENZ 07996000
+.*                                                           * @Z25LENZ 07996200
+.*        - oper=putrec                                      * @Z25LENZ 07996400
+.*          The record put was accepted and TWO data blocks  * @Z25LENZ 07996600
+.*          are scheduled to be returned. Upon returning     * @Z25LENZ 07996800
+.*          from oper=putrec R0 will contain address to      * @Z25LENZ 07997000
+.*          first data block. Caller will process and        * @Z25LENZ 07997200
+.*          return the first data block via oper=rtnblk().   * @Z25LENZ 07997400
+.*          The oper=rtnblk will return in R0 the second     * @Z25LENZ 07997600
+.*          data block. Once processed this data block must  * @Z25LENZ 07997800
+.*          also be returned via oper=rtnblk().              * @Z25LENZ 07998300
+.*                                                           * @Z25LENZ 07998800
+.*     20 - oper=setupe                                      * @Z25LENZ 07999400
+.*          Operation was successful - but - compression     * @Z25LENZ 07999500
+.*          was requested and no devices available for       * @Z25LENZ 07999600
+.*          compression.                                     * @Z25LENZ 07999700
+.*                                                           * @Z25LENZ 07999900
+.*     24 - oper=setupe                                      * @Z25LENZ 08000900
+.*          Key associated with supplied key label was not   * @Z25LENZ 08001900
+.*          AES 256 bit.                                     * @Z25LENZ 08002900
+.*                                                           * @Z25LENZ 08003900
+.*  OTHER CONSIDERATIONS:                                    *          08004900
+.*                                                           *          08010000
+.*  - Macro invocation requires AMODE64                      *          08020000
+.*  - All pointers passed in must be crafted for AMODE64     *          08030000
+.*                                                           *          08040000
+.*************************************************************          08050000
+.*                                                                      08060000
+.********************************************************************** 08070000
+.* CHANGE ACTIVITY:                                                   * 08080000
+.* $Z25LENZ=ENCRYPT  HBB77D0 190416 SJS:  SPOOL Encryption phase 3    * 08085000
+.*                                                                    * 08095000
+.********************************************************************** 08100000
+.*                                                                      08110000
+         GBLC  &ANVIRON                                                 08120000
+         GBLC  &SYSASCE,&SYSAM64                                        08130000
+&LAB     SETC  'ENC'.'&SYSNDX'                                          08140000
+         SYSSTATE TEST                                                  08150000
+&ENM01   SETC  '$EN1&SYSNDX'                                            08160000
+&ENM02   SETC  '$EN2&SYSNDX'                                            08170000
+&ENM03   SETC  '$EN3&SYSNDX'                                            08180000
+&ENM04   SETC  '$EN4&SYSNDX'                                   @Z25LENZ 08185000
+&ENM05   SETC  '$EN5&SYSNDX'                                   @Z25LENZ 08186000
+&ENM06   SETC  '$EN6&SYSNDX'                                   @Z25LENZ 08188000
+&LBL     SETC  '&LABEL'                                        @Z25LENZ 08189000
+.*                                                                      08190000
+.*************************************************************          08200000
+.*       Verify valid environment                            *          08210000
+.*************************************************************          08220000
+.*                                                                      08230000
+.*************************************************************          08240000
+.*       Macro requires AMODE64                              *          08250000
+.*************************************************************          08260000
+.*                                                                      08270000
+         AIF   ('&SYSAM64' EQ 'YES').CKENV                              08280000
+         MNOTE 8,'IAZENOPR - Requires AMODE64'                          08290000
+         MEXIT                                                          08300000
+.*                                                                      08310000
+.*                                                                      08320000
+.*                                                                      08330000
+.CKENV   AIF   ('&ANVIRON' EQ 'USER').ENCOK,                           C08340000
+               ('&ANVIRON' EQ 'JES2').ENCOK,                           C08350000
+               ('&ANVIRON' EQ 'FSS').ENCOK,                            C08360000
+               ('&ANVIRON' EQ 'SUBTASK').ENCOK                          08370000
+         MNOTE 8,'IAZENOPR - &ANVIRON ENVIRONMENT IS INVALID'           08380000
+         MEXIT                                                          08390000
+.*                                                                      08400000
+.*************************************************************          08410000
+.*       Verify oper= keyword has been specified - required  *          08420000
+.*       on all macro invocations.                           *          08430000
+.*************************************************************          08440000
+.*                                                                      08450000
+.ENCOK   ANOP                                                           08460000
+         AIF   ('&OPER' NE '').ENCOPRP                                  08470000
+         MNOTE 8,'IAZENOPR - OPER= must be specified'                   08480000
+         MEXIT                                                          08490000
+.*                                                                      08500000
+.*************************************************************          08510000
+.*       Verify OPER= parm specified                         *          08520000
+.*************************************************************          08530000
+.*                                                                      08540000
+.ENCOPRP ANOP                                                           08550000
+         AIF   ('&OPER(1)' NE '').ENCOBJ                                08560000
+         MNOTE 8,'IAZENOPR - OPER= parm is missing'                     08570000
+         MEXIT                                                          08580000
+.*                                                                      08590000
+.*************************************************************          08600000
+.*       OBJECT_PTR also required on all macro invocations.  *          08610000
+.*       Only exception here is OPER=objsiz.                 *          08620000
+.*************************************************************          08630000
+.*                                                                      08640000
+.ENCOBJ  ANOP                                                           08650000
+         AIF   ('&OPER(1)' EQ 'OBJSIZ').ENCCHK1                         08660000
+         AIF   ('&OBJECT_PTR' NE '').ENCOBJP                            08670000
+         MNOTE 8,'IAZENOPR - OBJECT_PTR must be specified'              08680000
+         MEXIT                                                          08690000
+.*                                                                      08700000
+.*************************************************************          08710000
+.*       OBJECT_PTR parm also required.                      *          08720000
+.*************************************************************          08730000
+.*                                                                      08740000
+.ENCOBJP ANOP                                                           08750000
+         AIF   ('&OBJECT_PTR(1)' NE '').ENCLREG                         08760000
+         MNOTE 8,'IAZENOPR - OBJECT_PTR parm is missing'                08770000
+         MEXIT                                                          08780000
+.*                                                                      08790000
+.*************************************************************          08800000
+.*       Using with supplied object address.                 *          08810000
+.*************************************************************          08820000
+.*                                                                      08830000
+.ENCLREG ANOP                                                           08840000
+.*                                                                      08850000
+         USING ENCOBJ,&OBJECT_PTR(1) Base object pointer                08860000
+         SPACE 1                                                        08870000
+&LBL     LTGR  14,&OBJECT_PTR(1)  Make sure object pointer     @Z25LENZ 08871000
+         JNZ   &ENM04             Specified                    @Z25LENZ 08874000
+&LBL     SETC  ''                                              @Z25LENZ 08877000
+         LGHI  15,4               Error                        @Z25LENZ 08880000
+         LGHI  0,ENCNOOBJ         Reason code -zero object PTR @Z25LENZ 08882000
+         J     &ENM01             Return error                 @Z25LENZ 08884000
+&ENM04   DS    0H                 Object pointer ok            @Z25LENZ 08886000
+         STG   &OBJECT_PTR(1),ENCOBPTR Store object pointer             08890000
+.ENCCHK1 ANOP                                                           08900000
+         AIF   ('&OPER(1)' EQ 'OBJSIZ').OBJSIZ,                        C08910000
+               ('&OPER(1)' EQ 'SETUPE').ENCSET,                @Z25LENZC08920000
+               ('&OPER(1)' EQ 'CLEANUP').ENCLEAN,                      C08930000
+               ('&OPER(1)' EQ 'PUTREC').ENCPUT,                        C08940000
+               ('&OPER(1)' EQ 'GETBLK').ENCGETB,                       C08950000
+               ('&OPER(1)' EQ 'RTNBLK').ENCRTNB,                       C08960000
+               ('&OPER(1)' EQ 'PRIMEBLK').ENCRPIM,                     C08970000
+               ('&OPER(1)' EQ 'GETRECO').ENCGREC,                      C08980000
+               ('&OPER(1)' EQ 'REPLREC').ENCRREC,                      C08990000
+               ('&OPER(1)' EQ 'QUERY').ENCGRAN,                        C09000000
+               ('&OPER(1)' EQ 'POINT').ENCPOIN,                        C09010000
+               ('&OPER(1)' EQ 'ENDREQ').ENCENDR,                       C09020000
+               ('&OPER(1)' EQ 'FLUSH').ENCFLUS,                        C09030000
+               ('&OPER(1)' EQ 'GETALLADDR').ENCBLAD            @Z25LENZ 09040000
+.*                                                                      09050000
+         MNOTE 8,'IAZENOPR - Value for oper= not valid'                 09060000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 09065000
+         MEXIT                                                          09070000
+.*                                                                      09080000
+.*************************************************************          09090000
+.*       Verify oper=objsiz                                  *          09100000
+.*************************************************************          09110000
+.*                                                                      09120000
+.OBJSIZ  ANOP                                                           09130000
+&LBL     LGHI  R0,146              Set oper=objsiz - 146K      @Z25LENZ 09140000
+&LBL     SETC  ''                                              @Z25LENZ 09145000
+         AGO   .ENC0099            All done.                            09150000
+.*                                                                      09160000
+.*************************************************************          09170000
+.*       Verify oper=setupe                                  * @Z25LENZ 09180000
+.*************************************************************          09190000
+.*                                                                      09200000
+.ENCSET  ANOP                                                  @Z25LENZ 09210000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 09215000
+&LBL     SETC  ''                                              @Z25LENZ 09216000
+         MVI   ENCOPER,SETUPE      Set oper=setupe             @Z25LENZ 09220000
+.*                                                                      09230000
+.*                                                                      09240000
+.*************************************************************          09250000
+.*       OBJECT_TYP required for oper=setupe. Could be       * @Z25LENZ 09260000
+.*       reference to 1 byte numeric value or character      * @Z25LENZ 09261000
+.*       string "PUT" or "GET".                              * @Z25LENZ 09264000
+.*************************************************************          09270000
+.*                                                                      09280000
+         AIF   ('&OBJECT_TYP' NE '').ENCOBTY                            09290000
+         MNOTE 8,'IAZENOPR - OBJECT_TYP must be specified'              09300000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 09305000
+         MEXIT                                                          09310000
+.ENCOBTY ANOP                                                           09320000
+         AIF   ('&OBJECT_TYP(1)' NE '').ENC0001                         09330000
+         MNOTE 8,'IAZENOPR - OBJECT_TYP parm is missing'                09340000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 09345000
+         MEXIT                                                          09350000
+.ENC0001 ANOP                                                           09360000
+         AIF   ('&OBJECT_TYP(1)' EQ 'PUT').ENC0002,                    C09370000
+               ('&OBJECT_TYP(1)' EQ 'GET').ENC0003                      09380000
+         LA    14,&OBJECT_TYP(1)   Load addr 1 byte indicator  @Z25LENZ 09390000
+         LLGC  14,1(14)            Load one byte object type   @Z25LENZ 09395000
+         STC   14,SETOBTYP         Set object type             @Z25LENZ 09400000
+         AGO   .ENC0004                                        @Z25LENZ 09405000
+.ENC0002 ANOP                                                           09410000
+         MVI   SETOBTYP,ENCPUT     PUT type object                      09420000
+         AGO   .ENC0004                                                 09430000
+.ENC0003 ANOP                                                           09440000
+         MVI   SETOBTYP,ENCGET     GET type object                      09450000
+.*                                                                      09460000
+.*************************************************************          09470000
+.*       DATA_MOD_TYPE required for oper=setupe. May pass    * @Z25LENZ 09480000
+.*       equated value (COMP, ENCRY, BOTH or CLEAR). Also    * @Z25LENZ 09482000
+.*       may pass register with equated values. Register     * @Z25LENZ 09484000
+.*       denoted by ().                                      * @Z25LENZ 09486000
+.*************************************************************          09490000
+.*                                                                      09500000
+.ENC0004 ANOP                                                           09510000
+         AIF   ('&DATA_MOD_TYPE' NE '').ENC0005                         09520000
+         MNOTE 8,'IAZENOPR - DATA_MOD_TYPE must be specified'           09530000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 09535000
+         MEXIT                                                          09540000
+.ENC0005 ANOP                                                           09550000
+         AIF   ('&DATA_MOD_TYPE(1)' NE '').ENC0006                      09560000
+         MNOTE 8,'IAZENOPR - DATA_MOD_TYPE parm is missing'             09570000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 09575000
+         MEXIT                                                          09580000
+.ENC0006 ANOP                                                           09590000
+         AIF   ('&DATA_MOD_TYPE'(1,1) EQ '(').ENC0094          @Z25LENZ 09595000
+         AIF   ('&DATA_MOD_TYPE(1)' EQ 'COMP').ENC0007,                C09600000
+               ('&DATA_MOD_TYPE(1)' EQ 'ENCRY').ENC0008,               C09610000
+               ('&DATA_MOD_TYPE(1)' EQ 'BOTH').ENC0009,        @Z25LENZC09620000
+               ('&DATA_MOD_TYPE(1)' EQ 'CLEAR').ENC0091        @Z25LENZ 09625000
+         MNOTE 8,'IAZENOPR - DATA_MOD_TYPE parm is incorrect'           09630000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 09635000
+         MEXIT                                                          09640000
+.ENC0007 ANOP                                                           09650000
+         MVI   SETDATM,ENCCOMP     Compression only                     09660000
+         AGO   .ENC0010                                                 09670000
+.ENC0008 ANOP                                                           09680000
+         MVI   SETDATM,ENCENCR     Encryption only                      09690000
+         AGO   .ENC0010                                                 09700000
+.ENC0009 ANOP                                                           09710000
+         MVI   SETDATM,ENCBOTH     Compress and encrypt        @Z25LENZ 09720000
+         AGO   .ENC0010                                        @Z25LENZ 09722000
+.ENC0091 ANOP                                                  @Z25LENZ 09724000
+         MVI   SETDATM,ENCCLEAR    Send data in clear          @Z25LENZ 09726000
+         AGO   .ENC0010                                        @Z25LENZ 09727000
+.ENC0094 ANOP                                                  @Z25LENZ 09728000
+         STC   &DATA_MOD_TYPE(1),SETDATM   Store mod type      @Z25LENZ 09729000
+.*                                                                      09730000
+.*************************************************************          09740000
+.*       ENCR_METHOD required for oper=setupe if flag set    * @Z25LENZ 09750000
+.*       Runtime enforced verses assembly time               * @Z25LENZ 09755000
+.*************************************************************          09760000
+.*                                                                      09770000
+.ENC0010 ANOP                                                           09780000
+         AIF   ('&ENCR_METHOD' EQ '').ENC012A                  @Z25LENZ 09790000
+         AIF   ('&ENCR_METHOD(1)' NE '').ENC0012                        09830000
+         MNOTE 8,'IAZENOPR - ENCR_METHOD parm is missing'               09840000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 09845000
+         MEXIT                                                          09850000
+.ENC0012 ANOP                                                           09860000
+         AIF   ('&ENCR_METHOD'(1,1) EQ '(').ENENC001                    09870000
+         LA    14,&ENCR_METHOD(1)  Load addr encrypt method             09880000
+         AGO   .ENENC002                                                09890000
+.ENENC001 ANOP                                                          09900000
+         LGR    14,&ENCR_METHOD(1) Load addr encrypt method             09910000
+.ENENC002 ANOP                                                          09920000
+         MVC   SETMETH,0(14)       Set method in object                 09930000
+.*                                                                      09940000
+.*************************************************************          09950000
+.*       COMP_METHOD required for oper=setupe                * @Z25LENZ 09960000
+.*************************************************************          09970000
+.*                                                                      09980000
+.ENC012A ANOP                                                  @Z25LENZ 09985000
+         AIF   ('&COMP_METHOD' EQ '').ENC0014A                 @Z25LENZ 09990000
+         AIF   ('&COMP_METHOD(1)' NE '').ENC0014                        10030000
+         MNOTE 8,'IAZENOPR - COMP_METHOD parm is missing'               10040000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 10045000
+         MEXIT                                                          10050000
+.ENC0014 ANOP                                                           10060000
+         AIF   ('&COMP_METHOD'(1,1) EQ '(').ENCOC001                    10070000
+         LA     14,&COMP_METHOD(1) Load addr compress method            10080000
+         AGO   .ENCOC002                                                10090000
+.ENCOC001 ANOP                                                          10100000
+         LGR   14,&COMP_METHOD(1)  Load addr compress method   @Z25LENZ 10110000
+.ENCOC002 ANOP                                                          10120000
+         MVC   SETCOMP,0(14)       Set method in object                 10130000
+.*                                                                      10140000
+.*************************************************************          10150000
+.*       KEY_LABEL required for oper=setupe                  * @Z25LENZ 10160000
+.*       Runtime enforced verses assembly time               * @Z25LENZ 10165000
+.*************************************************************          10170000
+.*                                                                      10180000
+.ENC014A ANOP                                                  @Z25LENZ 10185000
+         AIF   ('&KEY_LABEL' EQ '').ENC016A                    @Z25LENZ 10190000
+         AIF   ('&KEY_LABEL(1)' NE '').ENC0016                          10230000
+         MNOTE 8,'IAZENOPR - KEY_LABEL parm is missing'                 10240000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 10245000
+         MEXIT                                                          10250000
+.ENC0016 ANOP                                                           10260000
+         AIF   ('&KEY_LABEL'(1,1) EQ '(').ENKEY001                      10270000
+         LA    14,&KEY_LABEL(1)    Load addr key label                  10280000
+         AGO   .ENKEY002                                                10290000
+.ENKEY001 ANOP                                                          10300000
+         LGR   14,&KEY_LABEL(1)    Load addr key label                  10310000
+.ENKEY002 ANOP                                                          10320000
+         MVC   SETLABEL,0(14)      Set DSKEYLBL in object               10330000
+.*                                                                      10340000
+.*************************************************************          10350000
+.*       KEY_LABEL_LEN  required for oper=setupe             * @Z25LENZ 10360000
+.*       Runtime enforced verses assembly time               * @Z25LENZ 10365000
+.*************************************************************          10370000
+.*                                                                      10380000
+.ENC016A ANOP                                                  @Z25LENZ 10385000
+         AIF   ('&KEY_LABEL_LEN' EQ '').ENCKEYVF               @Z25LENZ 10390000
+         AIF   ('&KEY_LABEL_LEN(1)' NE '').ENCKYGO                      10430000
+         MNOTE 8,'IAZENOPR - KEY_LABEL_LEN parm is missing'             10440000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 10445000
+         MEXIT                                                          10450000
+.ENCKYGO ANOP                                                           10460000
+         AIF   ('&KEY_LABEL_LEN'(1,1) EQ '(').ENCKY001                  10470000
+         LA    14,&KEY_LABEL_LEN(1) Ptr to key label length             10480000
+         AGO   .ENCKY011                                       @Z25LENZ 10485000
+.ENCKY001 ANOP                                                          10490000
+         LGR   14,&KEY_LABEL_LEN(1) Load key label length      @Z25LENZ 10491000
+.ENCKY011 ANOP                                                 @Z25LENZ 10494000
+         MVC   SETKYLEN,0(14)      Move key label length                10500000
+.*                                                                      10510000
+.*************************************************************          10520000
+.*       KEY_VERIFY_IN required for oper=setupe              * @Z25LENZ 10530000
+.*       Runtime enforced verses assembly time               * @Z25LENZ 10535000
+.*************************************************************          10540000
+.*                                                                      10550000
+.ENCKEYVF ANOP                                                          10560000
+         AIF   ('&KEY_VERIFY_IN' EQ '').ENC0034Y               @Z25LENZ 10570000
+         AIF   ('&KEY_VERIFY_IN(1)' NE '').ENCKEYVL                     10610000
+         MNOTE 8,'IAZENOPR - KEY_VERIFY_IN parm is missing'             10620000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 10625000
+         MEXIT                                                          10630000
+.ENCKEYVL ANOP                                                          10640000
+         AIF   ('&KEY_VERIFY_IN'(1,1) EQ '(').ENREG001                  10650000
+         LA    14,&KEY_VERIFY_IN(1) Load verify token          @Z25LENZ 10660000
+         J     &ENM05               Go move key                @Z25LENZ 10665000
+         AGO   .ENREG002                                       @Z25LENZ 10670000
+.ENREG001 ANOP                                                          10680000
+         LGR   14,&KEY_VERIFY_IN(1) Pointer to verify token    @Z25LENZ 10690000
+.ENREG002 ANOP                                                 @Z25LENZ 10700000
+&ENM05   MVC   SETVERIN,0(14)      Move verify key to parm     @Z25LENZ 10710000
+.*                                                                      10720000
+.*************************************************************          10730000
+.*       KEY_WRAP_ROUTINE address required for oper=setupe   * @Z25LENZ 10740000
+.*       Runtime enforced verses assembly time               * @Z25LENZ 10745000
+.*************************************************************          10750000
+.*                                                                      10760000
+.ENC0034Y ANOP                                                 @Z25LENZ 10765000
+         AIF   ('&KEY_WRAP_ROUTINE' EQ '').ENDODEBF            @Z25LENZ 10770000
+         AIF   ('&KEY_WRAP_ROUTINE(1)' NE '').ENC0036Y                  10810000
+         MNOTE 8,'IAZENOPR - KEY_WRAP_ROUTINE parm is missing'          10820000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 10825000
+         MEXIT                                                          10830000
+.ENC0036Y ANOP                                                          10840000
+         AIF   ('&KEY_WRAP_ROUTINE'(1,1) EQ '(').ENREC01Y      @Z25LENZ 10850000
+         LA    14,&KEY_WRAP_ROUTINE(1) Addrees to routine addr          10860000
+         MVC   SETKYWRP,0(14)          Move routine address             10870000
+         AGO   .ENDODEB                                                 10880000
+.ENREC01Y ANOP                                                          10890000
+         STG   &KEY_WRAP_ROUTINE(1),SETKYWRP Set routine addr           10910000
+         SPACE 1                                                        10920000
+.*                                                                      10930000
+.*************************************************************          10940000
+.*       DEBUG_OPT is optional for oper=setupe               * @Z25LENZ 10950000
+.*************************************************************          10960000
+.*                                                                      10970000
+.ENDODEB AIF   ('&DEBUG_OPT' EQ '').ENICSF                     @Z25LENZ 10980000
+         AIF   ('&DEBUG_OPT'(1,1) EQ '(').ENDEBVAL             @Z25LENZ 10990000
+         MNOTE 8,'IAZENOPR - DEBUG_OPT required in Rx form'    @Z25LENZ 11000000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11005000
+         MEXIT                                                          11010000
+.ENDEBVAL ANOP                                                          11020000
+.*                                                                      11030000
+         AIF   ('&DEBUG_OPT(1)' EQ 'R14').ENDDEBER             @Z25LENZ 11031000
+         AIF   ('&DEBUG_OPT(1)' EQ '14').ENDDEBER              @Z25LENZ 11032000
+         AGO   .ENDEBVA2                                       @Z25LENZ 11033000
+.*                                                             @Z25LENZ 11034000
+.ENDDEBER ANOP                                                 @Z25LENZ 11035000
+         MNOTE 8,'IAZENOPR - R14 or 14 cannot be with DEBUG_OPT'        11036000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11037000
+         MEXIT                                                 @Z25LENZ 11038000
+.ENDEBVA2 ANOP                                                 @Z25LENZ 11039000
+         STC   &DEBUG_OPT(1),SETDEBUG Set debug option         @Z25LENZ 11040000
+.*                                                             @Z25LENZ 11090400
+.************************************************************* @Z25LENZ 11090800
+.*       SECURE_ICSF is not a required paramter. If not      * @Z25LENZ 11091200
+.*       supplied the default is SECURE_ICSF=YES.            * @Z25LENZ 11091600
+.************************************************************* @Z25LENZ 11092000
+.*                                                             @Z25LENZ 11092400
+.ENICSF  MVI   SETICSF,ICSFYES     Use ICSF is default         @Z25LENZ 11092800
+         AIF   ('&SECURE_ICSF' EQ '').ENEVERI                  @Z25LENZ 11093200
+         AIF   ('&SECURE_ICSF(1)' NE '').ENICSFDO              @Z25LENZ 11093600
+         MNOTE 8,'IAZENOPR - SECURE_ICSF parm is missing'      @Z25LENZ 11094000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11094200
+         MEXIT                                                 @Z25LENZ 11094400
+.ENICSFDO ANOP                                                 @Z25LENZ 11094800
+.*                                                             @Z25LENZ 11095200
+         AIF   ('&SECURE_ICSF(1)' EQ 'YES').ENEVERI            @Z25LENZ 11095600
+         AIF   ('&SECURE_ICSF(1)' EQ 'NO').ENICSFNO            @Z25LENZ 11096000
+         MNOTE 8,'IAZENOPR - SECURE_ICSF parm is incorrect'    @Z25LENZ 11096400
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11096600
+         MEXIT                                                 @Z25LENZ 11096800
+.ENICSFNO ANOP                                                 @Z25LENZ 11097200
+         MVI   SETICSF,ICSFNO      Do not use ICSF security    @Z25LENZ 11097600
+.*                                                             @Z25LENZ 11098000
+.************************************************************* @Z25LENZ 11098400
+.*       ENCR_VER_TOK=  if not supplied then encrypted value * @Z25LENZ 11098800
+.*       value will be returned in output variable SETENTOK. * @Z25LENZ 11099200
+.************************************************************* @Z25LENZ 11100800
+.*                                                             @Z25LENZ 11101600
+.ENEVERI XC    SETENTOK,SETENTOK                               @Z25LENZ 11102400
+         AIF   ('&ENCR_VER_TOK' EQ '').ENC0200                 @Z25LENZ 11103200
+         AIF   ('&ENCR_VER_TOK(1)' NE '').ENEVER2              @Z25LENZ 11104000
+         MNOTE 8,'IAZENOPR - ENCR_VER_TOK parm is missing'     @Z25LENZ 11104800
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11105200
+         MEXIT                                                 @Z25LENZ 11105600
+.ENEVER2 ANOP                                                  @Z25LENZ 11106400
+.*                                                             @Z25LENZ 11107200
+         MVC   SETENTOK,&ENCR_VER_TOK(1) Set encry key token   @Z25LENZ 11108000
+         AGO   .ENC0200            Go call object service      @Z25LENZ 11108800
+.*                                                                      11110000
+.*************************************************************          11120000
+.*       Verify oper=cleanup                                 *          11130000
+.*************************************************************          11140000
+.*                                                                      11150000
+.ENCLEAN ANOP                                                           11160000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 11165000
+&LBL     SETC  ''                                              @Z25LENZ 11166000
+         MVI   ENCOPER,CLEANUP     Set oper=cleanup                     11170000
+         AGO   .ENC0200            Go call object service               11180000
+.*                                                                      11190000
+.*************************************************************          11200000
+.*       Verify oper=putrec                                  *          11210000
+.*************************************************************          11220000
+.*                                                                      11230000
+.ENCPUT  ANOP                                                           11240000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 11245000
+&LBL     SETC  ''                                              @Z25LENZ 11246000
+         MVI   ENCOPER,PUTRECO     Set oper=putrec                      11250000
+.*                                                                      11260000
+.*************************************************************          11270000
+.*       CALLER_KEY required for oper=putrec                 *          11280000
+.*************************************************************          11290000
+.*                                                                      11300000
+         AIF   ('&CALLER_KEY' NE '').ENC0025                            11310000
+         MNOTE 8,'IAZENOPR - CALLER_KEY must be specified'              11320000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11325000
+         MEXIT                                                          11330000
+.ENC0025 ANOP                                                           11340000
+         AIF   ('&CALLER_KEY(1)' NE '').ENC0026                         11350000
+         MNOTE 8,'IAZENOPR - CALLER_KEY parm is missing'                11360000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11365000
+         MEXIT                                                          11370000
+.ENC0026 ANOP                                                           11380000
+         AIF   ('&CALLER_KEY'(1,1) EQ '(').ENPCA001                     11390000
+         LA    14,&CALLER_KEY(1)   Ptr to caller_key                    11400000
+         MVC   PUTCAKEY,0(14)       and move to parm list               11410000
+         AGO   .ENRECIN                                                 11420000
+.ENPCA001 ANOP                                                          11430000
+         LGR   14,&CALLER_KEY(1)   Address of key --           @Z25LENZ 11435000
+         MVC   PUTCAKEY,0(14)       and move to parm list      @Z25LENZ 11440000
+.*                                                                      11450000
+.*************************************************************          11460000
+.*       REC_INFO required for oper=putrec                   *          11470000
+.*************************************************************          11480000
+.*                                                                      11490000
+.ENRECIN ANOP                                                           11500000
+         AIF   ('&REC_INFO' NE '').ENC0027                              11510000
+         MNOTE 8,'IAZENOPR - REC_INFO is missing'                       11520000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11525000
+         MEXIT                                                          11530000
+.ENC0027 ANOP                                                           11540000
+         AIF   ('&REC_INFO(1)' NE '').ENC0028                           11550000
+         MNOTE 8,'IAZENOPR - REC_INFO parm is missing'                  11560000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11565000
+         MEXIT                                                          11570000
+.ENC0028  ANOP                                                          11580000
+         AIF   ('&REC_INFO'(1,1) EQ '(').ENRIN001                       11590000
+         LA    14,&REC_INFO(1)     Get addr to rec_info        @Z25LENZ 11600000
+         AGO   .ENRIN002                                                11610000
+.ENRIN001 ANOP                                                          11620000
+         LGR   14,&REC_INFO(1)     Load rec_info addr                   11630000
+.ENRIN002 ANOP                                                          11640000
+         STG   14,PUTINFO          Set rec_info addr in obj             11650000
+.*                                                                      11660000
+.*************************************************************          11670000
+.*       REC_NUM  required for oper=putrec                   *          11680000
+.*************************************************************          11690000
+.*                                                                      11700000
+         AIF   ('&REC_NUM' NE '').ENC0029                               11710000
+         MNOTE 8,'IAZENOPR - REC_NUM  must be specified'                11720000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11725000
+         MEXIT                                                          11730000
+.ENC0029 ANOP                                                           11740000
+         AIF   ('&REC_NUM(1)' NE '').ENC0030                            11750000
+         MNOTE 8,'IAZENOPR - REC_NUM parm is missing'                   11760000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11765000
+         MEXIT                                                          11770000
+.ENC0030 ANOP                                                           11780000
+         AIF   ('&REC_NUM'(1,1) EQ '(').ENREP001                        11790000
+         LA    14,&REC_NUM(1)      Ptr to record number                 11800000
+         MVC   PUTRECNM,0(14)       and move to parm list               11810000
+         AGO   .ENRECLN                                                 11820000
+.ENREP001 ANOP                                                          11830000
+         STG   &REC_NUM(1),PUTRECNM Store record number        @Z25LENZ 11840000
+.*                                                                      11850000
+.*************************************************************          11860000
+.*       REC_LEN  required for oper=putrec                   *          11870000
+.*************************************************************          11880000
+.*                                                                      11890000
+.ENRECLN ANOP                                                           11900000
+         AIF   ('&REC_LEN' NE '').ENC0031                               11910000
+         MNOTE 8,'IAZENOPR - REC_LEN  must be specified'                11920000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11925000
+         MEXIT                                                          11930000
+.ENC0031 ANOP                                                           11940000
+         AIF   ('&REC_LEN(1)' NE '').ENC0032                            11950000
+         MNOTE 8,'IAZENOPR - REC_LEN parm is missing'                   11960000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 11965000
+         MEXIT                                                          11970000
+.ENC0032 ANOP                                                           11980000
+         AIF   ('&REC_LEN'(1,1) EQ '(').ENRELN01                        11990000
+         LA    14,&REC_LEN(1)      Ptr to record length                 12000000
+         MVC   PUTRELEN,0(14)       and move to parm list               12010000
+         AGO   .ENINFOLN                                                12020000
+.ENRELN01 ANOP                                                          12030000
+         ST    &REC_LEN(1),PUTRELEN  Store record length       @Z25LENZ 12040000
+.*                                                                      12050000
+.*************************************************************          12060000
+.*       REC_INFO_LEN for oper=putrec.                       *          12070000
+.*************************************************************          12080000
+.*                                                                      12090000
+.ENINFOLN ANOP                                                          12100000
+         AIF   ('&REC_INFO_LEN' NE '').ENC0033                          12110000
+         MNOTE 8,'IAZENOPR - REC_INFO_LEN is missing'                   12120000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 12125000
+         MEXIT                                                          12130000
+.ENC0033 ANOP                                                           12140000
+         AIF   ('&REC_INFO_LEN(1)' NE '').ENC0034                       12150000
+         MNOTE 8,'IAZENOPR - REC_INFO_LEN parm is missing'              12160000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 12165000
+         MEXIT                                                          12170000
+.ENC0034 ANOP                                                           12180000
+         AIF   ('&REC_INFO_LEN'(1,1) EQ '(').ENINFLN1                   12190000
+         LA    14,&REC_INFO_LEN(1)  Ptr to rec info length              12200000
+         MVC   PUTINLEN,0(14)        and move to parm list              12210000
+         AGO   .ENPRECO                                                 12220000
+.ENINFLN1 ANOP                                                          12230000
+         ST    &REC_INFO_LEN(1),PUTINLEN Store rec_info leng   @Z25LENZ 12240000
+         SPACE 1                                                        12250000
+.*                                                                      12260000
+.*************************************************************          12270000
+.*       RECORD required for oper=putrec                     *          12280000
+.*************************************************************          12290000
+.*                                                                      12300000
+.ENPRECO ANOP                                                           12310000
+         AIF   ('&RECORD' NE '').ENC0035                                12320000
+         MNOTE 8,'IAZENOPR - RECORD must be specified'                  12330000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 12335000
+         MEXIT                                                          12340000
+.ENC0035 ANOP                                                           12350000
+         AIF   ('&RECORD(1)' NE '').ENC0036                             12360000
+         MNOTE 8,'IAZENOPR - RECORD parm is missing'                    12370000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 12375000
+         MEXIT                                                          12380000
+.ENC0036 ANOP                                                           12390000
+         AIF   ('&RECORD'(1,1) EQ '(').ENREC001                         12400000
+         LA    14,&RECORD(1)       Load record addr                     12410000
+         STG   14,PUTREC           Store record address        @Z25LENZ 12415000
+         AGO   .ENREC002                                                12420000
+.ENREC001 ANOP                                                          12430000
+         STG   &RECORD(1),PUTREC   Store record address        @Z25LENZ 12440000
+.ENREC002 ANOP                                                          12450000
+         SPACE 1                                                        12470000
+.*                                                                      12480000
+.*************************************************************          12490000
+.*       CARR_CNTL_CH optional for oper=putrec               *          12500000
+.*************************************************************          12510000
+.*                                                                      12520000
+         AIF   ('&CARR_CNTL_CH' EQ '').ENCHC02                          12530000
+         AIF   ('&CARR_CNTL_CH(1)' NE '').ENCHC04                       12540000
+         MNOTE 8,'IAZENOPR - CARR_CNTL_CH parm is missing'              12550000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 12555000
+         MEXIT                                                          12560000
+.ENCHC04 ANOP                                                           12570000
+         AIF   ('&CARR_CNTL_CH'(1,1) EQ '(').ENCHC06                    12580000
+         LA    14,&CARR_CNTL_CH(1) Addr of carr_cntl_char               12590000
+         AGO   .ENCHC08                                                 12600000
+.ENCHC06 ANOP                                                           12610000
+         LGR   14,&CARR_CNTL_CH(1) Load carr_cntl_char                  12620000
+.ENCHC08 ANOP                                                           12630000
+         MVI   PUTCRYES,ENOPSPEC   Carriage control char               C12640000
+                                    has been specified                  12650000
+         STG   14,PUTCARRC         Store ptr to carriage cntrl @Z25LENZ 12660000
+         SPACE 1                                                        12670000
+.ENCHC02 ANOP                                                           12680000
+         AGO   .ENC0200            Go call object service               12690000
+.*                                                                      12700000
+.*************************************************************          12710000
+.*       Verify oper=getblk                                  *          12720000
+.*************************************************************          12730000
+.*                                                                      12740000
+.ENCGETB ANOP                                                           12750000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 12755000
+&LBL     SETC  ''                                              @Z25LENZ 12756000
+         MVI   ENCOPER,GETBLK      Set oper=getblk                      12760000
+         AGO   .ENC0200            Go call object service               12770000
+.*                                                                      12780000
+.*************************************************************          12790000
+.*       Verify oper=rtnblk                                  *          12800000
+.*************************************************************          12810000
+.*                                                                      12820000
+.ENCRTNB ANOP                                                           12830000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 12835000
+&LBL     SETC  ''                                              @Z25LENZ 12836000
+         MVI   ENCOPER,RTNBLK      Set oper=rtnblk                      12840000
+.*                                                                      12850000
+.*************************************************************          12860000
+.*       RTN_BLK_PTR required for oper=rtnblk                *          12870000
+.*************************************************************          12880000
+.*                                                                      12890000
+         AIF   ('&RTN_BLK_PTR' NE '').ENRTNB02                          12900000
+         MNOTE 8,'IAZENOPR - RTN_BLK_PTR must be specified'             12910000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 12915000
+         MEXIT                                                          12920000
+.ENRTNB02 ANOP                                                          12930000
+         AIF   ('&RTN_BLK_PTR(1)' NE '').ENRTNB04                       12940000
+         MNOTE 8,'IAZENOPR - RTN_BLK_PTR parm is missing'               12950000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 12955000
+         MEXIT                                                          12960000
+.ENRTNB04 ANOP                                                          12970000
+         AIF   ('&RTN_BLK_PTR'(1,1) EQ '(').ENRTNB06                    12980000
+         LA    14,&RTN_BLK_PTR(1)  Load data block pointer              12990000
+         AGO   .ENRTNB08                                                13000000
+.ENRTNB06 ANOP                                                          13010000
+         LGR   14,&RTN_BLK_PTR(1)  Load data block pointer              13020000
+.ENRTNB08 ANOP                                                          13030000
+         STG   14,RTN_PTR          Block pointer to return              13040000
+         AGO   .ENC0200            Go call object service               13050000
+.*                                                                      13060000
+.*************************************************************          13070000
+.*       Verify oper=primeblk                                *          13080000
+.*************************************************************          13090000
+.ENCRPIM ANOP                                                           13100000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 13105000
+&LBL     SETC  ''                                              @Z25LENZ 13106000
+         MVI   ENCOPER,PRIMEBL     Set oper=primeblk                    13110000
+.*                                                                      13120000
+.*************************************************************          13130000
+.*       PRIM_BLK_PTR required for oper=primeblk             *          13140000
+.*************************************************************          13150000
+.*                                                                      13160000
+         AIF   ('&PRIM_BLK_PTR' NE '').ENC0043                          13170000
+         MNOTE 8,'IAZENOPR - PRIM_BLK_PTR must be specified'            13180000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 13185000
+         MEXIT                                                          13190000
+.ENC0043 ANOP                                                           13200000
+         AIF   ('&PRIM_BLK_PTR(1)' NE '').ENC0044                       13210000
+         MNOTE 8,'IAZENOPR - PRIM_BLK_PTR parm is missing'              13220000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 13225000
+         MEXIT                                                          13230000
+.ENC0044 ANOP                                                           13240000
+         AIF   ('&PRIM_BLK_PTR'(1,1) EQ '(').ENPRIM01                   13250000
+         LA    14,&PRIM_BLK_PTR(1) Load pointer                         13260000
+         MVC   PRIM_PTR,0(14)      Set block ptr               @Z25LENZ 13265000
+         AGO   .ENPRIM04                                       @Z25LENZ 13270000
+.ENPRIM01 ANOP                                                          13280000
+         STG   &PRIM_BLK_PTR(1),PRIM_PTR Set block ptr         @Z25LENZ 13310000
+.*                                                                      13320000
+.*************************************************************          13330000
+.*       RESET optional for oper=primeblk                    * @Z25LENZ 13340000
+.*************************************************************          13350000
+.*                                                                      13360000
+.ENPRIM04 ANOP                                                 @Z25LENZ 13365000
+         AIF   ('&RESET' EQ 'NO').ENPRPOI                      @Z25LENZ 13370000
+         MVI    PRIRESET,ENOPSPEC  Denote reset specified      @Z25LENZ 13380000
+.*************************************************************          13530000
+.*       POINT optional for oper=primeblk                    * @Z25LENZ 13540000
+.*************************************************************          13550000
+.*                                                                      13560000
+.ENPRPOI ANOP                                                  @Z25LENZ 13570000
+         AIF   ('&POINT' EQ '').ENC0200                        @Z25LENZ 13572000
+         AIF   ('&POINT(1)' NE '').ENPRIPO                     @Z25LENZ 13574000
+         MNOTE 8,'IAZENOPR - POINT parm is missing'            @Z25LENZ 13576000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 13577000
+         MEXIT                                                 @Z25LENZ 13578000
+.ENPRIPO ANOP                                                  @Z25LENZ 13580000
+         AIF   ('&POINT'(1,1) EQ '(').ENPRIP02                 @Z25LENZ 13582000
+         LA    14,&POINT(1)    Addr of point rec #             @Z25LENZ 13584000
+         MVC   PRIPOINT,0(14)      Move point to parm list     @Z25LENZ 13584600
+         MVI   PRICUYES,ENOPSPEC   Denote point specified      @Z25LENZ 13585200
+         AGO   .ENC0200                                        @Z25LENZ 13586000
+.ENPRIP02 ANOP                                                 @Z25LENZ 13588000
+         ST    &POINT(1),PRIPOINT  Record # in parm list       @Z25LENZ 13590000
+         MVI   PRICUYES,ENOPSPEC   Denote point specified      @Z25LENZ 13592000
+         AGO   .ENC0200            Go call object service      @Z25LENZ 13594000
+.*                                                                      13600000
+.*************************************************************          13610000
+.*       Verify oper=getrec                                  *          13620000
+.*************************************************************          13630000
+.*                                                                      13640000
+.ENCGREC ANOP                                                           13650000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 13655000
+&LBL     SETC  ''                                              @Z25LENZ 13656000
+         MVI   ENCOPER,GETRECO     Set oper=getrec                      13660000
+.*                                                                      13670000
+.*************************************************************          13680000
+.*       CALLER_KEY required for oper=getrec                 *          13690000
+.*************************************************************          13700000
+.*                                                                      13710000
+         AIF   ('&CALLER_KEY' NE '').ENC0051                            13720000
+         MNOTE 8,'IAZENOPR - CALLER_KEY must be specified'              13730000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 13735000
+         MEXIT                                                          13740000
+.ENC0051 ANOP                                                           13750000
+         AIF   ('&CALLER_KEY(1)' NE '').ENC0052                         13760000
+         MNOTE 8,'IAZENOPR - CALLER_KEY parm is missing'                13770000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 13775000
+         MEXIT                                                          13780000
+.ENC0052 ANOP                                                           13790000
+         AIF   ('&CALLER_KEY'(1,1) EQ '(').ENPGCAL1                     13800000
+         LA    14,&CALLER_KEY(1)   Ptr to caller_key                    13810000
+         MVC   GETCAKEY,0(14)       and move to parm list               13820000
+         AGO   .ENGEREC                                                 13830000
+.ENPGCAL1 ANOP                                                          13840000
+         LGR   14,&CALLER_KEY(1)   Address of key --           @Z25LENZ 13845000
+         MVC   GETCAKEY,0(14)       and move to parm list      @Z25LENZ 13850000
+.*                                                                      13860000
+.*************************************************************          13870000
+.*       RECORD required for oper=getrec                     *          13880000
+.*************************************************************          13890000
+.*                                                                      13900000
+.ENGEREC ANOP                                                           13910000
+         AIF   ('&RECORD' NE '').ENC0053                                13920000
+         MNOTE 8,'IAZENOPR - RECORD must be specified'                  13930000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 13935000
+         MEXIT                                                          13940000
+.ENC0053 ANOP                                                           13950000
+         AIF   ('&RECORD(1)' NE '').ENC0054                             13960000
+         MNOTE 8,'IAZENOPR - RECORD parm is missing'                    13970000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 13975000
+         MEXIT                                                          13980000
+.ENC0054 ANOP                                                           13990000
+         AIF   ('&RECORD'(1,1) EQ '(').ENGET001                         14000000
+         LA    14,&RECORD(1)       Load record addr                     14010000
+         AGO   .ENGET002                                                14020000
+.ENGET001 ANOP                                                          14030000
+         LGR   14,&RECORD(1)       Record address                       14040000
+.ENGET002 ANOP                                                          14050000
+         STG   14,GETREC           Set GETREC addr in obj               14060000
+.*                                                                      14070000
+.*************************************************************          14080000
+.*       REC_INFO required for oper=getrec                   *          14090000
+.*************************************************************          14100000
+.*                                                                      14110000
+         AIF   ('&REC_INFO' NE '').ENGIN01                              14120000
+         MNOTE 8,'IAZENOPR - REC_INFO is missing'                       14130000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14135000
+         MEXIT                                                          14140000
+.ENGIN01 ANOP                                                           14150000
+         AIF   ('&REC_INFO(1)' NE '').ENGIN02                           14160000
+         MNOTE 8,'IAZENOPR - REC_INFO parm is missing'                  14170000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14175000
+         MEXIT                                                          14180000
+.ENGIN02 ANOP                                                           14190000
+         AIF   ('&REC_INFO'(1,1) EQ '(').ENGIN03                        14200000
+         LA    14,&REC_INFO(1)     Load rec_info addr                   14210000
+         AGO   .ENGIN04                                                 14220000
+.ENGIN03 ANOP                                                           14230000
+         LGR   14,&REC_INFO(1)     Load rec_info addr                   14240000
+.ENGIN04 ANOP                                                           14250000
+         STG   14,PUTINFO          Set rec_info addr in obj             14260000
+.*                                                                      14270000
+.*************************************************************          14280000
+.*       REC_AREA_LEN required for oper=getrec               *          14290000
+.*************************************************************          14300000
+.*                                                                      14310000
+         AIF   ('&REC_AREA_LEN' NE '').ENREA001                         14320000
+         MNOTE 8,'IAZENOPR - REC_AREA_LEN must be specified'            14330000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14335000
+         MEXIT                                                          14340000
+.ENREA001 ANOP                                                          14350000
+         AIF   ('&REC_AREA_LEN(1)' NE '').ENREA002                      14360000
+         MNOTE 8,'IAZENOPR - REC_AREA_LEN parm missing'                 14370000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14375000
+         MEXIT                                                          14380000
+.ENREA002 ANOP                                                          14390000
+         AIF   ('&REC_AREA_LEN'(1,1) EQ '(').ENREA003                   14400000
+         LA    14,&REC_AREA_LEN(1)  Ptr to rec area length              14410000
+         MVC   GETINREC,0(14)        and move to parm list              14420000
+         AGO   .ENWHATF                                        @Z25LENZ 14430000
+.ENREA003 ANOP                                                          14440000
+         ST    &REC_AREA_LEN(1),GETINREC Load rcd len parm list         14450000
+.*                                                             @Z25LENZ 14451000
+.************************************************************* @Z25LENZ 14452000
+.*       WHAT_FITS  optional for oper=getrec()               * @Z25LENZ 14453000
+.*       Default is WHAT_FITS=NO                             * @Z25LENZ 14454000
+.************************************************************* @SJ6LE   14455000
+.ENWHATF ANOP                                                  @Z25LENZ 14460000
+         AIF   ('&WHAT_FITS' EQ '').ENWHANO                    @Z25LENZ 14460200
+         AIF   ('&WHAT_FITS(1)' EQ 'NO').ENWHANO               @Z25LENZ 14460400
+         AIF   ('&WHAT_FITS(1)' EQ 'YES').ENWHYES              @Z25LENZ 14460600
+         MNOTE 8,'IAZENOPR - WHAT_FITS parm missing or incorrect'       14460800
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14461000
+         MEXIT                                                 @Z25LENZ 14461200
+.ENWHANO ANOP                                                  @Z25LENZ 14461400
+         MVI    GETWFITS,ENOPNOSP  WHAT_FITS = not specified   @Z25LENZ 14461600
+         AGO   .ENCCT001                                       @Z25LENZ 14461800
+.ENWHYES ANOP                                                  @Z25LENZ 14462000
+         MVI   GETWFITS,ENOPSPEC   WHAT_FITS specified         @Z25LENZ 14462200
+.*                                                             @Z25LENZ 14462400
+.************************************************************* @Z25LENZ 14462600
+.*       CCTL_OP is optional for oper=getrec()               * @Z25LENZ 14462800
+.*       Default is CCTL_OP=ASIS                             * @Z25LENZ 14463000
+.************************************************************* @SJ6LE   14463200
+.*                                                             @Z25LENZ 14463400
+.ENCCT001 ANOP                                                 @Z25LENZ 14463600
+         AIF   ('&CCTL_OP' EQ '').ENCCT002                     @Z25LENZ 14463800
+         AIF   ('&WHAT_FITS' EQ '').ENCCT011                   @Z25LENZ 14464000
+         MNOTE 8,'IAZENOPR -CCTP_OP!WHAT_FITS are mutually exclusive'   14464200
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14464400
+         MEXIT                                                 @Z25LENZ 14464600
+.ENCCT011 ANOP                                                 @Z25LENZ 14464800
+         AIF   ('&CCTL_OP(1)' EQ 'ASIS').ENCCT002              @Z25LENZ 14465000
+         AIF   ('&CCTL_OP(1)' EQ 'ALWAYS').ENCCT003            @Z25LENZ 14465200
+         AIF   ('&CCTL_OP(1)' EQ 'NEVER').ENCCT004             @Z25LENZ 14465400
+         AIF   ('&CCTL_OP'(1,1) EQ '(').ENCCT005               @Z25LENZ 14465600
+         MNOTE 8,'IAZENOPR - CCTL_OP parm missing or incorrect'         14465800
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14466000
+         MEXIT                                                 @Z25LENZ 14466200
+.ENCCT002 ANOP                                                 @Z25LENZ 14466400
+         MVI   GETCCTL,GETASIS      Return CCTL as in object   @Z25LENZ 14466600
+         AGO   .ENC0200                                        @Z25LENZ 14466800
+.ENCCT003 ANOP                                                 @Z25LENZ 14467000
+         MVI   GETCCTL,GETALWAY     Always CCTL on return      @Z25LENZ 14467200
+         AGO   .ENC0200                                        @Z25LENZ 14467400
+.ENCCT004 ANOP                                                 @Z25LENZ 14467600
+         MVI   GETCCTL,GETNEVER     Never CCTL on return       @Z25LENZ 14467800
+         AGO   .ENC0200                                        @Z25LENZ 14468000
+.ENCCT005 ANOP                                                 @Z25LENZ 14468200
+         STC   &CCTL_OP(1),GETCCTL  Set CCTL option            @Z25LENZ 14468400
+         AGO   .ENC0200                                        @Z25LENZ 14468600
+.*                                                                      14470000
+.*************************************************************          14480000
+.*       Verify oper=replrec                                 *          14490000
+.*************************************************************          14500000
+.*                                                                      14510000
+.ENCRREC ANOP                                                           14520000
+         MNOTE 8,'IAZENOPR - oper=replrec not supported'       @Z25LENZ 14521000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14522000
+         MEXIT                                                 @Z25LENZ 14523000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 14525000
+&LBL     SETC  ''                                              @Z25LENZ 14526000
+         MVI   ENCOPER,REPLREC     Set oper=replrec                     14530000
+.*                                                                      14540000
+.*************************************************************          14550000
+.*       RECORD required for oper=replrec                    *          14560000
+.*************************************************************          14570000
+.*                                                                      14580000
+         AIF   ('&RECORD' NE '').ENC0055                                14590000
+         MNOTE 8,'IAZENOPR - RECORD must be specified'                  14600000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14605000
+         MEXIT                                                          14610000
+.ENC0055 ANOP                                                           14620000
+         AIF   ('&RECORD(1)' NE '').ENC0056                             14630000
+         MNOTE 8,'IAZENOPR - RECORD parm is missing'                    14640000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14645000
+         MEXIT                                                          14650000
+.ENC0056 ANOP                                                           14660000
+         AIF   ('&RECORD'(1,1) EQ '(').ENRER001                         14670000
+         LA    14,&RECORD(1)       Load record addr                     14680000
+         AGO   .ENREP002                                                14690000
+.ENRER001 ANOP                                                          14700000
+         LGR   14,&RECORD(1)       Record address                       14710000
+.ENREP002 ANOP                                                          14720000
+         STG   14,REPREC           Set REPREC addr in obj               14730000
+.*                                                                      14740000
+.*************************************************************          14750000
+.*       REC_LEN  required for oper=replrec                  *          14760000
+.*************************************************************          14770000
+.*                                                                      14780000
+         AIF   ('&REC_LEN' NE '').ENC0057                               14790000
+         MNOTE 8,'IAZENOPR - REC_LEN  must be specified'                14800000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14805000
+         MEXIT                                                          14810000
+.ENC0057 ANOP                                                           14820000
+         AIF   ('&REC_LEN(1)' NE '').ENC0058                            14830000
+         MNOTE 8,'IAZENOPR - REC_LEN parm is missing'                   14840000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 14845000
+         MEXIT                                                          14850000
+.ENC0058 ANOP                                                           14860000
+         AIF   ('&REC_LEN'(1,1) EQ '(').ENRELEN1                        14870000
+         LA    14,&REC_LEN(1)      Ptr to record number                 14880000
+         MVC   RERECLEN,0(14)       and move to parm list               14890000
+         AGO   .ENREPNUM                                                14900000
+.ENRELEN1 ANOP                                                          14910000
+         ST    &REC_LEN(1),RERECLEN Store rec # in parm list            14920000
+.*                                                                      14930000
+.*************************************************************          14940000
+.*       REL_REC# required for oper=replrec                  * @Z25LENZ 14950000
+.*************************************************************          14960000
+.*                                                                      14970000
+.ENREPNUM ANOP                                                          14980000
+         AIF   ('&REL_REC#' NE '').ENC0059                     @Z25LENZ 14990000
+         MNOTE 8,'IAZENOPR - REL_REC# must be specified'       @Z25LENZ 15000000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 15005000
+         MEXIT                                                          15010000
+.ENC0059 ANOP                                                           15020000
+         AIF   ('&REL_REC#(1)' NE '').ENC0060                  @Z25LENZ 15030000
+         MNOTE 8,'IAZENOPR - REL_REC# parm is missing'         @Z25LENZ 15040000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 15045000
+         MEXIT                                                          15050000
+.ENC0060 ANOP                                                           15060000
+         AIF   ('&REL_REC#'(1,1) EQ '(').ENRPN001              @Z25LENZ 15070000
+         LA    14,&REL_REC#(1)     Ptr to record number        @Z25LENZ 15080000
+         MVC   REPRECNM,0(14)       and move to parm list               15090000
+         AGO   .ENRECAL                                                 15100000
+.ENRPN001 ANOP                                                          15110000
+         ST    &REL_REC#(1),REPRECNM Store rec # in parm list  @Z25LENZ 15120000
+.*                                                                      15130000
+.*************************************************************          15140000
+.*       CALLER_KEY required for oper=replrec                *          15150000
+.*************************************************************          15160000
+.*                                                                      15170000
+.ENRECAL ANOP                                                           15180000
+         AIF   ('&CALLER_KEY' NE '').ENC0061                            15190000
+         MNOTE 8,'IAZENOPR - CALLER_KEY  must be specified'             15200000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 15205000
+         MEXIT                                                          15210000
+.ENC0061 ANOP                                                           15220000
+         AIF   ('&CALLER_KEY(1)' NE '').ENC0062                         15230000
+         MNOTE 8,'IAZENOPR - CALLER_KEY parm is missing'                15240000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 15245000
+         MEXIT                                                          15250000
+.ENC0062 ANOP                                                           15260000
+         AIF   ('&CALLER_KEY'(1,1) EQ '(').ENRCA001                     15270000
+         LA    14,&CALLER_KEY(1)   Ptr to caller_key                    15280000
+         MVC   REPCAKEY,0(14)       and move to parm list               15290000
+         AGO   .ENRCA04                                                 15300000
+.ENRCA001 ANOP                                                          15310000
+         LGR   14,&CALLER_KEY(1)   Address of key --           @Z25LENZ 15320000
+         MVC   REPCAKEY,0(14)       and move to parm list      @Z25LENZ 15325000
+.*                                                                      15330000
+.*************************************************************          15340000
+.*       CARR_CNTL_CH optional for oper=replrec              *          15350000
+.*************************************************************          15360000
+.*                                                                      15370000
+.ENRCA04 ANOP                                                           15380000
+         AIF   ('&CARR_CNTL_CH' EQ '').ENC0200                          15390000
+         AIF   ('&CARR_CNTL_CH(1)' NE '').ENRCA06                       15400000
+         MNOTE 8,'IAZENOPR - CARR_CNTL_CH parm is missing'              15410000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 15415000
+         MEXIT                                                          15420000
+.ENRCA06 AIF   ('&CARR_CNTL_CH'(1,1) EQ '(').ENRCA09                    15430000
+         LA    14,&CARR_CNTL_CH(1) Addr of carr_cntl_char               15440000
+         AGO   .ENRCA08                                                 15450000
+.ENRCA09 ANOP                                                           15460000
+         LGR   14,&CARR_CNTL_CH(1) Load carr_cntl_char                  15470000
+.ENRCA08 ANOP                                                           15480000
+         STG   14,REPCARRC         Store carr_cntl_char        @Z25LENZ 15490000
+         MVI   REPCRYES,ENOPSPEC   Carriage cntrl specified             15500000
+         AGO   .ENC0200            Go call object service               15520000
+.*                                                                      15530000
+.*************************************************************          15540000
+.*       Verify oper=query                                   *          15550000
+.*************************************************************          15560000
+.*                                                                      15570000
+.ENCGRAN ANOP                                                           15580000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 15585000
+&LBL     SETC  ''                                              @Z25LENZ 15586000
+         MVI   ENCOPER,QUERY       Set oper=getrang                     15590000
+         AGO   .ENC0200            Go call object service               15600000
+.*                                                                      15610000
+.*************************************************************          15620000
+.*       Verify oper=point                                   *          15630000
+.*************************************************************          15640000
+.*                                                                      15650000
+.ENCPOIN ANOP                                                           15660000
+.*                                                                      15670000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 15675000
+&LBL     SETC  ''                                              @Z25LENZ 15676000
+         MVI   ENCOPER,POINT       Set oper=point                       15680000
+.*                                                                      15690000
+.*************************************************************          15700000
+.*       POINT required for oper=point get object - but not  * @Z25LENZ 15710000
+.*       put object.                                         * @Z25LENZ 15715000
+.*************************************************************          15720000
+.*                                                                      15730000
+         AIF   ('&LASTB' EQ '').ENC0063                        @Z25LENZ 15732000
+         MVI   POINTLST,ENOPSPEC   LASTB specified             @Z25LENZ 15735000
+.ENC0063 ANOP                                                  @Z25LENZ 15736000
+         AIF   ('&POINT' EQ '').ENC0200                        @Z25LENZ 15740000
+         AIF   ('&POINT(1)' NE '').ENC0064                              15780000
+         MNOTE 8,'IAZENOPR - POINT parm is missing'                     15790000
+&ENM01   DS    0H                  End of IAZENOPR macro       @Z25LENZ 15795000
+         MEXIT                                                          15800000
+.ENC0064 ANOP                                                           15810000
+         MVI   POINTSPC,ENOPSPEC   Point specified             @Z25LENZ 15815000
+         AIF   ('&POINT'(1,1) EQ '(').ENPPPT01                          15820000
+         LA    14,&POINT(1)        Addr of point # and move             15830000
+         MVC   POINTPOS,0(14)       to parm list                        15840000
+         AGO   .ENC0200            Go call object service               15850000
+.ENPPPT01 ANOP                                                          15860000
+         ST    &POINT(1),POINTPOS  Store in call parm                   15870000
+         SPACE 1                                                        15880000
+         AGO   .ENC0200            Go call object service               15890000
+.*************************************************************          15900000
+.*       Verify oper=endreq                                  *          15910000
+.*************************************************************          15920000
+.*                                                                      15930000
+.ENCENDR ANOP                                                           15940000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 15945000
+&LBL     SETC  ''                                              @Z25LENZ 15946000
+         MVI   ENCOPER,ENDREQ      Set oper=endreq                      15950000
+         AGO   .ENC0200            Go call object service               15960000
+.*                                                                      15970000
+.*************************************************************          15980000
+.*       Verify oper=flush                                   *          15990000
+.*************************************************************          16000000
+.*                                                                      16010000
+.ENCFLUS ANOP                                                           16020000
+&LBL     XC    ENCPARMS,ENCPARMS   Zero parameter/output area  @Z25LENZ 16025000
+&LBL     SETC  ''                                              @Z25LENZ 16026000
+         MVI   ENCOPER,FLUSH       Set oper=flush                       16030000
+.ENC0200 ANOP                                                           16040000
+.*                                                                      16050000
+.*----------------------------------------------------------*           16060000
+.*       Set up branch to IAZENSER service. Locate its      *           16070000
+.*       address going from the CVT to the JESCT, to the    *           16080000
+.*       FSIB and pull the entry point address from field   *           16090000
+.*       FSIBENSR.                                          *           16100000
+.*----------------------------------------------------------*           16110000
+         SPACE 1                                                        16120000
+         LG    1,ENCOBPTR          Make sure R1 has obj PTR    @Z25LENZ 16125000
+         LLGT  15,16(,0)           Get CVT address                      16130000
+         LLGT  15,296(15)          Get JESCT address                    16140000
+         LLGT  15,100(15)          Get JESCT extension addr             16150000
+         LLGT  15,100(15)          Get IAZBASE cb addr (FSIB)           16160000
+         LLGT  15,32(15)           Get IAZENSER addr from FSIB          16170000
+.*                                                                      16180000
+         BASR  14,15               Call compress/encrypt serv           16190000
+         AIF   ('&OPER(1)' EQ 'PUTREC').ENC0070                         16200000
+         AIF   ('&OPER(1)' EQ 'GETBLK').ENC0072                         16210000
+         AIF   ('&OPER(1)' EQ 'ENDREQ').ENC0074                         16220000
+         AIF   ('&OPER(1)' EQ 'FLUSH').ENC0076                          16230000
+         AIF   ('&OPER(1)' EQ 'RTNBLK').ENC0084                         16240000
+         AIF   ('&OPER(1)' EQ 'GETRECO').ENC0088               @Z25LENZ 16245000
+         AGO   .ENC0078                                                 16250000
+.ENC0070 ANOP                                                           16260000
+         CHI   15,0                If oper=putrec not RC=0 then         16270000
+         JNE   &ENM06               continue                   @Z25LENZ 16280000
+         LLGF  R1,PUTREC#          Dataset record #            @Z25LENZ 16282000
+         J     &ENM01              Return                      @Z25LENZ 16284000
+&ENM06   DS    0H                  End of IAZENOPR macro       @Z25LENZ 16286000
+         CHI   15,4                If oper=putrec failed then           16290000
+         JE    &ENM01               just continue                       16300000
+.*       RC is either 8 or 12 - in either case return data     @Z25LENZ 16302000
+.*       block address in register 0                           @Z25LENZ 16305000
+         LG    0,PUTDATAB          Load data block ptr                  16310000
+         AGO   .ENC0078                                                 16320000
+.ENC0072 ANOP                                                           16330000
+         CHI   15,4                If oper=getblk failed then           16340000
+         JE    &ENM01               just continue                       16350000
+         LG    0,GETDATAB          Load data block ptr                  16360000
+         AGO   .ENC0078                                                 16370000
+.ENC0074 ANOP                                                           16380000
+         CHI   15,4                If oper=endreq failed then           16390000
+         JE    &ENM01               just continue                       16400000
+         LG    0,ENREQR0           Load data block ptr - may           C16410000
+                                    be zeroptr                          16420000
+         AGO   .ENC0078                                                 16430000
+.ENC0076 ANOP                                                           16440000
+         CHI   15,4                If oper=flush failed then   @Z25LENZ 16450000
+         JE    &ENM01               just continue                       16460000
+         LG    0,ENFLUR0           Load data block ptr - may   @Z25LENZC16470000
+                                    be zeroptr                 @Z25LENZ 16480000
+         AGO   .ENC0078                                                 16490000
+.ENC0084 ANOP                                                           16540000
+         CHI   15,0                If oper=rtnblk success and           16550000
+         JE    &ENM01               no data block then continue         16560000
+         CHI   15,4                If oper=rtnblk failed then           16570000
+         JE    &ENM01               just continue                       16580000
+         LG    0,RTNDATAB          Load data block ptr                  16590000
+         AGO   .ENC0078                                                 16600000
+.ENC0088 ANOP                                                  @Z25LENZ 16601000
+         CHI   15,0                If not RC=0 from oper=getrco         16602000
+         JNE   &ENM01               then just return           @Z25LENZ 16603000
+         LG    R1,GETREC#          Otherwise return dataset rec        C16604000
+                                   associated with rec returned         16605000
+         AGO   .ENC0078                                        @Z25LENZ 16606000
+.ENC0078 ANOP                                                           16610000
+         DROP  &OBJECT_PTR(1)      Drop object pointer                  16620000
+.ENC0099 ANOP                                                           16630000
+&ENM01   DS    0H                  End of IAZENOPR macro                16640000
+         MEND                                                           99999999

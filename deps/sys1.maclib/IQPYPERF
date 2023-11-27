@@ -1,0 +1,652 @@
+*                                                                       00001000
+* %DCL IQPYPERF_INCLUDED CHAR EXT;                                      00002000
+* %DEACTIVATE IQPYPERF_INCLUDED;                                        00003000
+* %IF IQPYPERF_INCLUDED = '' %THEN                                      00004000
+* %DO;                                                                  00005000
+*/* Macro made bi-lingual on 16122. CBGEN compile date 15295         */ 00006770
+*% /*                                                                   00007000
+         MACRO                                                          00008000
+         IQPYPERF &DSECT=YES,&LIST=YES,&TITLE=YES,&PERF=YES,           *00009000
+               &PERFDTHDR=COND                                          00010000
+         GBLC  &IQPYPERF_INCLUDED                                       00011000
+         GBLC  &ZCBPRINT                                                00012000
+&IQPYPERF_INCLUDED SETC 'YES'                                           00013000
+         AIF   ('&LIST' EQ 'NONE').P0                                   00014000
+         AIF   ('&TITLE' EQ 'NO').P5                                    00015000
+ TITLE   'IQPYPERF  - PCIE Performance Data Return Area               '*00016000
+                                                                        00017000
+.P5      ANOP                                                           00018000
+**/ IQPYPERF_1:;                                                        00019000
+*/****START OF SPECIFICATIONS****************************************** 00020000
+*                                                                       00021000
+*    $MAC (IQPYPERF) COMP(SCIQP) PROD(IQP):                             00022000
+*                                                                       00023000
+*01* MACRO NAME: IQPYPERF                                               00024000
+*                                                                       00025000
+*01* DSECT NAME: PERF, PerfDTHdr                                        00026000
+*                                                                       00027000
+*01* DESCRIPTIVE NAME: PCIE Performance Data Return Area                00028000
+*                                                                       00029000
+*02*   ACRONYM: PERF                                                    00030000
+**/                                                                     00031000
+*/*01* PROPRIETARY STATEMENT=                                        */ 00032000
+*/***PROPRIETARY_STATEMENT********************************************/ 00033000
+*/*                                                                  */ 00034000
+*/*                                                                  */ 00035000
+*/* LICENSED MATERIALS - PROPERTY OF IBM                             */ 00036000
+*/* 5650-ZOS COPYRIGHT IBM CORP. 2013, 2016                          */ 00037490
+*/*                                                                  */ 00038000
+*/* STATUS= HBB77A0                                                  */ 00039490
+*/*                                                                  */ 00040000
+*/***END_OF_PROPRIETARY_STATEMENT*************************************/ 00041000
+*/*                                                                     00042000
+*                                                                       00043000
+*01* EXTERNAL CLASSIFICATION: PI                                        00044490
+*01* END OF EXTERNAL CLASSIFICATION:                                    00045000
+*                                                                       00046000
+*01* FUNCTION:                                                          00047000
+*                                                                       00048000
+*      This is the mapping for a PCIE Performance Data Return           00049000
+*      Area that is returned by IQPINFO for PERFDATA option.            00050000
+*      This output area is good for the performance statistics          00051000
+*      of one PCIe function.                                            00052000
+*                                                                       00053000
+*      The output buffer may consist of the following sections:         00054000
+*                                                                       00055000
+*        - PCIE general info + PFMB data        (Mapped by IQPYPERF)    00056000
+*                                                                       00057000
+*        - PCIE performance measurement block data                      00057200
+*                                               (Mapped by IQPYPFMB)    00057400
+*                                                                       00057600
+*        - Device Type specific data (e.g. H/W accelerator devices)     00058000
+*                                               (Mapped by FPGYPERF)    00059000
+*                                                                       00060000
+*        - Application type specific data (e.g. H/W accelerator         00061000
+*          device with the zEDC function)       (Mapped by FPZYPERF)    00062000
+*                                                                       00063000
+*      Note that the Device Type specific data and the Application      00064000
+*      Type specific data may or may not be present depending on        00065004
+*      whether this information is provided by this type of device.     00066000
+*                                                                       00067000
+*      The following is an example of the structure that is returned    00068000
+*      for a hardware accelerator type device that has the              00069000
+*      zEnterprise Data Compression (zEDC) function (application        00070000
+*      type):                                                           00071000
+*                                                                       00072000
+*                 IQPYPERF                                              00073000
+*               +---------------------+                                 00074000
+*               ! PerfData Header     !                                 00075000
+*               !  - Version          !                                 00076000
+*               !  - PFID             !                                 00077000
+*               !  - Status           !                                 00078000
+*               !  - PCHID            !                                 00079000
+*               !  - Device type      !                                 00080000
+*               !  - Device name      !                                 00081000
+*               !    ...              !                                 00082000
+*               !  - Dev type section !                                 00083000
+*               !    offset, or 0    -------+                           00084690
+*               !  - PFMB offset/len------+ !                           00085380
+*               !    ...              !   ! !                           00086070
+*               +---------------------+   ! !                           00086760
+*               !  - PFMB statistics  ! <-+ !                           00087450
+*               !    (mapped by       !     !                           00088140
+*               !     IQPYPFMB)       !     !                           00088830
+*               +---------------------+ <---+                           00089520
+* Common to  -->! Device Type Header  !                                 00091000
+* all PCIE      ! - DT Data version   !                                 00092000
+* device types  ! - DT Data length    !                                 00093000
+*               !                     !                                 00094000
+*               ! (Mapped by PerfDTHdr!                                 00095000
+*               ! in IQPYPERF)        !                                 00096000
+*               !                     !        HwaPCM                   00097000
+*               +---------------------+      +---------------------+    00098000
+*               ! Device Type         ! <===>! Hwa Common header   !    00099000
+*               !   Specific Data     !      ! - Appl type         !    00100000
+*               ! (Mapped by HwaPCM   !      ! - Appl type desc    !    00101000
+*               ! in FPGYPERF)       -----+  ! - Appl type section !    00102000
+*               !                     !   !  !   offset, or 0      !    00103000
+*               ! (Length of this     !   !  ! - Service layer     !    00104000
+*               !  section is in      !   !  !   statistics        !    00105000
+*               !  "DT Data length"   !   !  +---------------------+    00106000
+*               !  of Device Type     !   !                             00107000
+*               !  Header)            !   !                             00108000
+*               !                     !   !                             00109000
+*               +---------------------+ <-+     HwaATH                  00110000
+* Common to  -->! Appl Type Header    ! <===>+---------------------+    00111000
+* all H/W       ! - AT Data version   !      ! Appl Type header    !    00112000
+* accelerator   ! - AT Data length    !      !                     !    00113000
+* application   !                     !      !                     !    00114000
+* types         ! (Mapped by HwaATH   !      +---------------------+    00115000
+*               ! in FPGYPERF)        !                                 00116000
+*               !                     !         FPZYPERF                00117000
+*               +---------------------+      +---------------------+    00118000
+*               ! Appl Type Specific  ! <===>! Compression Appl    !    00119000
+*               ! Data (Device        !      ! type specific       !    00120000
+*               ! dependent)          !      ! statistics          !    00121000
+*               ! (Mapped by FPZYPERF)!      !                     !    00122000
+*               !                     !      !                     !    00123000
+*               ! (Length of this     !      !                     !    00124000
+*               !  section is in      !      +---------------------+    00125000
+*               !  "AT Data Length")  !                                 00126000
+*               +---------------------+                                 00127000
+*                                                                       00128000
+*         Notes on diagram:                                             00129000
+*                                                                       00129100
+*           - The PerfData header contains the offset and length        00129200
+*             in words of the PCIE performance measurement block        00129300
+*             (PFMB) mapped by IQPYPFMB.  The PFMB contains a           00129400
+*             format field that indicates which measurement             00129500
+*             information is present.                                   00129600
+*                                                                       00129700
+*           - The version number in the PerfData header (PerfHdr)       00130790
+*             controls the format and length of the PCIE-specific       00131580
+*             data in the header.  There is no separate length          00132370
+*             field that defines the length of the header.  The         00133160
+*             version number should be examined to determine the        00133950
+*             contents of the header information returned.        @02C  00134740
+*                                                                       00136000
+*           - The version number in the device type header              00137290
+*             (PerfDTHdr) defines the format of the device type         00137580
+*             specific data that follows.  The length field in          00137870
+*             device type header defines the length of that data,       00138160
+*             which in this example is the hardware accelerator         00138450
+*             service layer information.  This length does not          00138740
+*             include the length of the application type specific       00139030
+*             information.                                        @02C  00139320
+*                                                                       00139610
+*           - The length field in the application type header           00139900
+*             defines the length of the application type specific       00140190
+*             data, which in this example is the zEDC (compression)     00140480
+*             specific information.                               @02A  00140770
+*                                                                       00142000
+*           - With the exception of the PFMB, each major section        00143690
+*             has the offset to the next section.  The offset is        00144380
+*             from the start of the header for that section.      @01C  00145070
+*                                                                       00146000
+*           - The device type specific (e.g., hardware accelerator)     00147000
+*             common section identifies the application type of the     00148000
+*             data that follows (e.g., compression).  This is the       00149000
+*             binary application type retrieved from the device.        00150000
+*                                                                       00151000
+*           - The device type specific data can also be used for        00152000
+*             non-hardware accelerator type devices.                    00153000
+*                                                                       00154000
+*                                                                       00155000
+*                                                                       00156000
+*01* METHOD OF ACCESS:                                                  00157000
+*                                                                       00158000
+*02*   PL/X:                                                            00159000
+*                                                                       00160000
+*        %INCLUDE SYSLIB(IQPYPERF)                                      00161000
+*                                                                       00162000
+*02*   ASM:                                                             00163000
+*                                                                       00164000
+*        With DSECT=NO, storage is allocated in line                    00165000
+*        and addressability is provided thru that DSECT or CSECT.       00166000
+*        With DSECT=YES, a DSECT is produced and "USING PERF,reg"       00167000
+*        is required for addressability.  Here "reg" contains the       00168000
+*        address of the PERF control block.                             00169000
+*        The default is DSECT=YES.                                      00170000
+*                                                                       00171000
+*01* SIZE:  Release Dependent.   Refer to the mapping.                  00172000
+*            PERFDTHDR -- X'0008' bytes                                 00173000
+*            PERF      -- X'0100' bytes                                 00174490
+*                                                                       00175000
+*01* POINTED TO BY:  Local pointers in dynamic storage (in IQPPRINF).   00176000
+*            The address of the performance data return area is         00177000
+*            passed as a parameter in the IQPINFO call.                 00178000
+*                                                                       00179000
+*01* CREATED BY: User application. Passed to IQPPRINF as parameter.     00180000
+*                                                                       00181000
+*01* DELETED BY: User application                                       00182000
+*                                                                       00183000
+*01* STORAGE ATTRIBUTES:                                                00184000
+*02*   SUBPOOL:   Caller supplied                                       00185000
+*02*   KEY:       Caller supplied                                       00186000
+*02*   RESIDENCY: Caller supplied                                       00187000
+*02*   MAIN STORAGE:       YES                                          00188000
+*02*   AUXILIARY STORAGE:  NO                                           00189000
+*02*   VIRTUAL STORAGE:    YES                                          00190000
+*02*   DATA SPACE:  NO                                                  00191000
+*                                                                       00192000
+*                                                                       00193000
+*01* FREQUENCY:  Each time the IQPINFO service is called.               00194000
+*                                                                       00195000
+*01* SERIALIZATION: None                                                00196000
+*                                                                       00197000
+*01* DEPENDENCIES: None                                                 00198000
+*                                                                       00199000
+*01* NOTES:      CBGEN must be manually run for this macro]]]           00200000
+*                                                                       00201000
+*01* COMPONENT: PCIE (SCIQP)                                            00202000
+*                                                                       00203000
+*01* DISTRIBUTION LIBRARY:  AMACLIB                                     00204000
+*                                                                       00205000
+*01* EYE-CATCHER: NONE                                                  00206000
+*                                                                       00207000
+*01* CHANGE-ACTIVITY:                                                   00208000
+*                                                                       00209000
+*    $L0=IOSPEN   HBB7790 110530 PDI6: PCIE Initial Release (B821.00)   00210000
+*    $P1=ME22162  HBB7790 110727 PDJI: ASAADMAC IQPYPFMB                00211000
+*    $P2=ME22870  HBB7790 111103 PDJI: Update prolog                    00212000
+*    $L1=FPGA     HBB7790 130130 PDDR: Add device type specific         00213000
+*                                      performance statistics           00214000
+*                                      offset and section               00215000
+*    $01=OA44791  HBB7790 150315 PDSW: Add PFMB offset and length.      00215140
+*                                      Add compatibility mapping        00215200
+*                                      for location of PFMB with        00215300
+*                                      respect to the PerfHdr field.    00215400
+*                                      Remove PERFBASE macro logic      00215500
+*                                      and PERFPTR declare (not used).  00215600
+*    $02=OA47913  HBB77A0 160215 PDDR: PCIE SMC-L ISM Support           00215650
+*                                      - Generate PCIE function type    00215700
+*                                        (PFT) constants via IQPYPFT    00215750
+*                                      - Add version 2 header info      00215800
+*                                      - Add #PRAGMA to imbed           00215850
+*                                        specific assembler stmts       00215900
+*    $03=OA51289  HBB7790 170915 PDDR: Add physical port number         00215950
+*                                                                       00216000
+****END OF SPECIFICATIONS*********************************************/ 00217000
+*% /*                                                                   00218000
+.P0      ANOP                                                           00219000
+         AIF   ('&ZCBPRINT' EQ 'NO').P1                                 00220000
+         AIF   ('&LIST' EQ 'YES').P2                                    00221000
+.P1      ANOP                                                           00222000
+         PUSH  PRINT                                                    00223000
+         PRINT OFF                                                      00224000
+.P2      ANOP                                                           00225000
+         AIF   ('&PERF' EQ 'NO').L0002                                  00226000
+         AIF   ('&DSECT' EQ 'YES').L0003                                00227000
+         AIF   ('&PERF' NE 'YES').L0002                                 00228000
+.L0003   ANOP                                                           00229000
+*                                                                       00230000
+* ********************************************************************  00231000
+* *                                                                  *  00232000
+* * Performance Data Return Area                                     *  00233000
+* *                                                                     00234000
+* ********************************************************************  00235000
+*                                                                       00236000
+*                                                                       00237000
+         AIF   ('&DSECT' EQ 'YES').L0004                                00238000
+PERF     DS    0D        Performance Data Return Area                   00239000
+         AGO   .L0005                                                   00240000
+.L0004   ANOP                                                           00241000
+PERF     DSECT           Performance Data Return Area                   00242000
+.L0005   ANOP                                                           00243000
+PERFHDR  DS    0CL256    +00 Header Area                                00245980
+PERFVERSION DS H         +00 Version number of the header area          00246970
+         DS    CL2       +02 Reserved                                   00248000
+PERFPFID DS    F         +04 PCIE Function ID (PFID) for PCIE Function *00249000
+                         upon which performance data is returned        00250000
+PERFSTATUS DS  0BL2      +08 PFID device status flags (Multiple bits   *00251490
+                         may be set)                                    00252000
+PERFSTATUS_FLAG1 DS 0B   Status flag one                                00253490
+PERFSTATALLOC EQU X'80'  PFID is allocated                              00254000
+PERFSTATDP EQU X'40'     PFID is deallocate-pending                     00255000
+PERFSTATPERMERR EQU X'20' PFID is in permanent error                    00256000
+         ORG   PERFSTATUS_FLAG1+1                                       00256300
+PERFSTATUS_FLAG2 DS B    Status flag two                                00256600
+PERFPCHID DS   H         +0A Physical channel identifier for the PCI   *00257000
+                         function                                       00258000
+PERFDEVTYPE DS CL4       +0C Device Type for Function. It identifies   *00259000
+                         if this is a RoCE, hardware accelerator, or   *00260000
+                         some other type of device.                     00261000
+PERFDEVNAME DS CL24      +10 Device Name for Function                   00262000
+PERFJOBNAME DS CL8       +28 Job name of current owner of the PFID      00263000
+PERFOWNERASID DS H       +30 ASID of current owner of the PFID          00264000
+PERFPFT  DS    X         +32 PCIE function type                         00265290
+PERFPORT DS    X         +33 Physical port number for which this PCI   *00265640
+                         function is associated. If zero, then either  *00265700
+                         the port field is not applicable, or there is *00265760
+                         more than one port associated with the PCI    *00265820
+                         function.                                      00265880
+PERFDMAASCNT DS F        +34 Count of DMA Address Spaces defined for   *00266000
+                         PCIE Function                                  00267000
+PERFALLOCTIME DS CL8     +38 Time Stamp of when device was allocated    00268000
+PERFDTOFFSET DS H        +40 Offset of device type specific            *00269000
+                         performance statistics section from the start *00270000
+                         of PCIE Performance data header. 0 = No       *00271000
+                         device type performance statistics provided    00272000
+PERFPFMBOFFSET DS H      +42 Offset of the PFMB from the start of the  *00273090
+                         PCIE Performance data header                   00273180
+PERFPFMBLEN DS X         +44 Length of the PFMB in words                00273270
+         DS    CL59      +45 Reserved for future use                    00273360
+PERFHDREND DS  0C        +80 End of information in the version 1       *00273470
+                         performance data header                        00273490
+*                                                                       00273540
+* ********************************************************************  00273630
+* *                                                                  *  00273720
+* * Version 2 Performance Data Header Information                    *  00274400
+* *                                                                     00275160
+* ********************************************************************  00275250
+*                                                                       00275340
+*                                                                       00275430
+PERFHDRV2START DS 0C     +80 Start of information in the version 2     *00275540
+                         performance data header                        00275560
+PERFUTILSTRINGS DS 0CL64 +80 Up to four 16 byte utility strings that   *00275580
+                         were defined for the PCIE function. The       *00275600
+                         meaning of the utility strings is PCIE        *00275620
+                         function dependent. If no utility strings     *00275640
+                         were defined, the area is set to zeroes. If   *00275660
+                         fewer than four utility strings were defined, *00275680
+                         the string positions that were not defined    *00275700
+                         are set to zeroes.                             00275720
+PERFELEMUTILSTRARRAY DS CL16 +80 Utility string array                   00275750
+         ORG   PERFUTILSTRINGS+64                                       00275760
+         DS    CL64      +C0 Reserved                                   00275780
+PERFHDRV2END DS 0C       +100 End of information in the version 2      *00275800
+                         performance data header                        00275820
+PERF_LEN EQU   *-PERF                                                   00276000
+.L0002   ANOP                                                           00277000
+         AIF   ('&PERFDTHDR' EQ 'NO').L0006                             00278000
+         AIF   ('&DSECT' EQ 'YES').L0007                                00279000
+         AIF   ('&PERFDTHDR' NE 'YES').L0006                            00280000
+.L0007   ANOP                                                           00281000
+*                                                                       00282000
+* ********************************************************************  00283000
+* *                                                                  *  00284000
+* * Device Type Header                                               *  00285000
+* *                                                                  *  00286000
+* * This is the header that precedes the device type specific        *  00287000
+* * statistics.  It is present if PerfDTOffset is non-zero.          *  00288000
+* *                                                                  *  00289000
+* * The content of the device type specific statistics, including    *  00290000
+* * the version number and length shown below, is defined in a       *  00291000
+* * device type specific macro (e.g., FPGYPERF for hardware          *  00292000
+* * accelerator devices).                                            *  00293000
+* *                                                                     00294000
+* ********************************************************************  00295000
+*                                                                       00296000
+*                                                                       00297000
+         AIF   ('&DSECT' EQ 'YES').L0008                                00298000
+PERFDTHDR DS   0D                                                       00299000
+         AGO   .L0009                                                   00300000
+.L0008   ANOP                                                           00301000
+PERFDTHDR DSECT                                                         00302000
+.L0009   ANOP                                                           00303000
+*                                                                       00304000
+*                                      Device type header for device    00305000
+*                                      type specific performance        00306000
+*                                      statistics                       00307000
+*                                                                       00308000
+PERFDTHDR_VERSION DS H   +00 Version number of the device type         *00309000
+                         specific data that follows                     00310000
+PERFDTHDR_LENGTH DS H    +02 Length of the device type specific data   *00311000
+                         (mapped by a device type specific macro) that *00312000
+                         follows. It does not include the length of    *00313000
+                         this device type header. It does not include  *00314000
+                         the application type specific information.     00315000
+         DS    CL4       +04 Reserved                                   00316000
+PERFDTHDR_END DS 0C      +08 End of device type header and start of    *00317000
+                         device type specific data                      00318000
+*                                                                       00319000
+* ********************************************************************  00320000
+* *                                                                  *  00321000
+* * Performance Data Header Version (PerfVersion) Constants          *  00322490
+* *                                                                     00323000
+* ********************************************************************  00324000
+*                                                                       00325000
+*                                                                       00326000
+PERF#VER EQU   2         Current version of control block               00327690
+PERF#VER01 EQU 1         Version 1 of performance data header           00328380
+PERF#VER02 EQU 2         Version 2 of performance data header           00329070
+PERFDTHDR_LEN EQU *-PERFDTHDR                                           00330000
+.L0006   ANOP                                                           00331000
+* *******************************************************************   00331030
+* *                                                                 *   00331060
+* * The following field is defined for compatibility with the       *   00331090
+* * original definition of this macro.  In the initial support for  *   00331120
+* * the zEC12 and zBC12 processors, the Performance Measurement     *   00331150
+* * Block (PFMB) was defined as a 64 byte field starting at offset  *   00331180
+* * x'80' from the beginning of the performance data block header   *   00331210
+* * (PerfHdr).  On subsequent processors, the PFMB has a different  *   00331240
+* * length depending on the PCIE function type (e.g., RoCE, zEDC).  *   00331270
+* * Therefore, to allow for different PFMB lengths and to allow     *   00331300
+* * the PerfData header to be expanded compatibly in the future,    *   00331330
+* * programs should now use the PerfPFMBOffset to determine the     *   00331360
+* * offset of the PFMB from the beginning of the header, and        *   00331390
+* * PerfPFMBLen to determine the length of the PFMB.  Macro         *   00331420
+* * IQPYPFMB should be used to determine the format of the PFMB.    *   00331450
+* *                                                                 *   00331480
+* * This field will be deleted in a future release.                 *   00331510
+* *                                                                 *   00331540
+* *******************************************************************   00331570
+PERF_PFMB EQU PERFHDREND,64 +80 Performance Measurement Block (PFMB)    00331600
+                                                                        00331630
+* *******************************************************************   00331660
+* *                                                                 *   00331690
+* *  PCIE Function Type (PerfPFT) Constants                         *   00331720
+* *                                                                 *   00331750
+* *******************************************************************   00331780
+         IQPYPFT PREFIX=PERFPFT                                         00331810
+         AIF   ('&ZCBPRINT' EQ 'NO').P3                                 00332000
+         AIF   ('&LIST' EQ 'YES').P4                                    00333000
+.P3      ANOP                                                           00334000
+         POP   PRINT                                                    00335000
+.P4      ANOP                                                           00336000
+.P_EXIT  ANOP                                                           00337000
+         MEND                                                           00338000
+**/ IQPYPERF_2:;                                                        00339000
+* %IQPYPERF_INCLUDED = 'YES';                                           00340000
+* %DCL ZCBPRINT CHAR EXT;                                               00341000
+* %DEACTIVATE ZCBPRINT;                                                 00342000
+* %DCL IQPYPERF_LIST CHAR EXT;                                          00343000
+* %DEACTIVATE IQPYPERF_LIST;                                            00344000
+* %IF IQPYPERF_LIST ^= 'NO' &                                           00345000
+*    ZCBPRINT ^= 'NO' %THEN                                             00346000
+*   %GOTO IQPYPERF_3;                                                   00347000
+*   @LIST PUSH NOECHO;                                                  00348000
+*   @LIST NOASSEMBLE NOECHO;                                            00349000
+*   @LIST OFF C NOECHO;                                                 00350000
+* %IQPYPERF_3:;                                                         00351000
+*/* Start of PL/X Source                                             */ 00352000
+*                                                                       00361000
+*/********************************************************************/ 00362000
+*/*                                                                  */ 00363000
+*/* Performance Data Return Area                                     */ 00364000
+*/*                                                              @L1A*/ 00365000
+*/********************************************************************/ 00366000
+*DCL                                                                    00367000
+* 1  PERF    Bdy(Dword) Based,    /* Performance Data Return Area    */ 00368000
+*  3 PerfHDR,                     /*+00 Header Area                  */ 00369000
+*    5 PerfVersion   Fixed(16),   /*+00 Version number of the header    00370590
+*                                    area                        @02C*/ 00371180
+*    5 *             Char(2),     /*+02 Reserved                     */ 00372000
+*    5 PerfPFID      Fixed(32),   /*+04 PCIE Function ID (PFID) for     00373000
+*                                    PCIE Function upon which           00374000
+*                                    performance data is returned    */ 00375000
+*    5 PerfStatus    Bit(16),     /*+08 PFID device status flags        00376490
+*                                    (Multiple bits may be set)      */ 00377000
+*      7 PerfStatus_Flag1 Bit(8), /* Status flag one             @01A*/ 00378490
+*        9 PerfStatAlloc  Bit(1), /* PFID is allocated           @01C*/ 00378980
+*        9 PerfStatDP     Bit(1), /* PFID is deallocate-pending  @01C*/ 00379470
+*        9 PerfStatPermErr Bit(1),/* PFID is in permanent error  @01C*/ 00379960
+*      7 PerfStatus_Flag2 Bit(8), /* Status flag two             @01A*/ 00380450
+*    5 PerfPCHID     Fixed(16),   /*+0A Physical channel identifier     00381000
+*                                    for the PCI function            */ 00382000
+*    5 PerfDevType   Char(04),    /*+0C Device Type for Function.       00383000
+*                                    It identifies if this is a RoCE,   00384000
+*                                    hardware accelerator, or some      00385000
+*                                    other type of device.           */ 00386000
+*    5 PerfDevName   Char(24),    /*+10 Device Name for Function     */ 00387000
+*    5 PerfJobName   Char(8),     /*+28 Job name of current owner of    00388000
+*                                    the PFID                        */ 00389000
+*    5 PerfOwnerAsid Fixed(16),   /*+30 ASID of current owner of the    00390000
+*                                    PFID                            */ 00391000
+*    5 PerfPFT       Fixed(8),    /*+32 PCIE function type       @01A*/ 00392290
+*    5 PerfPort      Fixed(8),    /*+33 Physical port number for which  00392630
+*                                    this PCI function is associated.   00392680
+*                                    If zero, then either the port      00392730
+*                                    field is not applicable, or there  00392780
+*                                    is more than one port associated   00392830
+*                                    with the PCI function.      @03A*/ 00392880
+*    5 PerfDMAAsCnt  Fixed(32),   /*+34 Count of DMA Address Spaces     00393000
+*                                    defined for PCIE Function       */ 00394000
+*    5 PerfAllocTime Char(8),     /*+38 Time Stamp of when device was   00395000
+*                                    allocated                       */ 00396000
+*    5 PerfDTOffset  Fixed(16),   /*+40 Offset of device type           00397000
+*                                    specific performance statistics    00398000
+*                                    section from the start of          00399000
+*                                    PCIE Performance data header.      00400000
+*                                    0 = No device type performance     00401000
+*                                        statistics provided     @L1A*/ 00402000
+*    5 PerfPFMBOffset Fixed(16),  /*+42 Offset of the PFMB from the     00403290
+*                                    start of the PCIE Performance      00403580
+*                                    data header                 @01A*/ 00403870
+*    5 PerfPFMBLen   Fixed(8),    /*+44 Length of the PFMB in           00404160
+*                                    words                       @01A*/ 00404450
+*    5 *             Char(59),    /*+45 Reserved for future use  @L1C*/ 00404740
+*    5 PerfHdrEnd Char(0),        /*+80 End of information in the       00405040
+*                                    version 1 performance data         00405050
+*                                    header                      @02C*/ 00405060
+*                                                                       00405070
+*/********************************************************************/ 00405080
+*/*                                                                  */ 00405090
+*/* Version 2 Performance Data Header Information                    */ 00405100
+*/*                                                              @02A*/ 00405110
+*/********************************************************************/ 00405120
+*    5 PerfHdrV2Start Char(0),      /*+80 Start of information in the   00405130
+*                                      version 2 performance data       00405140
+*                                      header                    @02A*/ 00405150
+*    5 PerfUtilStrings Char(64),    /*+80 Up to four 16 byte utility    00405160
+*                                      strings that were defined for    00405170
+*                                      the PCIE function.  The          00405180
+*                                      meaning of the utility strings   00405190
+*                                      is PCIE function dependent.      00405200
+*                                      If no utility strings were       00405210
+*                                      defined, the area is set to      00405220
+*                                      zeroes.  If fewer than four      00405230
+*                                      utility strings were defined,    00405240
+*                                      the string positions that were   00405250
+*                                      not defined are set to zeroes.   00405260
+*                                                                @02A*/ 00405270
+*      7 PerfElemUtilStrArray(4) Char(16),                              00405285
+*                                   /*+80 Utility string array   @02A*/ 00405290
+*    5 * Char(64),                  /*+C0 Reserved               @02A*/ 00405300
+*    5 PerfHdrV2End Char(0);        /*+100 End of information in the    00405310
+*                                      version 2 performance data       00405320
+*                                      header                    @02A*/ 00405330
+*                                                                       00405610
+*/********************************************************************/ 00405900
+*/*                                                                  */ 00406190
+*/* The following field is defined for compatibility with the        */ 00406480
+*/* original definition of this macro.  In the initial support for   */ 00406770
+*/* the zEC12 and zBC12 processors, the Performance Measurement      */ 00407060
+*/* Block (PFMB) was defined as a 64 byte field starting at offset   */ 00407350
+*/* x'80' from the beginning of the performance data block header    */ 00407640
+*/* (PerfHdr).  On subsequent processors, the PFMB has a different   */ 00407930
+*/* length depending on the PCIE function type (e.g., RoCE, zEDC).   */ 00408220
+*/* Therefore, to allow for different PFMB lengths and to allow      */ 00408510
+*/* the PerfData header to be expanded compatibly in the future,     */ 00408800
+*/* programs should now use the PerfPFMBOffset to determine the      */ 00409090
+*/* offset of the PFMB from the beginning of the header, and         */ 00409380
+*/* PerfPFMBLen to determine the length of the PFMB.  Macro          */ 00409670
+*/* IQPYPFMB should be used to determine the format of the PFMB.     */ 00409960
+*/*                                                                  */ 00410250
+*/* This field will be deleted in a future release.                  */ 00410540
+*/*                                                              @01A*/ 00410830
+*/********************************************************************/ 00411120
+*DCL                                                                    00411900
+*  PERF_PFMB Char(64) Bdy(DWord) Based(Addr(PerfHdrEnd));               00412390
+*                                   /*+80 Performance Measurement       00412880
+*                                      Block (PFMB)              @02C*/ 00413370
+*                                                                       00414000
+*/********************************************************************/ 00415000
+*/*                                                                  */ 00416000
+*/* Device Type Header                                               */ 00417000
+*/*                                                                  */ 00418000
+*/* This is the header that precedes the device type specific        */ 00419000
+*/* statistics.  It is present if PerfDTOffset is non-zero.          */ 00420000
+*/*                                                                  */ 00421000
+*/* The content of the device type specific statistics, including    */ 00422000
+*/* the version number and length shown below, is defined in a       */ 00423000
+*/* device type specific macro (e.g., FPGYPERF for hardware          */ 00424000
+*/* accelerator devices).                                            */ 00425000
+*/*                                                              @L1A*/ 00426000
+*/********************************************************************/ 00427000
+*DCL                                                                    00428000
+* 1 PerfDTHdr Char(8) Bdy(Dword) Based(ADDR(Perf)+PerfDTOffset),        00429000
+*                                   /* Device type header for device    00430000
+*                                      type specific performance        00431000
+*                                      statistics                @L1A*/ 00432000
+*   3 PerfDTHdr_Version Fixed(16),  /*+00 Version number of the device  00433000
+*                                      type specific data that          00434000
+*                                      follows                   @L1A*/ 00435000
+*   3 PerfDTHdr_Length  Fixed(16),  /*+02 Length of the device type     00436000
+*                                      specific data (mapped by a       00437000
+*                                      device type specific macro)      00438000
+*                                      that follows.  It does not       00439000
+*                                      include the length of this       00440000
+*                                      device type header.  It does     00441000
+*                                      not include the application      00442000
+*                                      type specific information.       00443000
+*                                                                @L1A*/ 00444000
+*   3 *                 Char(4),    /*+04 Reserved               @L1A*/ 00445000
+*   3 PerfDTHdr_End     Char(0);    /*+08 End of device type header and 00446000
+*                                      start of device type specific    00447000
+*                                      data                      @L1A*/ 00448000
+*                                                                       00449000
+*/********************************************************************/ 00450000
+*/*                                                                  */ 00451000
+*/* Performance Data Header Version (PerfVersion) Constants          */ 00452590
+*/*                                                              @01C*/ 00453180
+*/********************************************************************/ 00454000
+*DCL                                                                    00455000
+*  Perf#Ver   Fixed(16) Constant(Perf#Ver02), /* Current version of     00456690
+*                                    control block               @02C*/ 00457380
+*  Perf#Ver01 Fixed(16) Constant(1), /* Version 1 of performance        00458070
+*                                       data header              @02C*/ 00458760
+*  Perf#Ver02 Fixed(16) Constant(2); /* Version 2 of performance        00459450
+*                                       data header              @02A*/ 00460140
+*                                                                       00461000
+*/********************************************************************/ 00462390
+*/*                                                                  */ 00462780
+*/* PCIE Function Type (PerfPFT) Constants                           */ 00463170
+*/*                                                              @01C*/ 00463560
+*/********************************************************************/ 00463950
+*%IQPYPFT_Prefix = 'PERFPFT';       /* PFT constants will start with    00464430
+*                                      PERFPFT                   @02C*/ 00464520
+*?AsaAdMac Name(IQPYPFT) Listopt(COND); /* Generate constants    @02C*/ 00464610
+*                                                                       00464700
+*@LOGIC;                                                                00464790
+*#PRAGMA TOOL=CBGEN.                                                    00464880
+*#ADD.                                                                  00464970
+** *******************************************************************  00465060
+** *                                                                 *  00465150
+** * The following field is defined for compatibility with the       *  00465240
+** * original definition of this macro.  In the initial support for  *  00465330
+** * the zEC12 and zBC12 processors, the Performance Measurement     *  00465420
+** * Block (PFMB) was defined as a 64 byte field starting at offset  *  00465510
+** * x'80' from the beginning of the performance data block header   *  00465600
+** * (PerfHdr).  On subsequent processors, the PFMB has a different  *  00465690
+** * length depending on the PCIE function type (e.g., RoCE, zEDC).  *  00465780
+** * Therefore, to allow for different PFMB lengths and to allow     *  00465870
+** * the PerfData header to be expanded compatibly in the future,    *  00465960
+** * programs should now use the PerfPFMBOffset to determine the     *  00466050
+** * offset of the PFMB from the beginning of the header, and        *  00466140
+** * PerfPFMBLen to determine the length of the PFMB.  Macro         *  00466230
+** * IQPYPFMB should be used to determine the format of the PFMB.    *  00466320
+** *                                                                 *  00466410
+** * This field will be deleted in a future release.                 *  00466500
+** *                                                                 *  00466590
+** *******************************************************************  00466680
+*PERF_PFMB EQU PERFHDREND,64 +80 Performance Measurement Block (PFMB)   00466770
+*                                                                       00466860
+** *******************************************************************  00466950
+** *                                                                 *  00467040
+** *  PCIE Function Type (PerfPFT) Constants                         *  00467130
+** *                                                                 *  00467220
+** *******************************************************************  00467310
+*         IQPYPFT PREFIX=PERFPFT                                        00467400
+*#EADD.                                                                 00467490
+*#MAP.PERF_PFMB                                                         00467580
+*#EPRAGMA.                                                              00467670
+*@ENDLOGIC;                                                             00467760
+*                                                                       00469000
+*/* End of PL/X Source                                               */ 00471000
+* %IF IQPYPERF_LIST ^= 'NO' &                                           00472000
+*    ZCBPRINT ^= 'NO' %THEN                                             00473000
+*   %GOTO IQPYPERF_4;                                                   00474000
+*   @LIST POP NOECHO;                                                   00475000
+* %IQPYPERF_4:;                                                         00476000
+* %END;                                                                 00477000

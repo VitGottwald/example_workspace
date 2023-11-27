@@ -1,0 +1,98 @@
+*********************************************************************** 00045400
+*                                                                     * 00090800
+*  $MAC(SYNADAF): SYNAD ANALYZE AND FORMAT                            * 00136200
+*                                                                     * 00181600
+*  DESCRIPTIVE-NAME = SYNAD ANALYZE AND FORMAT                        * 00227000
+*                                                                     * 00272400
+*  PROGRAM-NAME = SAM                                                 * 00317800
+*                                                                     * 00499400
+.*PROPRIETARY V3 STATEMENT                                              00503400
+.*LICENSED MATERIALS - PROPERTY OF IBM                                  00507400
+.*"RESTRICTED MATERIALS OF IBM"                                         00511400
+.*5695-DF1                                                              00515400
+.*COPYRIGHT 1992, 2011 IBM CORP.                                        00520400
+.*END PROPRIETARY V3 STATEMENT                                          00525400
+*                                                                     * 00531400
+* STATUS = z/OS 1.13 DFSMS                                            * 00534600
+*                                                                     * 00537800
+* FUNCTION = Invokes SVC 68, which returns storage for a general      * 00576800
+*      register save area and text describing the I/O error.          * 00615800
+*      Meaningful only in a non-VSAM access method SYNAD routine.     * 00654800
+*      The storage should be returned by issuing the SYNADRLS      @L2A 00693800
+*      macro if you do not plan on abandoning it.                  @L2A 00732800
+*                                                                     * 00771800
+* CHANGE ACTIVITY =                                                   * 00799000
+* $L1=DFP,HDP1102,,STLDHC: MVS/XA CLEANUP                             * 00826200
+* $01=OY46548,HDP3330,910301,SJPLCC: BDAM DATA ABOVE THE LINE     @01A* 00853400
+* $L2=64BIT,JDZ1D10,20101116,SVLWER: 64 bit message               @L2A* 00880600
+*                                                                     * 00908000
+*********************************************************************** 00953400
+         MACRO                                                          01000000
+&NAME    SYNADAF &ACSMETH=,&PARM1=,&PARM2=                              01050000
+         GBLC  &SYSAM64    AMODE64=YES set by SYSSTATE macro       @L2A 01100000
+         GBLC  &SYSASCE    ASCENV=AR or ANY set by SYSSTATE macro  @L2A 01150000
+         GBLA  &SYSALVL    ARCHLVL set by SYSSTATE macro           @L2A 01200000
+         LCLC  &CB1                                                     03000000
+         SYSSTATE TEST    TEST HOW MACROS ARE TO EXPAND            @L2A 03050000
+         AIF   ('&SYSAM64' EQ 'YES').E0    GO IF AMODE64=YES       @L2A 03100000
+         AIF   (('&SYSASCE' NE '') AND ('&SYSASCE' NE 'P')).E1     @L2A 03150000
+         AIF   (T'&ACSMETH EQ 'O').AMERR                                05000000
+         AIF   ('&ACSMETH' EQ '(0)').AMERR                              06000000
+&CB1     SETC  '&ACSMETH'(1,1)                                          07000000
+         AIF   ('&CB1' EQ '(').AMERR                                    08000000
+&CB1     SETC  '(0)'                                                    09000000
+         AIF   ('&ACSMETH' EQ 'EXCP').AMCOM                             10000000
+&CB1     SETC  '(1)'                                                    11000000
+         AIF   ('&ACSMETH' EQ 'BPAM').AMCOM                             12000000
+&CB1     SETC  '(2)'                                                    13000000
+         AIF   ('&ACSMETH' EQ 'BSAM').AMCOM                             14000000
+&CB1     SETC  '(3)'                                                    15000000
+         AIF   ('&ACSMETH' EQ 'QSAM').AMCOM                             16000000
+&CB1     SETC  '(4)'                                                    17000000
+         AIF   ('&ACSMETH' EQ 'BDAM').AMCOM                             18000000
+&CB1     SETC  '(5)'                                                    19000000
+         AIF   ('&ACSMETH' EQ 'BISAM').AMCOM                            20000000
+&CB1     SETC  '(6)'                                                    21000000
+         AIF   ('&ACSMETH' EQ 'QISAM').AMCOM                            22000000
+&CB1     SETC  '(7)'                                                    23000000
+         AIF   ('&ACSMETH' EQ 'BTAM').AMCOM                             24000000
+&CB1     SETC  '(8)'                                                    25000000
+         AIF   ('&ACSMETH' EQ 'QTAM').AMCOM                             26000000
+&CB1     SETC  '(9)'                                                    27000000
+         AIF   ('&ACSMETH' EQ 'GAM').AMCOM                              28000000
+.AMERR   MNOTE 8,' ERROR ** ACCESS METHOD NOT SPEC. OR ILLEGAL '  15138 28800000
+         MEXIT                                                    15138 29600000
+.* Avoid needing a code base register if possible.                 @L2A 29650000
+.AMCOM   AIF   (&SYSALVL LT 2).Old  Go if not z/Architecture       @L2C 29700000
+&NAME    NILH  15,X'00FF'     Clear high order byte                @L2A 29750000
+         AIF   ('&CB1' EQ '(0)').ParmA  Go if code is zero         @L2A 29800000
+         OILH  15,&CB1*256    Turn on high order bits              @L2A 29850000
+         AGO   .ParmA                                              @L2A 29900000
+.Old     ANOP                                                      @L2A 29950000
+&NAME    BC    15,*+6         BRANCH AROUND LIST                   @01C 30450000
+         DC    AL1&CB1        ACCESS METHOD CODE                        35000000
+         DC    AL1(0)                                              @01C 35050000
+         ICM   15,B'1000',*-2 SET ACCESS METHOD IN REG. 15         @01C 35100000
+.ParmA   ANOP                                                      @L2A 35150000
+*  NOTE: ABOVE LINE DESTROYS REGISTER 15.                          @01A 35200000
+         AIF   (T'&PARM1 EQ 'O').PARMB                             @L2C 35250000
+         AIF   ('&PARM1' EQ '(1)').PARMB                                38000000
+&CB1     SETC  '&PARM1'(1,1)                                            39000000
+         AIF   (NOT ('&CB1' EQ '(')).SYMA                               40000000
+         LR    1,&PARM1(1)    GET ADDRESS IN REG. 1                     41000000
+         AGO   .PARMB                                                   42000000
+.SYMA    LA    1,&PARM1       GET ADDRESS IN REG. 1                     43000000
+.PARMB   AIF   (T'&PARM2 EQ 'O').COM                                    44000000
+         AIF   ('&PARM2' EQ '(0)').COM                                  45000000
+&CB1     SETC  '&PARM2'(1,1)                                            46000000
+         AIF   (NOT ('&CB1' EQ '(')).SYMB                               47000000
+         LR    0,&PARM2(1)    SET PARAMETER IN REG. 0                   48000000
+         AGO   .COM                                                     49000000
+.SYMB    LA    0,&PARM2(1)    GET PARAMETER IN REG. 0                   50000000
+.COM     SVC   68             ISSUE SVC                                 51000000
+         MEXIT                                                     @L2A 51050000
+.E0      IGGERMAC 203,SYNADAF   THE SYNADAF MACRO DOES NOT SUPPORT @L2A 51100000
+         MEXIT                    SYSSTATE AMODE64=YES             @L2A 51150000
+.E1      IGGERMAC 204,SYNADAF   THE SYNADAF MACRO DOES NOT SUPPORT @L2A 51200000
+         MEXIT                    SYSSTATE ASCENV=AR OR ANY        @L2A 51250000
+         MEND                                                           52000000

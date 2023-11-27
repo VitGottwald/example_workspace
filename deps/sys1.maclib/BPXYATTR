@@ -1,0 +1,580 @@
+*        %GOTO ATTRPRO  ;        /* Bilingual header                            
+         MACRO                                                                  
+         BPXYATTR &DSECT=YES,&LIST=YES                                          
+         GBLB  &ATTR411                                                         
+         AIF   (&ATTR411 EQ 1).E411                                             
+&ATTR411 SETB  1                                                                
+         AIF   ('&LIST' EQ 'YES').A411                                          
+         PUSH  PRINT  BPXYATTR: File attributes for v_ system calls             
+         PRINT OFF                                                              
+         AGO   .A411                                                            
+*                                  */                                           
+*%ATTRPRO : ;                                                                   
+*/****START OF SPECIFICATIONS******************************************         
+*                                                                               
+*    $MAC (BPXYATTR) COMP(SCPX1) PROD(BPX):                                     
+*                                                                               
+*01* MACRO NAME: BPXYATTR                                                       
+*                                                                               
+*01* DSECT NAME: N/A                                                            
+*                                                                               
+*01* DESCRIPTIVE NAME: Attribute Structure for the Logical File System          
+*                                                                               
+*02*   ACRONYM: ATTR                                                            
+**/                                                                             
+*/*01* PROPRIETARY STATEMENT=                                        */         
+*/***PROPRIETARY_STATEMENT********************************************/         
+*/*                                                                  */         
+*/*                                                                  */         
+*/* LICENSED MATERIALS - PROPERTY OF IBM                             */         
+*/* 5650-ZOS COPYRIGHT IBM CORP. 1993, 2021                          */         
+*/*                                                                  */         
+*/* STATUS= HBB77D0                                                  */         
+*/*                                                                  */         
+*/***END_OF_PROPRIETARY_STATEMENT*************************************/         
+*/*                                                                             
+*                                                                               
+*01* EXTERNAL CLASSIFICATION:  GUPI                                             
+*01* END OF EXTERNAL CLASSIFICATION:                                            
+*                                                                               
+*01* FUNCTION:                                                                  
+*                                                                               
+*      The ATTR maps file attributes that the logical file system is            
+*      interested in.                                                           
+*                                                                               
+*01* METHOD OF ACCESS:                                                          
+*                                                                               
+*02*   PL/X:                                                                    
+*                                                                               
+*        %INCLUDE SYSLIB(BPXYATTR)                                              
+*        By default, the ATTR is based on AttrPtr.  If                          
+*        other basing is desired, use %ATTRBASE='BASED(XXXXXX)'.                
+*        If %ATTRBASE='BASED(ATTRPTR)' is coded, a Declare for                  
+*        ATTRPTR is also generated.                                             
+*                                                                               
+*        By default, the ATTR uses no VIA.  If access                           
+*        register usage is desired, code %ATTRVIA='VIA(XXXXXX)'.                
+*        If %ATTRVIA='VIA(AttrAlet)' is coded, a Declare for                    
+*        AttrAlet is also generated.                                            
+*                                                                               
+*02*   ASM:                                                                     
+*                                                                               
+*        BPXYATTR  DSECT=YES!NO,LIST=YES!NO                                     
+*                                                                               
+*        With DSECT=NO, storage is allocated in line                            
+*        and addressability is provided thru that DSECT or CSECT.               
+*        With DSECT=YES, a DSECT is produced and "USING ATTR,reg"               
+*        is required for addressability.  Here "reg" contains the               
+*        address of ATTR#LENGTH bytes of storage.                               
+*        The defaults are DSECT=YES and LIST=YES.                               
+*                                                                               
+*01* SIZE: Release dependent.  Refer to the mapping.                            
+*                                                                               
+*01* POINTED TO BY: In dynamic storage of LFS routines or caller of             
+*                   Vnode interface services.                                   
+*                                                                               
+*01* CREATED BY: LFS Syscall Routines and callers of Vnode interface            
+*                services                                                       
+*                                                                               
+*01* DELETED BY: LFS Syscall Routines or caller of Vnode interface              
+*                services                                                       
+*                                                                               
+*01* STORAGE ATTRIBUTES:                                                        
+*02*   SUBPOOL: N/A                                                             
+*02*   KEY: N/A                                                                 
+*02*   RESIDENCY: Writeable Storage                                             
+*                                                                               
+*01* FREQUENCY: 1 per syscall                                                   
+*                                                                               
+*01* SERIALIZATION: N/A                                                         
+*                                                                               
+*01* DEPENDENCIES: None                                                         
+*                                                                               
+*01* NOTES: The following mapping macros are closely related.                   
+*                                                                               
+*      BPXYATT  - Interface between an application and the LFS for              
+*                 BPX1CHA (chattr).  It maps the subset of BPXYATTR             
+*                 fields which can be modified, and the set flags.              
+*                 Fields match corresponding fields in BPXYATTR.                
+*                 The overall structures are not related.                       
+*                 (Field size and type match, but not the offset.)              
+*                 AttSetFlags, AttGenMask, and AttGenValue structures           
+*                 match AttrSetFlags, AttrGenMask, and AttrGenValue             
+*                 in BPXYATTR.                                                  
+*                                                                               
+*      BPXYATTR - Vnode interface to the LFS and PFS for file                   
+*                 attributes.                                                   
+*                 Fields match corresponding fields in BPXYATT.                 
+*                 AttrStat, AttrStat2, and AttrStat3 structures match           
+*                 st_Part1, st_Part2,  and st_Part3 in BPXYSTAT.                
+*                                                                               
+*      BPXYSTAT - Interface between an application and the LFS for              
+*                 BPX1STA (stat).  It is the POSIX interface to the LFS         
+*                 for file attributes.  The st_Part1, st_Part2, and             
+*                 st_Part3 structures match AttrStat, AttrStat2,                
+*                 and AttrStat3 in BPXYATTR.  The entire BPXYSTAT               
+*                 structure also matches the stat.h structure.                  
+*                                                                               
+*      BPXZATTR - Prior name of BPXYATTR.  To facilitate migration,             
+*                 BPXZATTR includes BPXYATTR.  In all new code,                 
+*                 BPXYATTR should be used.                                      
+*                                                                               
+*      BPXYVFSI - C program interface for the BPX1V (v_) services.              
+*                 The ATTR structure in BPXYVFSI matches the BPXYATTR           
+*                 structure.                                                    
+*                                                                               
+*      stat.h   - C program interface for stat().  It is the POSIX C            
+*                 form of BPXYSTAT.  The entire stat.h structure                
+*                 matches the BPXYSTAT structure.                               
+*                                                                               
+*                                                                               
+*01* COMPONENT: OpenMVS (SCPX1)                                                 
+*                                                                               
+*01* DISTRIBUTION LIBRARY:  AMACLIB                                             
+*                                                                               
+*01* EYE-CATCHER: ATTR                                                          
+*02*   OFFSET:  0                                                               
+*02*   LENGTH:  4                                                               
+*                                                                               
+*01* CHANGE-ACTIVITY:                                                           
+*                                                                               
+*    $L0=POSIXXF  HOM1110 921201 PD2T: OpenMVS Initial Release                  
+*    $P0=PL70547  HOM1110 921208 PDJV: Make time fields signed                  
+*    $D0=DL70034  HOM1110 930120 PDCL: Change Proprietary statement             
+*                                      for IPCS format models                   
+*    $D1=DOAA008  HOM1111 930128 PDJV: DCR A008.01 (f)chattr changes            
+*    $D2=DOAA009  HOM1111 930311 PDJV: DCR A009.01 NFS                          
+*    The preceding lines were copied from BPXZATTR, reflecting activity         
+*    prior to the creation of BPXYATTR.                                         
+*    $D3=DOAA009  HOM1111 930714 PDSV: DCR A009.03 NFS: create BPXYATTR         
+*    $D4=DOAA009  HOM1120 931015 PDSV: ASM improvements - DCR A009.05           
+*    $D5=DPFA065  HOM1130 940922 PDJT: DCR A065.31 - File Format                
+*    $P1=PSP0065  HOM1150 960417 PDND: name reserved field in AttrGen           
+*    $D6=DSYA188  JBB6604 960823 PDND: trusted tree - DCR A188.03               
+*    $D7=DSYA214  JBB6604 961120 PDJT  NFS V3 Protocols       (PSY0380)         
+*    $D8=DWYA315  JBB6609 981021 PDJZ  DCR A315.00 - Shared Library             
+*    $DA=DxxA505  HBB7704 000424 PDJT: LP64 & 64-Bit addressing                 
+*    $P1=PX00213  HBB7705 000613 PDJV: Restrict delete from directory           
+*    $D9=DX0A412  HBB7705 000206 PDJT  DCR A412.00 - Native Ascii               
+*    $DB=DYM0525  HBB7706 001018 PDJS  DCR A525.01 - ACL Support                
+*    $DC=DYNA519  HBB7705 010215 PDJT: 8-Byte utime values      A519.07         
+*    $DD=DYNA519  HBB7708 010810 PDSK: LP64                     A519.07         
+*    $P3=PYN0220  HBB7708 020301 PDFO: Bilingual fixup                          
+*    $DE=DYNA597  HBB7708 011002 PDJS: MLS Seclabel support    A597.00          
+*    $T0=TJK0971  HBB7709 031031 PDJT: 64-Bit cleanup                           
+*    $DF=ME01996  HBB7720 040913 PDJT: NFS V4                   A630            
+*    $01=OA31294  HBB7770 100106 PDJT: Rollup: Make AttrSp=0                    
+*    $DG=DCRC595  HBB77A0 140328 PDSK: AMODE64 64-bit autodata                  
+*    $DH=DCRC923  HBB77B0 161130 PDCL: HFS->zFS - Add set constant              
+*    $DI=EA299845 HBB77D0 201016 PDGY: UFS attr bits                            
+*                                                                               
+****END OF SPECIFICATIONS*********************************************/         
+*        %GOTO ATTRPLS   ;        /* Bilingual header                           
+.A411    ANOP  ,                                                                
+**  BPXYATTR:  File attributes for callable services                            
+**  Used By:  VRP VLK VRW VCR VMD VSY VGA VSA                                   
+         AIF   ('&DSECT' EQ 'NO').B411                                          
+ATTR                  DSECT ,                                                   
+         AGO   .C411                                                            
+.B411    ANOP  ,                                                                
+                     DS    0D                 Clear storage                     
+ATTR                 DC    XL(ATTR#LENGTH)'00'                                  
+                     ORG   ATTR                                                 
+.C411    ANOP  ,                                                                
+ATTRBEGIN            DS    0D                                                   
+*                                                                               
+ATTRHDR              DS    0D     ATTR Header                                   
+ATTRID               DC    C'ATTR'                                     *        
+                                  Eye Catcher                                   
+ATTRLEN4             DS    0F     Length as 4 bytes                             
+ATTRSP               DC    AL1(ATTR#SP)                                *        
+                                  Subpool number of this ATTR                   
+ATTRLEN              DC    AL3(ATTR#LENGTH)                            *        
+                                  Length of this Attr                           
+ATTRSTAT             DS    0D     stat() structure                              
+ATTRMODE             DS    0F     File Mode mapped by BPXYMODE                  
+ATTRTYPE             DS    AL1    First byte of mode is file type,     *        
+                                  mapped by BPXYFTYP                            
+ATTRREMMODE          DS    AL3    Name to know the last 3 byte                  
+ATTRINO              DS    F      File Serial Number                            
+ATTRDEV              DS    F      Device ID of the file                         
+ATTRLINK             DS    F      Number of links                               
+ATTRUID              DS    F      User ID of owner of the file                  
+ATTRGID              DS    F      Group ID of Group of file                     
+ATTRSIZE             DS    0D     File Size in bytes, for              *        
+                                  regular file.  This is               *        
+                                  unspecified for others.                       
+ATTRSIZE_H           DS    F      First word of size                            
+ATTRSIZE_L           DS    F      Second word of size                           
+ATTRATIME            DS    F      Time of last access                           
+ATTRMTIME            DS    F      Time of last data mod                         
+ATTRCTIME            DS    F      Time of last file stat chng                   
+ATTRMAJORNUMBER      DS    F      Major number for this file,          *        
+                                  if it is a character                 *        
+                                  special file.                                 
+ATTRMINORNUMBER      DS    F      Minor number for this file,          *        
+                                  if it is a character                 *        
+                                  special file.                                 
+ATTRSTAT2            DS    0F     second part of the stat                       
+ATTRAUDITORAUDIT     DS    0F     Area for auditor audit info                   
+ATTRAUDITORAUDIT1    DS    XL1     Auditor audit byte 1                         
+ATTRAUDITORAUDIT2    DS    XL1     Auditor audit byte 2                         
+ATTRAUDITORAUDIT3    DS    XL1     Auditor audit byte 3                         
+ATTRAUDITORAUDIT4    DS    XL1     Auditor audit byte 4                         
+ATTRAAUDIT           EQU   X'01'    ON = auditor audit info            *        
+                                         change request                *        
+                                         (ON when AttrMAAudit = ON)             
+ATTRUSERAUDIT        DS    0F     Area for user audit info                      
+ATTRUSERAUDIT1       DS    XL1     User audit byte 1                            
+ATTRUSERAUDIT2       DS    XL1     User audit byte 2                            
+ATTRUSERAUDIT3       DS    XL1     User audit byte 3                            
+ATTRUSERAUDIT4       DS    XL1     User audit byte 4                            
+ATTRNOTAAUDIT        EQU   X'01'    Always OFF to indicate             *        
+                                           this is NOT auditor audit   *        
+                                           info                                 
+ATTRBLKSIZE          DS    F      File Block Size                               
+ATTRCREATETIME       DS    F      File Creation Time                            
+ATTRAUDITID          DS    CL16   RACF File ID for auditing                     
+*                                                                               
+ATTRGUARDTIME        ORG   ATTRAUDITID   Guard Time                @D7A         
+ATTRGUARDTIMESEC     DS    F               Seconds                 @D7A         
+ATTRGUARDTIMEMSEC    DS    F               Micro_Seconds           @D7A         
+                     ORG   ATTRAUDITID                             @D7A         
+ATTRCVER             DS    CL8           Creation Verifier         @D7A         
+                     DS    CL8           Spacer                    @D7A         
+*                                                                               
+ATTRRES01            DS    F      Reserved                                      
+ATTRGENMASK          DS    0F     Mask to indicate which               *        
+                                  General attributes bit to            *        
+                                  modify                               *        
+                                  --Masks AttrGenValue                          
+ATTROPAQUEMASK       DS    XL3    Opaque attribute flags -             *        
+                                  Reserved for ADSTAR use                       
+ATTRVISIBLEMASK      DS    XL1    Visible attribute flags                       
+ATTRNODELFILESMASK   EQU   X'20'  Files should not be deleted      @P1A         
+ATTRSHARELIBMASK     EQU   X'10'  Shared Library                   @D6A         
+ATTRNOSHAREASMASK    EQU   X'08'  No shareas flag                  @D8A         
+ATTRAPFAUTHMASK      EQU   X'04'  APF authorized flag              @D6A         
+ATTRPROGCTLMASK      EQU   X'02'  Program controlled flag          @D6A         
+ATTREXTLINKMASK      EQU   X'01'  External Symlink flag                *        
+                                  Mask bit not used on                 *        
+                                  vn_setattr                                    
+ATTRSETFLAGS         DS    0XL4   Flags - which fields to set                   
+ATTRSETFLAGS1        DS    XL1    Flag byte 1                                   
+ATTRMODECHG          EQU   X'80'  Change to the mode indicated                  
+ATTROWNERCHG         EQU   X'40'  Change to Owner indicated                     
+ATTRSETGEN           EQU   X'20'  Set General attributes                        
+ATTRTRUNC            EQU   X'10'  Truncate size                                 
+ATTRATIMECHG         EQU   X'08'  Change the Atime                              
+ATTRATIMETOD         EQU   X'04'  Change to the Current Time                    
+ATTRMTIMECHG         EQU   X'02'  Change the Mtime                              
+ATTRMTIMETOD         EQU   X'01'  Change to the Current Time                    
+ATTRSETFLAGS2        DS    XL1    Flag byte 2                                   
+ATTRMAAUDIT          EQU   X'80'  Modify auditor audit info                     
+ATTRMUAUDIT          EQU   X'40'  Modify user audit info                        
+ATTRCTIMECHG         EQU   X'20'  Change the Ctime                              
+ATTRCTIMETOD         EQU   X'10'  Change Ctime to the Current          *        
+                                  Time                                          
+ATTRREFTIMECHG       EQU   X'08'  Change the RefTime                            
+ATTRREFTIMETOD       EQU   X'04'  Change RefTime to Current Time                
+ATTRFILEFMTCHG       EQU   X'02'  Change File Format               @D5A         
+ATTRGUARDTIMECHK     EQU   X'01'  Guard Time Check Requested       @D7A         
+ATTRSETFLAGS3        DS    XL1    Flag byte 3 - reserved                        
+ATTRCVERSET          EQU   X'80'  Creation Verifier Set            @D7A         
+ATTRCHARSETIDCHG     EQU   X'40'  CharSetId Change                 @D9A         
+ATTRLP64TIMES        EQU   X'20'  64-bit time fields used          @DDA         
+ATTRSECLABELCHG      EQU   X'10'  Seclabel Change                  @DEA         
+ATTRSETFLAGS4        DS    XL1    Flag byte 4 - reserved               *        
+                                                                                
+ATTRSTAT3            DS    0F     Third part of the stat                        
+ATTRCHARSETID        DS    CL12   Coded Character set id                        
+                     ORG   ATTRCHARSETID                           @D9A         
+ATTRFILETAG          DS    CL4       File Tag                      @D9A         
+                     DS    CL8       Reserved                      @D9A         
+                     ORG   ATTRCHARSETID                           @DFA         
+ATTRVINFO            DS    0CL12     Cross MtPt Information:       @DFA         
+ATTRVFSTOK           DS    CL8         Cross MtPt Vfs Tok          @DFA         
+ATTRVMTPTINO         DS    CL4         Root's MtPt's Ino           @DFA         
+ATTRBLOCKS_D         DS    0F     Double word num blocks                        
+ATTRBLOCKS_H         DS    F      First word of blocks                          
+ATTRBLOCKS           DS    F      Number of blocks allocated                    
+ATTRGENVALUE         DS    0F     General attribute values             *        
+                                  --Masked by  AttrGenMask                      
+ATTROPAQUE           DS    XL3    Opaque attribute flags -             *        
+                                  Reserved for ADSTAR use                       
+ATTRVISIBLE          DS    XL1    Visible attribute flags                       
+ATTRNODELFILES       EQU   X'20'  Files should not be deleted      @P1A         
+ATTRSHARELIB         EQU   X'10'  Shared Library flag              @D8A         
+ATTRNOSHAREAS        EQU   X'08'  No shareas flag                  @D6A         
+ATTRAPFAUTH          EQU   X'04'  APF authorized flag              @D6A         
+ATTRPROGCTL          EQU   X'02'  Program controlled flag          @D6A         
+ATTREXTLINK          EQU   X'01'  External Symlink                              
+ATTRREFTIME          DS    F      Reference Time -                     *        
+                                  Reserved for ADSTAR use                       
+                     DS    0F     Align ATTRFID                                 
+ATTRFID              DS    CL8    File Identifier                               
+ATTRFILEFMT          DS    XL1    File Format                      @D5A         
+ATTRFSPFLAG2         DS    XL1    IFSP_FLAG2                       @DBA         
+ATTRACCESSACL        EQU   X'80'  Access ACL exists                @DBA         
+ATTRFMODELACL        EQU   X'40'  File Model ACL exists            @DBA         
+ATTRDMODELACL        EQU   X'20'  Directory Model ACL exists       @DBA         
+ATTRRES02            DS    CL2    Reserved for future              @DBC         
+*                                                                               
+ATTRCTIMEMSEC        DS    F      Ctime Micro_Seconds              @D7A         
+ATTRSECLABEL         DS    CL8    Security Label                   @DBA         
+ATTRRES03            DS    CL4    Reserved for future              @DBC         
+ATTRENDVER1          EQU   *      End of Version 1 ATTR                         
+*                                                                               
+ATTRATIME64          DS    D      Access Time                      @DAA         
+ATTRMTIME64          DS    D      Data Mod Time                    @DAA         
+ATTRCTIME64          DS    D      Medadata Change Time             @DAA         
+ATTRCREATETIME64     DS    D      File Creation Time               @DAA         
+ATTRREFTIME64        DS    D      Reference Time                   @DAA         
+                     DS    D                                       @DAA         
+                     DS    CL16   Reserved                         @DAA         
+ATTRENDVER2          EQU   *      End of Version 2 ATTR            @DAA         
+*                                                                               
+*   Constants                                                                   
+*                                                                               
+ATTR#LEN             EQU   *-ATTRBEGIN                                 *        
+                                    Length of ATTR                              
+ATTR#LENGTH          EQU   ATTR#LEN Length of ATTR                              
+ATTR#MINLEN          EQU   ATTRENDVER1-ATTRBEGIN                       *        
+                                    Minimum length of valid ATTR                
+ATTR#SP              EQU   0        Subpool is meaningless         @01C         
+** BPXYATTR End                                                                 
+         SPACE 3                                                                
+         AIF   ('&LIST' EQ 'YES').E411                                          
+         POP   PRINT                                                            
+.E411    ANOP  ,                                                                
+         MEND  ,                  Terminating PL/X comment           */         
+*                                                                               
+*%ATTRPLS : ;                                                                   
+*                                                               @EJECT;         
+* %DCL ASABEGIN_AMODE CHAR EXTERNAL;                          /* @DGA*/         
+* %DCL PTR_64 CHAR EXTERNAL;                                  /* @DGA*/         
+*                                                                               
+* %IF ATTRBASE = '' %THEN                                                       
+*   %DO;                                                                        
+*     %ATTRBASE = 'Based(AttrPtr)';                                             
+*   %END;                                                                       
+* %IF TRANSLATE(ATTRBASE) = 'BASED(ATTRPTR)' %THEN                              
+*   %DO;                                                                        
+*     %IF ASABEGIN_AMODE='64' ! PTR_64='YES'                  /* @DGA*/         
+*     %THEN                                                   /* @DGA*/         
+*     %DO;                                                    /* @DGA*/         
+*       DCL AttrPtr Ptr(64);         /* Pointer to the ATTR      @DGA*/         
+*     %END;                                                   /* @DGA*/         
+*    %ELSE                                                    /* @DGA*/         
+*     %DO;                                                    /* @DGA*/         
+*       DCL AttrPtr Ptr(31);         /* Pointer to the ATTR          */         
+*     %END;                                                   /* @DGA*/         
+*   %END;                                                                       
+* %IF TRANSLATE(ATTRVIA) = 'VIA(ATTRALET)' %THEN                                
+*    %DO;                                                                       
+*      Dcl AttrAlet Ptr(31);         /* Alet of the ATTR             */         
+*    %END;                                                                      
+*                                                                               
+*%IF AsaxmacF63 = ''                                                            
+*   %Then %AsaxmacF63 = 'Char(8)';                            /* @DCA*/         
+*                                                                               
+*Dcl                                                                            
+* 1    Attr       ATTRBASE ATTRVIA,                                             
+*  3   AttrHdr,                   /* +00 Attr Header             @D2A*/         
+*    5 AttrID     Char(4),        /* +00 EBCDIC ID               @D2C*/         
+*    5 AttrLen4   Fixed(32),      /* +04 Length as 4 bytes       @01A*/         
+*      7 AttrSP    Fixed(8),      /* +04  Subpool (Not used)     @D2C*/         
+*      7 AttrLen   Fixed(24),     /* +05  Length of this Attr    @D2C*/         
+*  3   AttrStat,                  /* +08 stat() structure            */         
+*    5 AttrMode       Fixed(32),  /*     File Mode mapped by BPXYMODE*/         
+*      7  AttrType    Fixed(8),   /*     First byte of mode is file             
+*                                          type, mapped by BPXYFTYP  */         
+*      7  AttrRemMode Fixed(24),  /*     Name to know the last 3 byte*/         
+*    5 AttrIno        Fixed(32),  /* +0C File Serial Number          */         
+*    5 AttrDev        Fixed(32),  /* +10 Device ID of the file       */         
+*    5 AttrLink       Fixed(32),  /* +14 Number of links             */         
+*    5 AttrUid        Fixed(31),  /* +18 User ID of owner of the file*/         
+*    5 AttrGid        Fixed(31),  /* +1C Group ID of Group of file   */         
+*    5 AttrSize Char(8) Bdy(8),   /* +20 File Size in bytes, for                
+*                                          regular file.  This is               
+*                                          unspecified, for others.  */         
+*       7 AttrSize_h  Fixed(31),  /* +20 First word of size          */         
+*       7 AttrSize_l  Fixed(32),  /* +24 Second word of size         */         
+*    5 AttrAtime      Fixed(31),  /* +28 Time of last access     @P0C*/         
+*    5 AttrMtime      Fixed(31),  /* +2C Time of last data mod   @P0C*/         
+*    5 AttrCtime      Fixed(31),  /* +30 Time of last file stat chng            
+*                                                                @P0C*/         
+*  3 AttrMajorNumber Fixed(32),   /* +34 Major number for this file,            
+*                                          if it is a character                 
+*                                          special file.             */         
+*  3 AttrMinorNumber Fixed(32),   /* +38 Minor number for this file,            
+*                                          if it is a character                 
+*                                          special file.             */         
+*  3   AttrStat2,                 /* +3C second part of the stat     */         
+*    5 AttrAuditorAudit Bit(32),  /* +3C Area for auditor audit info */         
+*      7 *              Bit(31),  /*       First 31 bits         @D1A*/         
+*      7 AttrAAudit     Bit(1),   /*       ON = auditor audit info              
+*                                               change request                  
+*                                          (ON when AttrMAAudit = ON)           
+*                                                                @D1A*/         
+*    5 AttrUserAudit    Bit(32),  /* +40 Area for user audit info    */         
+*      7 *              Bit(31),  /*       First 31 bits         @D1A*/         
+*      7 AttrNotAAudit  Bit(1),   /*       Always OFF to indicate               
+*                                          this is NOT auditor audit            
+*                                          info                  @D1A*/         
+*    5 AttrBlkSize     Fixed(31), /* +44 File Block Size             */         
+*    5 AttrCreateTime  Fixed(31), /* +48 File Creation Time      @P0C*/         
+*    5 * UNION         Char(16) Bdy(Word),                     /*@D7A*/         
+*      7 AttrAuditID    Char(16), /* +4C RACF File ID for auditing   */         
+*                                                                               
+*      7 AttrGuardTime ,          /*     Guard Time Value:       @D7A*/         
+*        8 AttrGuardTimeSec  Fixed(32), /* Seconds - compare     @D7A           
+*                                  against either AttrCtime or                  
+*                                  AttrCtime64L                  @DCA*/         
+*        8 AttrGuardTimeMsec Fixed(32),       /* Micro-seconds   @D7A*/         
+*                                                                               
+*      7 AttrCver       Char(8),  /*     Creation Verifier       @D7A*/         
+*                                                                               
+*    5 *               Fixed(32), /* +5C Reserved                    */         
+*                                                                               
+*  3 AttrGenMask  Bit(32),        /* +60 Mask to indicate which                 
+*                                        General attributes bit to              
+*                                        modify                                 
+*                                        --Masks AttrGenValue    @D1A*/         
+*    5 AttrOpaqueMask   Bit(24),  /*     Opaque attribute flags -               
+*                                        Reserved for ADSTAR use @D1A*/         
+*    5 AttrVisibleMask  Bit(8),   /*     Visible attribute flags @D1A*/         
+*      7 AttrRsvMask    Bit(2),   /*     Reserved           @D8C @P1C*/         
+*      7 AttrNoDelFilesMask Bit(1),/*    Files should not be deleted            
+*                                        from directory          @P1A*/         
+*      7 AttrShareLibMask Bit(1), /*     Shared Library          @D8A*/         
+*      7 AttrNoShareasMask Bit(1), /*    do not run in shareas   @D6A*/         
+*      7 AttrApfAuthMask Bit(1),  /*     Program is APF auth     @D6A*/         
+*      7 AttrProgCtlMask Bit(1),  /*     Program controlled      @D6A*/         
+*      7 AttrExtLinkMask Bit(1),  /*     External Symlink flag                  
+*                                        Mask bit not used on                   
+*                                        vn_setattr              @D1A*/         
+*  3 AttrSetFlags    Bit(32),     /* +64 Flags - which fields to set */         
+*    5 AttrModeChg       Bit(1),  /*     Change to the mode indicated*/         
+*    5 AttrOwnerChg      Bit(1),  /*     Change to Owner indicated   */         
+*    5 AttrSetGen        Bit(1),  /*     Set General attributes  @D1A*/         
+*    5 AttrTrunc         Bit(1),  /*     Truncate size           @D2C*/         
+*    5 AttrATimeChg    Bit(1),    /*     Change the Atime            */         
+*    5 AttrAtimeTOD    Bit(1),    /*     Change to the Current Time  */         
+*    5 AttrMTimeChg    Bit(1),    /*     Change the Mtime            */         
+*    5 AttrMtimeTOD    Bit(1),    /*     Change to the Current Time  */         
+*    5 AttrMAAudit   Bit(1),      /*     Modify auditor audit info   */         
+*    5 AttrMUAudit   Bit(1),      /*     Modify user audit info      */         
+*    5 AttrCTimeChg  Bit(1),      /*     Change the Ctime        @D1A*/         
+*    5 AttrCTimeTOD  Bit(1),      /*     Change Ctime to the Current            
+*                                        Time                    @D1A*/         
+*    5 AttrRefTimeChg    Bit(1),  /*     Change the RefTime      @D1A*/         
+*    5 AttrRefTimeTOD    Bit(1),  /*     Change RefTime to Current Time         
+*                                                                @D1A*/         
+*    5 AttrFileFmtChg    Bit(1),  /*     Change the File Format  @D5A*/         
+*    5 AttrGuardTimeChk  Bit(1),  /*     Guard Time Check Req    @D7A*/         
+*    5 AttrCverSet      Bit(1),   /*     Creation Verifier Set   @D7A*/         
+*    5 AttrCharSetIdChg Bit(1),   /*     Change File Info        @D9A*/         
+*    5 AttrLP64Times    Bit(1),   /*     64-bit time fields used @DCA*/         
+*    5 AttrSecLabelChg  Bit(1),   /*     Change Security Label   @DEA*/         
+*    5 *                Bit(12),  /*     Reserved bits           @DEC*/         
+*                                                                               
+*  3 AttrStat3,                   /* +68 Third part of the stat      */         
+*    5 * UNION,                   /*                             @DFA*/         
+*      7 AttrCharSetID Char(12),  /* +68 Character Set Information   */         
+*        9 AttrFileTag  Char(4),  /*        File Tag             @D9A*/         
+*        9 *            Char(8),  /*        Reserved             @D9A*/         
+*      7 AttrVInfo     Char(12),  /*     v_readdir/v_getattr Info@DFA*/         
+*        9 AttrVfsTok   Char(8),  /*        Cross MtPt Vfs Tok   @DFA*/         
+*        9 AttrVMtPtIno Char(4),  /*        Root's MtPt's Ino    @DFA*/         
+*    5 AttrBlocks_D Char(8) Bdy(word),/* +74 Double word num blocks  */         
+*      7 *           Fixed(31),                                                 
+*      7 AttrBlocks  Fixed(32),   /* +78 Number of blocks allocated  */         
+*    5 AttrGenValue Bit(32),      /* +7C General attribute values               
+*                                     --Masked by  AttrGenMask   @D1A*/         
+*      7 AttrOpaque      Bit(24), /*     Opaque attribute flags                 
+*                                        Reserved for ADSTAR use @D1A*/         
+*      7 AttrVisible     Bit(8),  /*     Visible attribute flags @D1A*/         
+*        9  AttrRsv      Bit(2),  /*     Reserved           @D8C @P1C*/         
+*        9 AttrNoDelFiles Bit(1), /*     Files should not be deleted            
+*                                        from directory          @P1A*/         
+*        9  AttrShareLib Bit(1), /*      Shared Library          @D8A*/         
+*        9  AttrNoShareas Bit(1), /*     do not run in shareas   @D6A*/         
+*        9  AttrApfAuth  Bit(1),  /*     Program is APF auth     @D6A*/         
+*        9  AttrProgCtl  Bit(1),  /*     Program controlled      @D6A*/         
+*        9  AttrExtLink  Bit(1),  /*     External Symlink        @D1A*/         
+*    5 AttrRefTime   Fixed(31),   /* +80 Reference Time -                       
+*                                        Reserved for ADSTAR use @D1A*/         
+*    5 AttrFid Char(8) Bdy(Word), /* +84 File Identifier         @D2A*/         
+*    5 AttrFileFmt   Fixed(8),    /* +8C File Format             @D5A*/         
+*                                 /*     Value constants for filefmt */         
+*                                 /*     declared in BPXYFTYP    @D5A*/         
+*                                 /***********************************/         
+*    5 AttrFspFlag2  Bit(8),      /* +8D byte maps IFSP_FLAG2 -  @DBA*/         
+*                                 /*     These flags are copied by              
+*                                        HFS directly into this field.          
+*                                        The bit positions match those          
+*                                        defined in the FSP.     @DBA*/         
+*      7 AttrAccessAcl Bit(1),    /* 1 = Access Acl exists       @DBA*/         
+*      7 AttrFModelAcl Bit(1),    /* 1 = File Model Acl exists   @DBA*/         
+*      7 AttrDModelAcl Bit(1),    /* 1 = Dir Model Acl exists    @DBA*/         
+*      7 *             Bit(5),    /* Reserved for future fsp use @DBA*/         
+*                                 /***********************************/         
+*    5 *             Char( 2),    /* +8F Reserved for future     @DBC*/         
+*    5 AttrCtimeMsec Fixed(32),   /* +90 Micro-seconds of Ctime  @D7A*/         
+*    5 AttrSecLabel  Char(8),     /* +94 Security Label          @DBA*/         
+*    5 *             Char(4),     /* +9C Reserved for future     @DBC*/         
+*                                                                               
+*  3 AttrEndVer1     Char(0),     /* +A0--- End of Version 1 --- @D2C*/         
+*                                                                               
+*  3 AttrStat4 ,                  /* +A0 Fourth part of the stat @DAA*/         
+*    5 AttrLP64 ,                 /* +A0 LP64 Versions           @DAA*/         
+*      7 AttrAtime64     Char(8) Bdy(DWord), /*+A8 Access Time   @DAA*/         
+*        9 AttrAtime64S  AsaxmacF63 Bdy(DWord), /* Signed value  @DCA*/         
+*          11 *          Char(4),                             /* @DCA*/         
+*          11 AttrAtime64L Fixed(31),                         /* @DCA*/         
+*      7 AttrMtime64     Char(8) Bdy(DWord), /*+B0 Data Mod Time @DAA*/         
+*        9 AttrMtime64S  AsaxmacF63 Bdy(DWord), /* Signed value  @DCA*/         
+*          11 *          Char(4),                             /* @DCA*/         
+*          11 AttrMtime64L Fixed(31),                         /* @DCA*/         
+*      7 AttrCtime64     Char(8) Bdy(DWord), /*+B8 Metadata                     
+*                                               Change Time      @DAA*/         
+*        9 AttrCtime64S  AsaxmacF63 Bdy(DWord), /* Signed value  @DCA*/         
+*          11 *          Char(4),                             /* @DCA*/         
+*          11 AttrCtime64L Fixed(31), /* compare w/AttrGuardTime @DCA*/         
+*      7 AttrCreateTime64  Char(8) Bdy(DWord),/*+C0 File                        
+*                                               Creation Time    @DAA*/         
+*        9 AttrCreateTime64S  AsaxmacF63 Bdy(DWord), /* Signed   @DCA*/         
+*          11 *          Char(4),                             /* @DCA*/         
+*          11 AttrCreatetime64L Fixed(31),                    /* @DCA*/         
+*      7 AttrRefTime64   Char(8) Bdy(DWord), /*+C8 Reference Time@DAA*/         
+*        9 AttrReftime64S  AsaxmacF63 Bdy(DWord), /* Signed      @DCA*/         
+*          11 *          Char(4),                             /* @DCA*/         
+*          11 AttrReftime64L Fixed(31),                       /* @DCA*/         
+*      7   *             Char(8),     /*+D0 May be AttrIno64     @DAA*/         
+*                                                                               
+*    5 *               Char(16),  /* +D0 Reserved (1st consider  @DAA           
+*                                         space at +5C,+8D,+94)  @DAA*/         
+*  3 AttrEndVer2 Char(0),         /* +E0 End of Version 2        @DAA*/         
+*    /****************************************************************/         
+*    /* Add fields here for Version 3.                               */         
+*    /* NOTE that the increased length of the ATTR will have         */         
+*    /* migration considerations in the code that handles ATTR's.    */         
+*    /****************************************************************/         
+*  3 * Char(0) Bdy(Dword);        /* +E0 Ensure ATTR ends on doubleword         
+*                                          boundary                  */         
+*                                                                               
+*DCL                                                                            
+*  ATTR#ID     Char(4)   Constant('ATTR'),   /* Control Block Acronym*/         
+*  ATTR#LEN    Fixed(24) Constant(Length(ATTR)), /* Length of ATTR   */         
+*  ATTR#MINLEN Fixed(24) Constant(Offset(AttrEndVer1)), /* Minimum              
+*                                           length of valid ATTR @D2A*/         
+*  ATTR#VER2LEN Fixed(24) Constant(Offset(AttrEndVer2)), /* Length              
+*                                               of version 2     @DCA*/         
+*  ATTR#SP     Fixed(8) Constant(0),   /* Subpool is meaningless @01C*/         
+*  /* Constants for migration SetAttr use.                       @DHA*/         
+*  ATTR#MIGSETFLAGB Bit(32) Constant('CAE83000'X),/* All nodes   @DHA*/         
+*  ATTR#MIGSETFLAGF Bit(32) Constant('20024000'X),/* Files only  @DHA*/         
+*  ATTR#MIGSETGENM  Bit(32) Constant('0000003F'X),/* Gen Mask    @DHA*/         
+*  /* Constants for UFS remove setattr.                          @DIA*/         
+*  ATTR#UFSREMSET Bit(32) Constant('E0000000'X); /* Set flags    @DIA*/         

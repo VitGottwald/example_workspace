@@ -1,0 +1,93 @@
+*/*PROPRIETARY V3 STATEMENT                              */             00004200
+*/*LICENSED MATERIALS - PROPERTY OF IBM                  */             00006200
+*/*"RESTRICTED MATERIALS OF IBM"                         */             00008200
+*/*5650-ZOS                                              */             00011190
+*/*Copyright IBM Corp. 1992,2017                         */             00012180
+*/*END PROPRIETARY V3 STATEMENT                          */             00015500
+*/*     START OF PL/X COMMENT ENDING IN %MACRO STATEMENT           @L2A 00017700
+         MACRO                                                          00020000
+&NAME    FIND  &DCB,&AREA,&TYPE                                         00040000
+.* $01=OY51276,HDP3330,,SJPLGEC: DCB ADDRESS REQUIRED FOR FIND.    @01A 00042300
+.* $L1=31BIT,JDZ1110,,SJPLRK:  INVOCABLE IN 31-BIT MODE            @L1A 00044600
+.* $L2=PLX,JDZ1110,,SJPLMET: PL/X SUPPORT                          @L2A 00046900
+.* $L3=64BIT,JDZ1D10,20101115,SVLJH: 64 bit message                @L3A 00049200
+.* $L4=PDSEGENS,HDZ2210,20130211,JerryDearing:                     @L4A 00050100
+.*   1. FIND dcb,area,G                                                 00051000
+.* $02=OA49929,HDZ2220,20160215,sjplam: Roll-up the code for       @02A 00051100
+.*     OA46913 FROM R2.1 TO R2.2.                                  @02A 00051200
+.*   1. Generate the correct return and reason codes when the      @02A 00051300
+.*      G option is specified and the DCB address is zero.         @02A 00051400
+         GBLC  &SYSAM64    GLOBAL VARIABLE SET BY SYSSTATE MACRO   @L3A 00051900
+         GBLC  &SYSASCE    GLOBAL VARIABLE SET BY SYSSTATE MACRO   @L3A 00053500
+         SYSSTATE TEST    TEST HOW MACROS ARE TO EXPAND            @L3A 00055100
+         AIF   ('&SYSAM64' EQ 'YES').E4    GO IF AMODE64=YES       @L3A 00056700
+         AIF   (('&SYSASCE' NE '') AND ('&SYSASCE' NE 'P')).E5     @L3A 00058300
+&ERR(1)  SETB  ('&DCB' EQ '')                                           00060000
+&ERR(2)  SETB  ('&AREA' EQ '')                                          00070000
+&ERR(3)  SETB  ('&TYPE' EQ '')                                          00080000
+&ERR(4)  SETB  (NOT &ERR(3) AND '&TYPE' NE 'C' AND '&TYPE' NE 'D'      x00092990
+               AND '&TYPE' NE 'G')                                 @L4A 00095980
+         AIF   (&ERR(1)+&ERR(2)+&ERR(3)+&ERR(4) NE 0).E0                00100000
+         AIF   ('&TYPE' NE 'D' AND '&TYPE' NE 'G').CTYPE                00129990
+&NAME    IHBINNRA &DCB,&AREA                                            00140000
+         LTR   1,1                      IS DCB ADDRESS 0                00147500
+         BNZ   *+16                     NO, BRANCH                      00155000
+         LA    15,8                     SET RETURN CODE                 00162500
+         LA    0,16                     SET REASON CODE                 00170000
+         AIF   ('&TYPE' EQ 'G').GTYPE                              @02A 00173000
+         B     *+8                      BR AROUND FIND SVC              00177500
+         AGO   .DCONT                                              @02A 00185190
+.GTYPE   B     *+24                     BR AROUND FIND SVC         @02A 00185380
+.DCONT   LCR   1,1                      INDICATE FIND REQ FOR SVC  @02C 00185570
+         AIF   ('&TYPE' EQ 'D').DTYPEEND                           @L4A 00185800
+*        Prepare the G form of the Area                            @L4A 00186600
+         LR    15,0                     Start of Area              @L4A 00187400
+         LA    15,0(15)                 Insure 24 bit compat       @L4A 00188200
+         OILH  15,X'8000'               High bit set               @L4A 00189000
+         LR    0,15                                                @L4A 00189800
+         AHI   0,8                      Zero points to member-Gen  @L4A 00190600
+.DTYPEEND ANOP ,                                                   @L4A 00191400
+         SVC   18                       ISSUE FIND SVC                  00192500
+         MEXIT                                                          00200000
+.CTYPE   ANOP                                                           00220000
+&NAME    IHBINNRA &DCB                                                  00240000
+         AIF   ('&AREA'(1,1) EQ '(').REG                                00260000
+         LA    15,&AREA                 LOAD AREA ADDRESS               00280000
+         AGO   .CONT                                                    00300000
+.REG     LR    15,&AREA(1)              LOAD AREA ADDRESS               00311800
+.CONT    ANOP                                                           00323600
+*  IF DCBE EXISTS THEN SET TTR IN DCBE AND POINT R0 TO DCBERELA         00327200
+         TM    32(1),X'84'              IS THERE A DCBE                 00330800
+         BNO   *+22                     NO, BRANCH                      00334400
+         L     14,0(0,1)                GET DCBE ADDRESS                00338000
+         MVC   12(4,14),0(15)           MOVE RELAD TO DCBE              00341600
+         LA    0,12(0,14)               INDICATE TYPE C                 00345200
+         B     *+12                     CONTINUE                        00348800
+*  NO DCBE...MOVE RELAD INTO DCB AND POINT RO TO DCBRELAD               00352400
+         MVC   0(4,1),0(15)             MOVE RELAD TO DCB               00363600
+         LR    0,1                      INDICATE TYPE C                 00374800
+         SLR   15,15                    CLEAR REGISTER             @L1C 00386000
+         ICM   15,7,85(1)               LOAD FIND RTN ADDR         @L1C 00397200
+         BAS   14,4(0,15)               LINK TO FIND ROUTINE       @L3C 00408400
+         MEXIT                                                          00420000
+.E0      AIF   (NOT &ERR(1)).E1                                         09420000
+         IHBERMAC 6                     &DCB MISSING                    18420000
+.E1      AIF   (NOT &ERR(2)).E2                                         27420000
+         IHBERMAC 13                    &AREA MISSING                   36420000
+.E2      AIF   (NOT &ERR(3)).E3                                         45420000
+         IHBERMAC 25                    &TYPE MISSING                   54420000
+.E3      AIF   (NOT &ERR(4)).MEND                                       63420000
+         IHBERMAC 48,,&TYPE             &TYPE INVALID                   72420000
+         MEXIT                                                     @L3A 72470000
+.E4      IGGERMAC 203,FIND    THE FIND MACRO DOES NOT SUPPORT      @L3A 72520000
+         MEXIT                  SYSSTATE AMODE64=YES               @L3A 72570000
+.E5      IGGERMAC 204,FIND    THE FIND MACRO DOES NOT SUPPORT      @L3A 72620000
+         MEXIT                  SYSSTATE ASCENV=AR OR ANY          @L3A 72670000
+.MEND    MEND                                                           81420000
+**/%FIND:  MACRO KEYS(0:1(DCB_ADDR,DCB_NAME),0:1(AREA_ADDR,    /*@L2A*/ 81489990
+*     AREA_NAME),0:1(RELAD_NAME,RELAD_ADDR),                            81509980
+*     GENERATION('*'),                                                  81529970
+*     RETCODE,RSNCODE);                                        /*@XXC*/ 81549960
+*  ANS('? '!!MACLABEL!!' FINDP '!!MACLIST !!                            81569950
+*            MACKEYS!!';') RESCAN SKIP; /*@L2A*/                /*@L1A*/81589940
+*  %END FIND;                                                  /*@L2A*/ 81620000

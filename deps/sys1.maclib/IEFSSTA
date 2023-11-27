@@ -1,0 +1,701 @@
+*/* START OF SPECIFICATIONS ******************************************/ 00010000
+*/*                                                                  */ 00020000
+*/*01* MACRO NAME: IEFSSTA                                           */ 00030000
+*/*                                                                  */ 00040000
+*/*01* DESCRIPTIVE NAME:  Tape Allocation Subsystem Interface Mapping*/ 00050000
+*/*02*  ACRONYM:  IEFSSTA                                            */ 00060000
+*/*                                                                  */ 00070000
+*/*01* PROPRIETARY STATEMENT=                                        */ 00080000
+*/***PROPRIETARY_STATEMENT********************************************/ 00090000
+*/*                                                                  */ 00100000
+*/* LICENSED MATERIALS - PROPERTY OF IBM                             */ 00110000
+*/* THIS MODULE IS "RESTRICTED MATERIALS OF IBM"                     */ 00120000
+*/* 5647-A01 (C) COPYRIGHT IBM CORP. 1994, 2006                      */ 00130000
+*/*                                                                  */ 00140000
+*/* STATUS= HBB7730                                                  */ 00150000
+*/*                                                                  */ 00160000
+*/***END_OF_PROPRIETARY_STATEMENT*************************************/ 00170000
+*/*                                                                  */ 00180000
+*/*01* EXTERNAL CLASSIFICATION:  GUPI                                */ 00190000
+*/*01* END OF EXTERNAL CLASSIFICATION:                               */ 00200000
+*/*                                                                  */ 00210000
+*/*01* DSECT NAME:                                                   */ 00220000
+*/*              SSTA      - SSTA Header                             */ 00230000
+*/*              SSTADDA   - DD array entry                          */ 00240000
+*/*              SSTADRA   - Device request array entry              */ 00250000
+*/*              SSTAEDA   - Eligible device array entry             */ 00260000
+*/*                                                                  */ 00270000
+*/*01* COMPONENT:  Allocation (SC1B4)                                */ 00280000
+*/*                                                                  */ 00290000
+*/*01* EYE-CATCHER:  SSTA                                            */ 00300000
+*/*02*  OFFSET:  0                                                   */ 00310000
+*/*02*  LENGTH:  4                                                   */ 00320000
+*/*                                                                  */ 00330000
+*/*01* STORAGE ATTRIBUTES:                                           */ 00340000
+*/*02*  SUBPOOL:  230                                                */ 00350000
+*/*02*  KEY:  1                                                      */ 00360000
+*/*02*  RESIDENCY:  Any                                              */ 00370000
+*/*02*  MAIN STORAGE:  No                                            */ 00380000
+*/*02*  AUXILIARY STORAGE:  Yes                                      */ 00390000
+*/*02*  VIRTUAL STORAGE:  Yes                                        */ 00400000
+*/*02*  DATA SPACE: No                                               */ 00410000
+*/*                                                                  */ 00420000
+*/*01* SIZE:                                                         */ 00430000
+*/*     '44'x - 68 decimal for SSTA Header                       @L1C*/ 00440000
+*/*     '20'x - 32 decimal for each DD Array entry               @L2C*/ 00450000
+*/*                (number of entries is in SSTANDDS)                */ 00460000
+*/*     '18'x - 24 decimal for each Device Request Array entry   @L3C*/ 00470000
+*/*                (number of entries is in SSTANDRA)                */ 00480000
+*/*      'C'x - 12 decimal for each Eligible Device Array entry      */ 00490000
+*/*                (number of entries is in SSTANEDA)                */ 00500000
+*/*                                                                  */ 00510000
+*/*01* CREATED BY: IEFAB483                                          */ 00520000
+*/*                                                                  */ 00530000
+*/*                                                                  */ 00540000
+*/*01* POINTED TO BY:                                                */ 00550000
+*/*                 Upon entry to the Tape Allocation Subsystem      */ 00560000
+*/*                 general purpose register 1 points to the         */ 00570000
+*/*                 SSOB.  The SSOBINDV field points to              */ 00580000
+*/*                 the SSTA.                                        */ 00590000
+*/*                                                                  */ 00600000
+*/*01* SERIALIZATION:                                                */ 00610000
+*/*                                                                  */ 00620000
+*/*                  ENQ -                                           */ 00630000
+*/*                        Major Name: SYSIEFSD                      */ 00640000
+*/*                                                                  */ 00650000
+*/*                          Minor Name: Q4                          */ 00660000
+*/*                          Scope     : SYSTEM                      */ 00670000
+*/*                          Mode      : Shared                      */ 00680000
+*/*                                                                  */ 00690000
+*/*                          Minor Name: CHNGDEVS                    */ 00700000
+*/*                          Scope     : SYSTEM                      */ 00710000
+*/*                          Mode      : Shared                      */ 00720000
+*/*                                                                  */ 00730000
+*/*                          Minor Name: DDRTPUR                     */ 00740000
+*/*                          Scope     : SYSTEM                      */ 00750000
+*/*                          Mode      : Shared                      */ 00760000
+*/*                                                                  */ 00770000
+*/*                          Minor Name: DDRDA   (if DA requests)    */ 00780000
+*/*                          Scope     : SYSTEM                      */ 00790000
+*/*                          Mode      : Shared                      */ 00800000
+*/*                                                                  */ 00810000
+*/*                LOCKS -                                           */ 00820000
+*/*                          Allocation group locks held             */ 00830000
+*/*                                                                  */ 00840000
+*/*01* FUNCTION:                                                     */ 00850000
+*/*            Provides data shared by Allocation and the            */ 00860000
+*/*            Tape Allocation Subsystem in order to build           */ 00870000
+*/*            the information needed to solve a tape                */ 00880000
+*/*            allocation request.  The Tape Allocation              */ 00890000
+*/*            Subsystem can influence the allocation selection      */ 00900000
+*/*            by adding new criteria to consider when the           */ 00910000
+*/*            allocation algorithm solves the requests.             */ 00920000
+*/*                                                                  */ 00930000
+*/*02*         To do this, the subsystem must know the relative      */ 00940000
+*/*            importance of each of the criteria that IBM considers */ 00950000
+*/*            as well as what criteria is applied to each request/  */ 00960000
+*/*            device combination.                                   */ 00970000
+*/*                                                                  */ 00980000
+*/*02*         The relative importance that IBM considers is         */ 00990000
+*/*            kept in the SSTAIBMM mask.  Each bit is defined       */ 01000000
+*/*            as a specific criteria and when the bit is on the     */ 01010000
+*/*            criteria is being applied to that request/device      */ 01020000
+*/*            combination.                                          */ 01030000
+*/*                                                                  */ 01040000
+*/*02*         The table below gives the relative importance of      */ 01050000
+*/*            each of the subsystem criteria as related to the      */ 01060000
+*/*            IBM criteria (highest to lowest criteria)             */ 01070000
+*/*                                                                  */ 01080000
+*/*02* Order   IBM                    Subsystem                      */ 01090000
+*/*02* -----   --------               --------                       */ 01100000
+*/*02*  1                             SSTAINEL                       */ 01110000
+*/*02*  2      SSTADMND                                              */ 01120000
+*/*02*  3                             SSTAUS01                       */ 01130000
+*/*02*  4                             SSTAUS02                       */ 01140000
+*/*02*  5      SSTAONUN                                              */ 01150000
+*/*02*  6                             SSTAUS03                       */ 01160000
+*/*02*  7                             SSTAUS04                       */ 01170000
+*/*02*  8      SSTANAFH                                              */ 01180000
+*/*02*  9                             SSTAUS05                       */ 01190000
+*/*02* 10                             SSTAUS06                       */ 01200000
+*/*02* 11      SSTASPCM                                              */ 01210000
+*/*02* 12                             SSTAUS07                       */ 01220000
+*/*02* 13                             SSTAUS08                       */ 01230000
+*/*02* 14      (Generic device type, not specified by a bit)     @03M*/ 01240000
+*/*02* 15                             SSTAUS09                       */ 01250000
+*/*02* 16                             SSTAUS10                       */ 01260000
+*/*02* 17      SSTAACL1                                          @03M*/ 01270000
+*/*02* 18                             SSTAUS11                       */ 01280000
+*/*02* 19                             SSTAUS12                       */ 01290000
+*/*02* 20      SSTAACL2                                          @03M*/ 01300000
+*/*02* 21                             SSTAUS13                       */ 01310000
+*/*02* 22                             SSTAUS14                       */ 01320000
+*/*02* 23      SSTAACL3                                          @03M*/ 01330000
+*/*02* 24                             SSTAUS15                       */ 01340000
+*/*02* 25                             SSTAUS16                       */ 01350000
+*/*02* 26      SSTAVOLM                                          @03M*/ 01360000
+*/*02* 27                             SSTAUS17                       */ 01370000
+*/*02* 28                             SSTAUS18                       */ 01380000
+*/*02* 29      SSTANVOL                                          @01M*/ 01390000
+*/*02* 30                             SSTAUS19                       */ 01400000
+*/*02* 31                             SSTAUS20                       */ 01410000
+*/*02* 32      SSTAWVOL                                          @01M*/ 01420000
+*/*02* 33                             SSTAUS21                       */ 01430000
+*/*02* 34                             SSTAUS22                       */ 01440000
+*/*02* 35      SSTAAVOL                                          @01M*/ 01450000
+*/*02* 36                             SSTAUS23                       */ 01460000
+*/*02* 37                             SSTAUS24                       */ 01470000
+*/*02* 38      SSTANAS                                               */ 01480000
+*/*02* 39                             SSTAUS25                       */ 01490000
+*/*02* 40                             SSTAUS26                       */ 01500000
+*/*                                                                  */ 01510000
+*/*02*         If the subsystem wants its own criteria considered    */ 01520000
+*/*            more important than a specific IBM criteria then it   */ 01530000
+*/*            just sets the bit in the User mask that is higher     */ 01540000
+*/*            in priority for the request/device combination that   */ 01550000
+*/*            the subsystem wishes the criteria to be applied to.   */ 01560000
+*/*                                                                  */ 01570000
+*/*02*         There are instances where bits can have multiple      */ 01580000
+*/*            meanings in the IBM criteria.  An example would be    */ 01590000
+*/*            the SSTAVOLM bit.  If the request is for a specific   */ 01600000
+*/*            tape volume the bit means one thing.  If the request  */ 01610000
+*/*            is for a nonspecific tape volume the bit means        */ 01620000
+*/*            something different.  In all cases where there are    */ 01630000
+*/*            multiple bit meanings there is no possibility of      */ 01640000
+*/*            overlapping criteria.  The actual meanings as applied */ 01650000
+*/*            to a specific entry is determined by the device       */ 01660000
+*/*            request array entry for which this is an eligible     */ 01670000
+*/*            device array entry.  The SSTAPRV and SSTASPEC bits    */ 01680000
+*/*            will indicate whether the request is a specific,      */ 01690000
+*/*            private/nonspecific, or scratch request.              */ 01700000
+*/*                                                                  */ 01710000
+*/*01* METHOD OF ACCESS:                                             */ 01720000
+*/*02*   PL/X:        %INCLUDE SYSLIB(IEFSSTA)                       */ 01730000
+*/*02*   BAL:         IEFSSTA                                        */ 01740000
+*/*                                                                  */ 01750000
+*/*01* STATUS:                                                       */ 01760000
+*/*                                                                  */ 01770000
+*/*01* DELETED BY: IEFAB483                                          */ 01780000
+*/*                                                                  */ 01790000
+*/*01* DEPENDENCIES:  None                                           */ 01800000
+*/*                                                                  */ 01810000
+*/*01* DISTRIBUTION LIBRARY:  AMACLIB                                */ 01820000
+*/*                                                                  */ 01830000
+*/*01* CHANGE ACTIVITY:                                              */ 01840000
+*/*                                                                  */ 01850000
+*/* $L0= SHRTP   HBB5520 940505 PDN2: SYSPLEX Shared Tape            */ 01860000
+*/* $L1= SHRTP   HBB5520 940602 PDN2: SYSPLEX Shared Tape        @L1A*/ 01870000
+*/* $L2= SHRTP   HBB5520 940802 PDN2: SYSPLEX Shared Tape        @L2A*/ 01880000
+*/* $P1= PN71115 HBB5520 940802 PDN2: PLX/ASM Mismatch           @P1A*/ 01890000
+*/* $01= OW22579 HBB5520 970319 PDHB: Various SSTA and supporting    */ 01900000
+*/*                                   Cost Factoring changes.    @01A*/ 01910000
+*/* $02= OW27611 HBB5520 970901 PDTN: Handle broken unit affinity    */ 01920000
+*/*                                   after algorithm call       @02A*/ 01930000
+*/* $03= OW29932 HBB5520 980320 PDHB: Generic Preference value       */ 01940000
+*/*                                   Factoring changes.         @03A*/ 01950000
+*/* $04= OW40085 HBB6606 990730 PDHB: Further qualify the setting    */ 01960000
+*/*                                   of SSTAVOLM.               @04A*/ 01970000
+*/* $L3= GRPLMT  HBB7730 050225 PDHB: GRouP LiMiT support.       @L3A*/ 01980000
+*/* $05= OA10240 HBB7709 050225 PDTA: Pending offline devices in     */ 01990000
+*/*                                   Recovery Allocation        @05A*/ 02000000
+*/* $P2= ME03330 HBB7730 050610 PDTA: SSTADNDV for compatibility @P2A*/ 02001002
+*/*                                                                  */ 02010000
+*/* END OF SPECIFICATIONS ********************************************/ 02020000
+*/*                                                                  */ 02030000
+*/* C - Add SSTADNDV where SSTANDEV used to be.  This field is       */ 02031000
+*/*     only for compatibility reasons with prior releases and       */ 02032000
+*/*     SSTANDVS should be used instead.                         @P2A*/ 02033000
+*/* C - Update the description of SSTAONUN to include pending        */ 02040000
+*/*     offline devices when in Recovery Allocation.             @05A*/ 02050000
+*/* C - Reserved where SSTANDEV ( FIXED(16) ) was at hex offset 6    */ 02060000
+*/*     in the Device Request Array and defined SSTANDVS FIXED(32)   */ 02070000
+*/*     as its replacement at hex offset 14.                         */ 02080000
+*/*   - Changed the mapping version number (SSTAVERC) from three     */ 02090000
+*/*     (4) to four (4).                                         @L3A*/ 02100000
+*/* C - New conditions were added to the meaning of SSTAVOLM         */ 02110000
+*/*     (volume was not RETAINed or PASSed) and therefore,           */ 02120000
+*/*     changed the comment associated with this flag.           @04A*/ 02130000
+*/* C - Changed the SSTA table comment in the prolog.  The actual    */ 02140000
+*/*     changes are in IEFZCST2 which reordered the Generic          */ 02150000
+*/*     Preference value Cost bits to come before the three (3)      */ 02160000
+*/*     ACL related Cost bits so the Generic Preference factors      */ 02170000
+*/*     have a higher weighting factor than the ACL and Volume/      */ 02180000
+*/*     Unit status factors.                                         */ 02190000
+*/*   - Changed the version constant (SSTAVERC) to three (3).    @03A*/ 02200000
+*/* C - Added a new bit SSTAUARM to the DD Array Entry to            */ 02210000
+*/*     indicate that unit affinity has been removed, even though    */ 02220000
+*/*     SSTAUNAF may still be on.  This occurs when IEFAB484         */ 02230000
+*/*     detects that the unit affinity must be broken, e.g. if       */ 02240000
+*/*     the referenced DD has been allocated to a unit which has a   */ 02250000
+*/*     reserved volume mounted.  This is not a permanent condition, */ 02260000
+*/*     and if the allocation is retried later the unit affinity may */ 02270000
+*/*     not need to be removed, so SCTUNAFF remains set, as does     */ 02280000
+*/*     SSTAUNAF.                                                    */ 02290000
+*/*   - Updated the current version constant SSTAVERC to 2.      @02A*/ 02300000
+*/* C - Reordered the three (3) SSTAIBMM ACL related flags to come   */ 02310000
+*/*     before the four (4) Volume related flags to give devices     */ 02320000
+*/*     with ACLs a higher priority than non-ACL devices, regardless */ 02330000
+*/*     of the volume state/status of a device.                      */ 02340000
+*/*   - Declared a version field (SSTAVERS) and a constant           */ 02350000
+*/*     (SSTAVERC) to be set by IEFAB483.                            */ 02360000
+*/*   - Declared four (4) length fields to provide a length value    */ 02370000
+*/*     to Users for each of the SSTA sections (Header, DDA, DRA,    */ 02380000
+*/*     and EDA).  This last change satisfies REQuest REQ00052448.   */ 02390000
+*/*                                                              @01A*/ 02400000
+*/* C - Added SSTADSK and SSTACHAR definitions to assembler.     @P1A*/ 02410000
+*/* C - Removed dataset name and added pointer to the JFCB       @L1A*/ 02420000
+*/*     which contains the dataset name and other information.   @L1A*/ 02430000
+*/* C - Added new DD level information indicators.               @L1A*/ 02440000
+*/* C - Added the SSI function code constant.                    @L1A*/ 02450000
+*/* C - Added bit to let subsystem indicate that the random      @L1A*/ 02460000
+*/*     preference value is to be overridden.                    @L1A*/ 02470000
+*/* C - Added field to let subsystem supply override to random   @L1A*/ 02480000
+*/*     preference value.                                        @L1A*/ 02490000
+*/* C - Added bit to let subsystem override deferred mounting.   @L1A*/ 02500000
+*/* C - Added bits to indicate what type of call it is.          @L1A*/ 02510000
+*/* A - Created for SYSPLEX Shared Tape                              */ 02520000
+*/********************************************************************/ 02530000
+*        %GOTO SSTAPLX;  /*                                             02540000
+         MACRO                                                          02550000
+         IEFSSTA ,                                                      02560000
+         SPACE 2                                                        02570000
+*********************************************************************** 02580000
+*                                                                       02590000
+*  Mapping for the SSTA Header.  One (1) per Step/SSI 78 call.          02600000
+*                                                                       02610000
+*********************************************************************** 02620000
+*                                                                       02630000
+SSTA     DSECT                     Tape Allocation SSI parameters       02640000
+SSTAID   DS    CL4                 Identifier 'SSTA'                    02650000
+SSTAVERS DS    BL1                 SSTA version.                   @01A 02660000
+SSTAFLGS DS    BL1                 SSI call information flags.     @01C 02670000
+SSTAFCAL EQU   X'80'               First call for this job step  @L1A   02680000
+*                                  or dynamic allocation request        02690000
+SSTARECV EQU   X'40'               This call from Recovery       @L1A   02700000
+*                                  Allocation processing                02710000
+SSTATRTY EQU   X'20'               This call from Tape           @L1A   02720000
+*                                  Allocation retry processing          02730000
+SSTAARTY EQU   X'10'               This call from Common         @L1A   02740000
+*                                  Allocation retry processing          02750000
+         DS    CL2                 reserved                      @L1A   02760000
+SSTASNAM DS    CL8                 System name                          02770000
+SSTAJNAM DS    CL8                 Job name                             02780000
+SSTASTNM DS    CL16                8-byte Job step name followed        02790000
+*                                  by 8 reserved bytes or 8-byte        02800000
+*                                  Procedure name followed by           02810000
+*                                  8-byte Job step name                 02820000
+*                                  (See TIOCSTEP in IEFTIOT1)           02830000
+SSTASTPN DS    XL4                 Step number                          02840000
+SSTANDDS DS    XL4                 Number of DD's                       02850000
+SSTADDAP DS    A                   Pointer to the first DD array        02860000
+*                                  entry for this job/step              02870000
+*                                                                       02880000
+SSTAHDRL EQU   *-SSTA              Length of the SSTA Header.      @01A 02890000
+*                                                                       02900000
+         SPACE 2                                                        02910000
+*********************************************************************** 02920000
+*                                                                       02930000
+*  Mapping for a DD Array entry.  One (1) per non-SMS Managed,          02940000
+*  non-DUMMY, non-Subsystem Tape DD.                                    02950000
+*                                                                       02960000
+*********************************************************************** 02970000
+*                                                                       02980000
+SSTADDA  DSECT                     DD array entry                       02990000
+SSTADDN  DS    CL8                 DD name                              03000000
+SSTAJFCP DS    A                   Pointer to the JFCB for this  @L2A   03010000
+*                                  DD array entry                @L2A   03020000
+SSTACPOS DS    XL4                 Concatenation position               03030000
+SSTADDF1 DS    B                   DD level information byte 1   @L1A   03040000
+SSTANEW  EQU   X'80'               DISP=NEW indicator            @L1A   03050000
+SSTAMOD  EQU   X'40'               DISP=MOD indicator            @L1A   03060000
+SSTAOLD  EQU   X'20'               DISP=OLD indicator            @L1A   03070000
+SSTAGDGS EQU   X'10'               GDG single request            @L1A   03080000
+SSTAGALL EQU   X'08'               Part of GDG all request       @L1A   03090000
+SSTAGDGA EQU   X'04'               Generated DD                  @L1A   03100000
+SSTAVLAF EQU   X'02'               Volume affinity indicator     @L1A   03110000
+SSTAVAFF EQU   X'01'               Intra-step volume affinity    @L1A   03120000
+SSTADDF2 DS    B                   DD level information byte 2   @L1A   03130000
+SSTAUNAF EQU   X'80'               Unit affinity indicator       @L1A   03140000
+SSTAUARM EQU   X'40'               Unit affinity has been removed,      03150000
+*                                  but this condition is not            03160000
+*                                  permanent (i.e. the SIOT still       03170000
+*                                  indicates unit affinity)      @02A   03180000
+         DS    CL2                 reserved                      @L1A   03190000
+SSTANDRA DS    XL4                 Number of device request arrays      03200000
+SSTADRAP DS    A                   Pointer to the first device request  03210000
+*                                  array entry for this DD              03220000
+SSTADDAN DS    A                   Pointer to the next DD array entry   03230000
+*                                                                       03240000
+SSTADDAL EQU   *-SSTADDA           Length of one (1) DD Array entry.    03250000
+*                                                                  @01A 03260000
+*                                                                       03270000
+         SPACE 2                                                        03280000
+*********************************************************************** 03290000
+*                                                                       03300000
+*  Mapping for a Device Request Array entry.  One (1) per volunit       03310000
+*  entry for a single DD.                                               03320000
+*                                                                       03330000
+*********************************************************************** 03340000
+*                                                                       03350000
+SSTADRA  DSECT                     Device request array entry           03360000
+SSTAVOLI DS    CL6                 Volume serial number                 03370000
+SSTADNDV DS    XL2                 Was SSTANDEV.  This field contains   03380000
+*                                  the number of devices eligible for   03381000
+*                                  this DD, with a maximum of 65535     03382000
+*                                  devices.  This field is provided for 03383000
+*                                  compatibility reasons only and       03384000
+*                                  SSTANDVS should be used instead.     03385000
+*                                                                 @P2C  03386000
+SSTAREQT DS    B                   Device request information flags     03390000
+SSTAPRV  EQU   X'80'               Private request                      03400000
+SSTASPEC EQU   X'40'               Specific volume needed               03410000
+SSTADEFR EQU   X'20'               Volume mounting deferred             03420000
+SSTAALOC EQU   X'10'               Entry already allocated              03430000
+SSTASKIP EQU   X'08'               This entry being skipped             03440000
+SSTAUREQ DS    B                   User supplied request level          03450000
+*                                  overrides                      @L1C  03460000
+SSTAUDFR EQU   X'80'               Force request to defer mounting.     03470000
+*                                                                 @L1A  03480000
+SSTAUPRF EQU   X'40'               Indicates to use SSTAPREF in place   03490000
+*                                  of random clumping avoidance.  @L1A  03500000
+SSTAVUID DS    XL2                 Volume unit id for affinity          03510000
+SSTADEVP DS    A                   Pointer to the first eligible        03520000
+*                                  device array entry for this request  03530000
+SSTADRAN DS    A                   Pointer to the next device request   03540000
+*                                  array entry for this DD              03550000
+SSTANDVS DS   XL4                  Number of devices eligible for       03560000
+*                                  this DD.                        @L3A 03570000
+SSTADRAL EQU   *-SSTADRA           Length of one (1) Device Request     03580000
+*                                  Array entry.                    @01A 03590000
+*                                                                       03600000
+         SPACE 2                                                        03610000
+*********************************************************************** 03620000
+*                                                                       03630000
+*  Mapping for an Eligible Device Array entry.  One (1) per eligible    03640000
+*  device for a single volunit entry.                                   03650000
+*                                                                       03660000
+*********************************************************************** 03670000
+*                                                                       03680000
+SSTAEDA  DSECT                     Eligible device array                03690000
+SSTADNUM DS    CL4                 Device number in EBCDIC              03700000
+*                                                                       03710000
+SSTAIBMM DS    0BL3                IBM applied mask                     03720000
+SSTAIBM1 DS    B                   First byte of the IBM mask           03730000
+SSTADSK  EQU   X'80'               This device skipped for request @P1A 03740000
+SSTADMND EQU   X'40'               This device demanded by this    @P1C 03750000
+*                                  request                         @P1C 03760000
+SSTAONUN EQU   X'20'               Online/Unallocated device.  In       03770000
+*                                  Recovery Allocation processing,      03780000
+*                                  this may also indicate a pending     03790000
+*                                  offline device                  @05C 03800000
+SSTANAFH EQU   X'10'               Not assigned to foreign host    @P1C 03810000
+SSTASPCM EQU   X'08'               Volume mounted is one needed    @P1C 03820000
+*                                  for this request                @P1C 03830000
+SSTAACL1 EQU   X'04'               Either no ACL is installed and this  03840000
+*                                  is a specific request or the ACL is  03850000
+*                                  active and this is a nonspecific     03860000
+*                                  request (public or private).    @01M 03870000
+SSTAACL2 EQU   X'02'               The installed ACL is inactive.  @01M 03880000
+SSTAACL3 EQU   X'01'               Either the ACL is active and this    03890000
+*                                  is a specific request or no ACL is   03900000
+*                                  installed and this is a nonspecific  03910000
+*                                  request (public or private).    @01M 03920000
+SSTAIBM2 DS    B                   Second byte of the IBM mask.         03930000
+SSTAVOLM EQU   X'80'               Either the last volume mounted is    03940000
+*                                  needed OR the volume mounted is      03950000
+*                                  Public, was not PASSed or RETAINed,  03960000
+*                                  and this is a Scratch Request.  @04C 03970000
+SSTANVOL EQU   X'40'               No volume is mounted and the last    03980000
+*                                  volume mounted is not needed.   @01M 03990000
+SSTAWVOL EQU   X'20'               The wrong volume is mounted for      04000000
+*                                  a specific request but the last      04010000
+*                                  volume mounted matches.         @01M 04020000
+SSTAAVOL EQU   X'10'               Either the wrong volume is mounted   04030000
+*                                  and the last one does not match,     04040000
+*                                  or any volume is mounted and this    04050000
+*                                  is a private request.           @01M 04060000
+SSTANAS  EQU   X'08'               This device is not              @P1C 04070000
+*                                  automatically switchable        @P1C 04080000
+SSTAIBM3 DS    B                   Third byte of the IBM mask           04090000
+*                                  (currently reserved)                 04100000
+*                                                                       04110000
+SSTAPREF DS    B                   Optional value to use as a           04120000
+*                                  replacement for random clumping      04130000
+*                                  avoidance.                     @L1A  04140000
+*                                                                       04150000
+SSTAUSRM DS    0BL4                User applied mask                    04160000
+*                                                                       04170000
+SSTAUSE1 DS    B                   First byte of the User mask          04180000
+SSTAINEL EQU   X'80'               Mark device ineligible               04190000
+SSTAUS01 EQU   X'40'               User factor 1 should be assigned     04200000
+SSTAUS02 EQU   X'20'               User factor 2 should be assigned     04210000
+SSTAUS03 EQU   X'10'               User factor 3 should be assigned     04220000
+SSTAUS04 EQU   X'08'               User factor 4 should be assigned     04230000
+SSTAUS05 EQU   X'04'               User factor 5 should be assigned     04240000
+SSTAUS06 EQU   X'02'               User factor 6 should be assigned     04250000
+SSTAUS07 EQU   X'01'               User factor 7 should be assigned     04260000
+*                                                                       04270000
+SSTAUSE2 DS    B                   Second byte of the User mask         04280000
+SSTAUS08 EQU   X'80'               User factor 8 should be assigned     04290000
+SSTAUS09 EQU   X'40'               User factor 9 should be assigned     04300000
+SSTAUS10 EQU   X'20'               User factor 10 should be assigned    04310000
+SSTAUS11 EQU   X'10'               User factor 11 should be assigned    04320000
+SSTAUS12 EQU   X'08'               User factor 12 should be assigned    04330000
+SSTAUS13 EQU   X'04'               User factor 13 should be assigned    04340000
+SSTAUS14 EQU   X'02'               User factor 14 should be assigned    04350000
+SSTAUS15 EQU   X'01'               User factor 15 should be assigned    04360000
+*                                                                       04370000
+SSTAUSE3 DS    B                   Third byte of the User mask          04380000
+SSTAUS16 EQU   X'80'               User factor 16 should be assigned    04390000
+SSTAUS17 EQU   X'40'               User factor 17 should be assigned    04400000
+SSTAUS18 EQU   X'20'               User factor 18 should be assigned    04410000
+SSTAUS19 EQU   X'10'               User factor 19 should be assigned    04420000
+SSTAUS20 EQU   X'08'               User factor 20 should be assigned    04430000
+SSTAUS21 EQU   X'04'               User factor 21 should be assigned    04440000
+SSTAUS22 EQU   X'02'               User factor 22 should be assigned    04450000
+SSTAUS23 EQU   X'01'               User factor 23 should be assigned    04460000
+*                                                                       04470000
+SSTAUSE4 DS    B                   Fourth byte of the User mask         04480000
+SSTAUS24 EQU   X'80'               User factor 24 should be assigned    04490000
+SSTAUS25 EQU   X'40'               User factor 25 should be assigned    04500000
+SSTAUS26 EQU   X'20'               User factor 26 should be assigned    04510000
+*                                                                       04520000
+SSTAEDAL EQU   *-SSTAEDA           Length of one (1) Eligible Device    04530000
+*                                  Array entry.                    @01A 04540000
+*                                                                       04550000
+******************************************************************      04560000
+*                                                                       04570000
+*  Constants                                                            04580000
+*                                                                       04590000
+******************************************************************      04600000
+*                                                                       04610000
+SSTACHAR DC    CL4'SSTA'           Eye catcher                     @P1A 04620000
+SSTAVERC EQU   04                  Current SSTA version number.    @L3C 04630000
+SSOBTALC EQU   78                  Function code                   @L1A 04640000
+       MEND                                                             04650000
+**********************************************************************/ 04660000
+*%SSTAPLX: ;                                                            04670000
+*                                                                       04680000
+*/********************************************************************/ 04690000
+*/*                                                                  */ 04700000
+*/*  Mapping for the SSTA Header.  One (1) per Step/SSI 78 call.     */ 04710000
+*/*                                                                  */ 04720000
+*/********************************************************************/ 04730000
+*                                                                       04740000
+*DCL                                                                    04750000
+*  1 SSTA SSOBTA,                   /* Tape Allocation SSI 78           04760000
+*                                      parameters.               @L1C*/ 04770000
+*    3 SSTAID   CHAR(4),            /* Identifier 'SSTA'             */ 04780000
+*    3 SSTAVERS BIT(8),             /* SSTA version.             @01A*/ 04790000
+*    3 SSTAFLGS BIT(8),             /* SSTA information flags.   @01C*/ 04800000
+*      5 SSTAFCAL BIT(1),           /* First call to SSI for job step   04810000
+*                                      or dynamic allocation     @L1A*/ 04820000
+*      5 SSTARECV BIT(1),           /* Call to SSI from Recovery        04830000
+*                                      Allocation processing     @L1A*/ 04840000
+*      5 SSTATRTY BIT(1),           /* Call to SSI from Tape Allocation 04850000
+*                                      retry processing          @L1A*/ 04860000
+*      5 SSTAARTY BIT(1),           /* Call to SSI from Common Alloc.   04870000
+*                                      retry processing          @L1A*/ 04880000
+*      5 *        BIT(4),           /* Not used and available.   @01C*/ 04890000
+*    3 *        CHAR(2),            /* Not used and available.   @L1A*/ 04900000
+*    3 SSTASNAM CHAR(8),            /* System name                   */ 04910000
+*    3 SSTAJNAM CHAR(8),            /* Job name                      */ 04920000
+*    3 SSTASTNM CHAR(16),           /* 8-byte Job step name followed    04930000
+*                                      by 8 reserved bytes or 8-byte    04940000
+*                                      Procedure name followed by       04950000
+*                                      8-byte Job step name             04960000
+*                                      (See TIOCSTEP in IEFTIOT1)    */ 04970000
+*    3 SSTASTPN FIXED(31),          /* Step number                   */ 04980000
+*    3 SSTANDDS FIXED(31),          /* Number of DD's                */ 04990000
+*    3 SSTADDAP PTR(31);            /* Pointer to the first DD array    05000000
+*                                      entry for this job/step       */ 05010000
+*                                                                       05020000
+*/********************************************************************/ 05030000
+*/*                                                                  */ 05040000
+*/*  Mapping for a DD Array entry.  One (1) per non-SMS Managed,     */ 05050000
+*/*  non-DUMMY, non-Subsystem, Tape DD.                              */ 05060000
+*/*                                                                  */ 05070000
+*/********************************************************************/ 05080000
+*                                                                       05090000
+*DCL                                                                    05100000
+*  1 SSTADDA BASED,                 /* DD Array entry                */ 05110000
+*    3 SSTADDN  CHAR(8),            /* DD Name                       */ 05120000
+*    3 SSTAJFCP PTR(31),            /* Pointer to the JFCB for this     05130000
+*                                      DD Array entry            @L2C*/ 05140000
+*    3 SSTACPOS FIXED(31),          /* Concatenation position        */ 05150000
+*    3 SSTADDF1 BIT(8),             /* DD level information 1    @L1A*/ 05160000
+*      5 SSTANEW  BIT(1),           /* DISP=NEW indicator        @L1A*/ 05170000
+*      5 SSTAMOD  BIT(1),           /* DISP=MOD indicator        @L1A*/ 05180000
+*      5 SSTAOLD  BIT(1),           /* DISP=OLD indicator        @L1A*/ 05190000
+*      5 SSTAGDGS BIT(1),           /* GDG single request        @L1A*/ 05200000
+*      5 SSTAGALL BIT(1),           /* Part of GDG all request   @L1A*/ 05210000
+*      5 SSTAGDGA BIT(1),           /* Generated DD              @L1A*/ 05220000
+*      5 SSTAVLAF BIT(1),           /* Volume affinity indicator @L1A*/ 05230000
+*      5 SSTAVAFF BIT(1),           /* Intra-step volume affinity@L1A*/ 05240000
+*    3 SSTADDF2 BIT(8),             /* DD level information 2    @L1A*/ 05250000
+*      5 SSTAUNAF BIT(1),           /* Unit affinity indicator   @L1A*/ 05260000
+*      5 SSTAUARM BIT(1),           /* Unit affinity has been removed,  05270000
+*                                      but this condition is not        05280000
+*                                      permanent (i.e. the SIOT still   05290000
+*                                      indicates unit affinity)  @02A*/ 05300000
+*      5 *        BIT(6),           /* Not used and available.   @02C*/ 05310000
+*    3 *        CHAR(2),            /* Not used and available.   @L1A*/ 05320000
+*    3 SSTANDRA FIXED(31),          /* Number of Device Request Array   05330000
+*                                      entries for this DD.          */ 05340000
+*    3 SSTADRAP PTR(31),            /* Pointer to the first Device      05350000
+*                                      Request Array entry for this     05360000
+*                                      DD.                           */ 05370000
+*    3 SSTADDAN PTR(31);            /* Pointer to the next DD array     05380000
+*                                      entry                         */ 05390000
+*                                                                       05400000
+*/********************************************************************/ 05410000
+*/*                                                                  */ 05420000
+*/*  Mapping for a Device Request Array entry.  One (1) per volunit  */ 05430000
+*/*  entry for a single DD.                                          */ 05440000
+*/*                                                                  */ 05450000
+*/********************************************************************/ 05460000
+*                                                                       05470000
+*DCL                                                                    05480000
+*  1 SSTADRA BASED,                 /* Device Request Array entry    */ 05490000
+*    3 SSTAVOLI CHAR(6),            /* Volume serial number          */ 05500000
+*    3 SSTADNDV FIXED(16),          /* Was SSTANDEV.  This field        05501000
+*                                      contains the number of devices   05502000
+*                                      eligible for this DD, with a     05503000
+*                                      maximum of 65535 devices.  This  05504000
+*                                      field is provided for            05505000
+*                                      compatibility reasons only and   05506000
+*                                      SSTANDVS should be used instead. 05507000
+*                                                                @P2C*/ 05508000
+*    3 SSTAREQT BIT(8),             /* Device req information flags  */ 05530000
+*      5 SSTAPRV  BIT(1),           /* Private request               */ 05540000
+*      5 SSTASPEC BIT(1),           /* Specific volume needed        */ 05550000
+*      5 SSTADEFR BIT(1),           /* Volume mounting deferred      */ 05560000
+*      5 SSTAALOC BIT(1),           /* Entry already allocated       */ 05570000
+*      5 SSTASKIP BIT(1),           /* This entry being skipped      */ 05580000
+*      5 *        BIT(3),           /* reserved                      */ 05590000
+*    3 SSTAUREQ BIT(8),             /* User supplied request level      05600000
+*                                      overrides                 @L1C*/ 05610000
+*      5 SSTAUDFR BIT(1),           /* Force request to defer           05620000
+*                                      mounting                  @L1A*/ 05630000
+*      5 SSTAUPRF BIT(1),           /* Replace random clumping          05640000
+*                                      avoidance value with             05650000
+*                                      SSTAPREF value supplied   @L1A*/ 05660000
+*      5 *        BIT(6),           /* reserved                  @L1A*/ 05670000
+*    3 SSTAVUID FIXED(15),          /* Volume unit id for affinity   */ 05680000
+*    3 SSTADEVP PTR(31),            /* Pointer to the first eligible    05690000
+*                                      device array entry for this      05700000
+*                                      request                       */ 05710000
+*    3 SSTADRAN PTR(31),            /* Pointer to the next device       05720000
+*                                      request array entry for this     05730000
+*                                      DD.                           */ 05740000
+*    3 SSTANDVS FIXED(32);          /* Number of devices eligible for   05750000
+*                                      this DD.                  @L3A*/ 05760000
+*                                                                       05770000
+*/********************************************************************/ 05780000
+*/*                                                                  */ 05790000
+*/*  Mapping for an Eligible Device Array entry.  One (1) per        */ 05800000
+*/*  eligible device for a single volunit entry.                     */ 05810000
+*/*                                                                  */ 05820000
+*/********************************************************************/ 05830000
+*                                                                       05840000
+*DCL                                                                    05850000
+*  1 SSTAEDA BASED,                 /* Eligible Device Array entry.  */ 05860000
+*    3 SSTADNUM CHAR(4),            /* Device number in EBCDIC       */ 05870000
+*    3 SSTAIBMM BIT(24),            /* IBM applied mask          @L1C*/ 05880000
+*      5 SSTADSKP BIT(1),           /* This device being skipped     */ 05890000
+*      5 SSTADMND BIT(1),           /* This device demanded by this     05900000
+*                                      request                       */ 05910000
+*      5 SSTAONUN BIT(1),           /* Online/Unallocated device.  In   05920000
+*                                      Recovery Allocation processing,  05930000
+*                                      this may also indicate a pending 05940000
+*                                      offline device            @05C*/ 05950000
+*      5 SSTANAFH BIT(1),           /* Not assigned to foreign host  */ 05960000
+*      5 SSTASPCM BIT(1),           /* Volume mounted is one needed     05970000
+*                                      for this request              */ 05980000
+*      5 SSTAACL1 BIT(1),           /* Either no ACL is installed and   05990000
+*                                      this is a specific request or    06000000
+*                                      the ACL is active and this is a  06010000
+*                                      nonspecific request (public or   06020000
+*                                      private).                 @01M*/ 06030000
+*      5 SSTAACL2 BIT(1),           /* The installed ACL is inactive    06040000
+*                                                                @01M*/ 06050000
+*      5 SSTAACL3 BIT(1),           /* Either the ACL is active and     06060000
+*                                      this is a specific request or    06070000
+*                                      no ACL is installed and this is  06080000
+*                                      a nonspecific request (public    06090000
+*                                      or private)               @01M*/ 06100000
+*      5 SSTAVOLM BIT(1),           /* Either the last volume mounted   06110000
+*                                      is needed OR the volume mounted  06120000
+*                                      is Public, was not PASSed or     06130000
+*                                      RETAINed, and this is a          06140000
+*                                      Scratch Request.          @04C*/ 06150000
+*      5 SSTANVOL BIT(1),           /* No volume is mounted and the     06160000
+*                                      last volume mounted is not the   06170000
+*                                      one needed.               @01M*/ 06180000
+*      5 SSTAWVOL BIT(1),           /* The wrong volume is mounted for  06190000
+*                                      a specific request but the last  06200000
+*                                      volume mounted matches.   @01M*/ 06210000
+*      5 SSTAAVOL BIT(1),           /* Either the wrong volume is       06220000
+*                                      mounted and the last one does    06230000
+*                                      not match, or any volume is      06240000
+*                                      mounted and this is a private    06250000
+*                                      request.                  @01M*/ 06260000
+*      5 SSTANAS  BIT(1),           /* This device is not               06270000
+*                                      automatically switchable      */ 06280000
+*      5 *        BIT(11),          /* Reserved                  @L1C*/ 06290000
+*                                                                       06300000
+*    3 SSTAPREF FIXED(8),           /* Optional replacement of          06310000
+*                                      random clumping avoidance        06320000
+*                                      value                     @L1A*/ 06330000
+*                                                                       06340000
+*    3 SSTAUSRM BIT(32),            /* User applied mask             */ 06350000
+*      5 SSTAINEL BIT(1),           /* Mark device ineligible        */ 06360000
+*      5 SSTAUS01 BIT(1),           /* Assign user factor 1          */ 06370000
+*      5 SSTAUS02 BIT(1),           /* Assign user factor 2          */ 06380000
+*      5 SSTAUS03 BIT(1),           /* Assign user factor 3          */ 06390000
+*      5 SSTAUS04 BIT(1),           /* Assign user factor 4          */ 06400000
+*      5 SSTAUS05 BIT(1),           /* Assign user factor 5          */ 06410000
+*      5 SSTAUS06 BIT(1),           /* Assign user factor 6          */ 06420000
+*      5 SSTAUS07 BIT(1),           /* Assign user factor 7          */ 06430000
+*      5 SSTAUS08 BIT(1),           /* Assign user factor 8          */ 06440000
+*      5 SSTAUS09 BIT(1),           /* Assign user factor 9          */ 06450000
+*      5 SSTAUS10 BIT(1),           /* Assign user factor 10         */ 06460000
+*      5 SSTAUS11 BIT(1),           /* Assign user factor 11         */ 06470000
+*      5 SSTAUS12 BIT(1),           /* Assign user factor 12         */ 06480000
+*      5 SSTAUS13 BIT(1),           /* Assign user factor 13         */ 06490000
+*      5 SSTAUS14 BIT(1),           /* Assign user factor 14         */ 06500000
+*      5 SSTAUS15 BIT(1),           /* Assign user factor 15         */ 06510000
+*      5 SSTAUS16 BIT(1),           /* Assign user factor 16         */ 06520000
+*      5 SSTAUS17 BIT(1),           /* Assign user factor 17         */ 06530000
+*      5 SSTAUS18 BIT(1),           /* Assign user factor 18         */ 06540000
+*      5 SSTAUS19 BIT(1),           /* Assign user factor 19         */ 06550000
+*      5 SSTAUS20 BIT(1),           /* Assign user factor 20         */ 06560000
+*      5 SSTAUS21 BIT(1),           /* Assign user factor 21         */ 06570000
+*      5 SSTAUS22 BIT(1),           /* Assign user factor 22         */ 06580000
+*      5 SSTAUS23 BIT(1),           /* Assign user factor 23         */ 06590000
+*      5 SSTAUS24 BIT(1),           /* Assign user factor 24         */ 06600000
+*      5 SSTAUS25 BIT(1),           /* Assign user factor 25         */ 06610000
+*      5 SSTAUS26 BIT(1),           /* Assign user factor 26         */ 06620000
+*      5 *        BIT(5);           /* Reserved                      */ 06630000
+*                                                                       06640000
+*/********************************************************************/ 06650000
+*/*                                                                  */ 06660000
+*/*  Constants                                                       */ 06670000
+*/*                                                                  */ 06680000
+*/********************************************************************/ 06690000
+*                                                                       06700000
+*DCL                                                                    06710000
+*  SSOBTALC FIXED(15) CONSTANT(78), /* Function code             @L1A*/ 06720000
+*  SSTACHAR CHAR(4)   INIT('SSTA'), /* SSTA eye catcher.         @01C*/ 06730000
+*  SSTADDAL FIXED(31) CONSTANT(LENGTH(SSTADDA)), /* Length of one       06740000
+*                                      (1) DD Array entry.       @01A*/ 06750000
+*  SSTADRAL FIXED(31) CONSTANT(LENGTH(SSTADRA)), /* Length of one       06760000
+*                                      (1) Device Request Array entry.  06770000
+*                                                                @01A*/ 06780000
+*  SSTAEDAL FIXED(31) CONSTANT(LENGTH(SSTAEDA)), /* Length of one       06790000
+*                                      (1) Eligible Device Array entry. 06800000
+*                                                                @01A*/ 06810000
+*  SSTAHDRL FIXED(31) CONSTANT(LENGTH(SSTA)), /* Length of the          06820000
+*                                      SSTA Header.              @01A*/ 06830000
+*  SSTAVERC FIXED(8)  CONSTANT(04); /* Current SSTA version number.     06840000
+*                                                                @L3C*/ 06850000

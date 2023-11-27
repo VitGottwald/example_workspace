@@ -1,0 +1,151 @@
+         MACRO                                                          00050000
+&NAME    WRTBFR &RPL=,&TYPE=                                            00100000
+.*                                                                      00105000
+.* $MAC(WRTBFR):                                                        00120000
+.*                                                                      00135000
+.*PROPRIETARY V3 STATEMENT                                     @WA04075 00136500
+.*LICENSED MATERIALS - PROPERTY OF IBM                         @WA04075 00137000
+.*"RESTRICTED MATERIALS OF IBM"                                @WA04075 00137500
+.*5695-DF1                                                     @WA04075 00138000
+.*COPYRIGHT 1992, 2011 IBM CORP.                               @WA04075 00138600
+.*END PROPRIETARY V3 STATEMENT                                 @WA04075 00139200
+.*                                                                 @L1A 00139400
+.* FUNCTION: VSAM macro.                                           @L1A 00139600
+.*                                                                      00140000
+.* STATUS: z/OS 1.13 DFSMS                                         @L1C 00140700
+.*                                                                      00141500
+.* CHANGE ACTIVITY:                                                     00142200
+.*  PREVENT COPYRIGHT FROM SHOWING WHEN MACRO IS INVOKED       @WA04075 00143000
+.* $L1=64BIT,JDZ1D10,20101119,SVLWER: 64 bit message               @L1A 00144000
+.*                                                                      00145000
+         GBLC  &SYSAM64         AMODE64=YES set by SYSSTATE macro  @L1A 00146200
+         GBLC  &SYSASCE         ASCENV=AR or ANY set by SYSSTATE   @L1A 00147400
+         GBLA  &SYSALVL         ARCHLVL set by SYSSTATE macro      @L1A 00148600
+         LCLA  &CODE                    CODE ACCUMULATOR                00150000
+         LCLA  &I                       WORK VARIABLE                   00200000
+         LCLB  &LRU                     TYPE=LRU INDICATOR              00250000
+         LCLB  &ERR                     ERROR INDICATOR                 00300000
+         LCLB  &LRUREG                  REGISTER FORM OF LRU            00310000
+         LCLB  &LRUR0                   PERCENT IS IN REG 0             00320000
+         LCLC  &LRUPCT                  LRU VALUE                       00350000
+         SYSSTATE TEST     Test how macros are to expand           @L1A 00356600
+         AIF   ('&SYSAM64' NE 'YES').ChkAR   GO IF AMODE64 NOT YES @L1A 00363200
+         IGGERMAC 203,WRTBFR    THE WRTBFR MACRO DOES NOT SUPPORT  @L1A 00369800
+&ERR     SETB  1                  SYSSTATE AMODE64=YES             @L1A 00376400
+.ChkAR   AIF   (('&SYSASCE' EQ '') OR ('&SYSASCE' EQ 'P')).ChkPos  @L1A 00383000
+         IGGERMAC 204,WRTBFR    THE WRTBFR MACRO DOES NOT SUPPORT  @L1A 00389600
+&ERR     SETB  1                  SYSSTATE ASCENV=AR OR ANY        @L1A 00396200
+.ChkPos  AIF   (N'&SYSLIST EQ 0).NOPOS GO IF NO POSITIONAL OPERANDS@L1C 00402800
+.POSLOOP ANOP                                                           00410000
+&I       SETA  &I+1                     POINT TO NEXT POS OPERAND       00420000
+         IDAERMAC 1,&SYSLIST(&I)        ISSUE WARNING MNOTE             00450000
+         AIF   (&I LT N'&SYSLIST).POSLOOP  GO IF MORE POS OPERANDS      00460000
+.NOPOS   ANOP                                                           00500000
+         AIF   ('&RPL' NE '').ROKY      GO IF RPL SPECIFIED             00550000
+         IDAERMAC 2,RPL                 ISSUE ERROR MNOTE               00600000
+&ERR     SETB  1                        INDICATE ERROR                  00650000
+.ROKY    ANOP                                                           00700000
+         AIF   ('&TYPE' NE '').TOKY     GO IF TYPE NOT SPECIFIED NULL   00750000
+         IDAERMAC 2,TYPE                ISSUE ERROR MNOTE               00800000
+&ERR     SETB  1                        INDICATE ERROR                  00850000
+         AGO   .TYPEB                   GO AROUND TYPE ANALYSIS         00900000
+.TOKY    ANOP                                                           00950000
+         AIF   ('&TYPE' NE 'DS').TDSB   GO IF NOT FOR DATA SET          01000000
+&CODE    SETA  0*256                    INDICATE DATA SET               01050000
+         AGO   .TYPEB                   GO AROUND TYPE ANALYSIS         01100000
+.TDSB    ANOP                                                           01150000
+         AIF   (K'&TYPE LT 6).TLRUB     GO IF NOT AT LEAST 6 CHARS      01200000
+         AIF   ('&TYPE'(1,4) NE 'LRU(').TLRUB  GO IF NOT LEAST RCNT USD 01250000
+&I       SETA  K'&TYPE                  POINT TO LAST CHARACTER         01300000
+         AIF   ('&TYPE'(&I,1) NE ')').TLRUB  GO IF LAST CHAR NOT ')'    01350000
+         AIF   ('&TYPE'(5,1) NE '(').NOREG  GO IF NOT REG FORM          01360000
+         AIF   ('&TYPE'(6,1) NE '1').REGOK  OK IF NOT 1 OR 13           01380000
+         AIF   ('&TYPE'(7,1) EQ '3').TLRUB  ERROR IF REG 13             01390000
+         AIF   ('&TYPE'(7,1) EQ ')').TLRUB  ERROR IF REG 1              01392000
+.REGOK   ANOP                                                           01394000
+         AIF   ('&TYPE'(6,1) NE '0').NOTR0  GO IF NOT REGISTER ZERO     01394400
+         AIF   ('&TYPE'(7,1) NE ')').NOTR0  GO IF NOT REGISTER ZERO     01394800
+&LRUR0   SETB  1                        INDICATE PERCENTAGE IS IN REG 0 01395200
+.NOTR0   ANOP                                                           01395600
+&LRUREG  SETB  1                        INDICATE REGISTER FORM          01396000
+.NOREG   ANOP                                                           01398000
+&LRU     SETB  1                        INDICATE LEAST                  01400000
+&CODE    SETA  4*256                    ..RECENTLY USED                 01450000
+         AIF   (&LRUREG).REGOK1         GO IF REGISTER FORM             01460000
+&I       SETA  K'&TYPE-5                CALC LENGTH OF N IN LRU(N)      01500000
+&LRUPCT  SETC  '&TYPE'(5,&I)            PICK UP PERCENT OF BUFFERS      01550000
+         AGO   .TYPEB                   GO AROUND TYPE ANALYSIS         02050000
+.REGOK1  ANOP                                                           02060000
+&I       SETA  K'&TYPE-7                CALC LENGTH OF N IN LRU((N))    02070000
+&LRUPCT  SETC  '&TYPE'(6,&I)            PICK UP PERCENT OF BUFFERS      02080000
+         AGO   .TYPEB                                                   02090000
+.TLRUB   ANOP                                                           02100000
+         AIF   ('&TYPE' NE 'ALL').TALLB  GO IF NOT FOR ALL BUFFERS      02150000
+&CODE    SETA  8*256                    INDICATE ALL BUFFERS            02200000
+         AGO   .TYPEB                   GO AROUND TYPE ANALYSIS         02250000
+.TALLB   ANOP                                                           02300000
+         AIF   ('&TYPE' NE 'TRN').TTRNB  GO IF NOT FOR TRANSACTION      02350000
+&CODE    SETA  12*256                   INDICATE TRANSACTION            02400000
+         AGO   .TYPEB                   GO AROUND TYPE ANALYSIS         02450000
+.TTRNB   ANOP                                                           02500000
+         AIF   ('&TYPE' NE 'CHK').TDRBT  GO IF NOT FOR CHECK POINT      02550000
+&CODE    SETA  16*256                   INDICATE CHECK POINT            02600000
+         AGO   .TYPEB                   GO AROUND TYPE ANALYSIS         02650000
+.TDRBT   ANOP                                                           02666600
+         AIF   ('&TYPE' NE 'DRBA').TERRX  GO IF NOT FOR DATA RBA        02683200
+&CODE    SETA  20*256                   INDICATE DATA RBA               02699800
+         AGO   .TYPEB                   GO AROUND TYPE ANALYSIS         02716400
+.TERRX   ANOP                                                           02733000
+         IDAERMAC 3,TYPE,&TYPE          ISSUE ERROR MNOTE               02750000
+&ERR     SETB  1                        INDICATE ERROR                  02800000
+.TYPEB   ANOP                                                           02850000
+         AIF   (&ERR).END               GO IF ANY ERRORS                02900000
+         AIF   ('&NAME' EQ '').NAMEB    GO IF NO NAME                   02910000
+&NAME    DS    0H                                                       02950000
+.NAMEB   ANOP                                                           02960000
+         AIF   ('&RPL'(1,1) EQ '(').RPLR  GO IF RPL SPECIFIED AS REG    03000000
+         LA    1,&RPL              LOAD RPL ADDRESS                     03050000
+         AGO   .AREG               GO AROUND REG CODE                   03100000
+.RPLR    ANOP                                                           03150000
+         AIF   ('&RPL' EQ '(1)').AREG   GO IF RPL ADDRESS ALREADY IN 1  03200000
+         LR    1,&RPL(1)           LOAD RPL ADDRESS                     03230000
+.AREG    AIF   (&SYSALVL GE 2).Forz                                @L1A 03260000
+.*                  Expand for pre-z/Architecture                  @L1A 03290000
+         AIF   (NOT &LRU).LRUB     GO IF NOT LEAST RECENTLY USED        03320000
+         AIF   (&LRUREG).REG       BRANCH IF REGISTER FORM              03350000
+         LA    0,&LRUPCT           LOAD PERCENT OF BUFFERS              03380000
+         AGO   .LRUOK                                                   03410000
+.REG     ANOP                                                           03420000
+         AIF   (&LRUR0).LRUOK      GO IF ALREADY IN REGISTER 0          03427300
+         LR    0,&LRUPCT           LOAD PERCENT OF BUFFERS              03434600
+.LRUOK   ANOP                                                           03442000
+         SLL   0,16                SHIFT TO HIGH ORDER                  03474000
+         ICM   0,3,*+18            INSERT WRITE BUFFER CODES            03506000
+         AGO   .NLRUB              GO AROUND NOT LRU CODE               03538000
+.LRUB    ANOP                                                           03570000
+         LH    0,*+18              LOAD WRITE BUFFER CODES              03580000
+.NLRUB   ANOP                                                           03590000
+         L     15,24(,1)           LOAD ACB ADDRESS FROM RPL            03604000
+         L     15,8(,15)           LOAD VSAM INTERFACE RTN ADDR         03618000
+         LA    14,*+8              LOAD RETURN ADDRESS                  03632000
+         BR    15                  BRANCH TO INTERFACE ROUTINE          03646000
+&CODE    SETA  &CODE+15            INDICATE WRITE BUFFER                03660000
+         DC    AL2(&CODE)          WRITE BUFFER CODES                   03674000
+         MEXIT                                                     @L1A 03688000
+.* Expand for z/Architecture or later.                             @L1A 03702000
+.Forz    AIF   (NOT &LRU).LRUBz    GO IF NOT LEAST RECENTLY USED   @L1A 03716000
+         AIF   (&LRUREG).REGz      BRANCH IF REGISTER FORM         @L1A 03730000
+         IILH  0,&LRUPCT           LOAD PERCENT OF BUFFERS         @L1A 03744000
+         AGO   .NLRUBz                                             @L1A 03758000
+.REGz    AIF   (&LRUR0).LRUOKz     GO IF ALREADY IN REG 0          @L1A 03772000
+         LR    0,&LRUPCT           LOAD PERCENT OF BUFFERS         @L1A 03786000
+.LRUOKz  ANOP                                                           03795300
+         SLL   0,16                SHIFT TO HIGH ORDER                  03804600
+         AGO   .NLRUBz             GO AROUND NOT LRU CODE          @L1A 03814000
+.LRUBz   SR    0,0                 Prepare for insertion           @L1A 03828000
+.NLRUBz  IILL  0,&Code+15          Buffer codes in low half        @L1A 03842000
+         L     15,24(,1)           LOAD ACB ADDRESS FROM RPL       @L1A 03856000
+         L     15,8(,15)           LOAD VSAM INTERFACE ROUTINE ADDR@L1A 03870000
+         BASR  14,15               CALL THE INTERFACE ROUTINE      @L1A 03884000
+.END     ANOP                                                           03900000
+         MEND                                                           03950000

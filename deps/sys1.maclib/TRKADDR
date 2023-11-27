@@ -1,0 +1,397 @@
+* %/*                                                                   00050000
+         MACRO                                                          00100000
+&Label   TRKADDR &OPERATION,&A,&B,&REG=                                 00150000
+.**** START OF SPECIFICATIONS ****************************************  00200000
+.*                                                                      00250000
+.*$MAC(TRKADDR): Track address service                                  00300000
+.*                                                                      00350000
+.*DESCRIPTIVE-NAME = Track address service                              00400000
+.*                                                                      00450000
+.*PROPRIETARY V3 STATEMENT                                              00500000
+.*Licensed Materials - Property of IBM                                  00550000
+.*"Restricted Materials of IBM"                                         00600000
+.*5694-A01                                                              00650000
+.*Copyright IBM Corp. 2008, 2009                                        00700000
+.*END PROPRIETARY V3 STATEMENT                                          00750000
+.*                                                                      00800000
+.*STATUS = z/OS 1.10 DFSMS                                              00850000
+.*                                                                      00900000
+.*FUNCTION = Perform operations on DASD track addresses in the form     00950000
+.*           CCCCcccH, where CCCC are the 16 low order bits of the      01000000
+.*           cylinder number and ccc are the 12 high order bits.        01050000
+.*                                                                      01100000
+.* Syntax:                                                              01150000
+.*                                                                      01200000
+.*      ABSTOREL,cchh,REG=(rega,regb)                                   01250000
+.*           Converts absolute track address (CCCCcccH) to a            01300000
+.*           relative track number and stores the result in the         01350000
+.*           first register. The second register is used for scratch.   01400000
+.*                                                                      01450000
+.*      COMPARE,cchh1,cchh2,REG=(rega,regb)                             01500000
+.*           Normalizes the 2 input values (CCCCcccH to cccCCCCH),      01530000
+.*           then compares the 2 normalized values. Sets the            01560000
+.*           condition code as for CLC. The two registers are used      01590000
+.*           for scratch. The input values are returned unchanged.      01620000
+.*                                                                      01650000
+.*      EXTRACTCYL,cchh,REG=reg                                         01700000
+.*           Extracts the 28-bit cylinder number to a register          01733300
+.*           (CCCCcccH to 0cccCCCC). The input field is unchanged.      01766600
+.*                                                                      01800000
+.*      EXTRACTTRK,cchh,REG=reg                                         01850000
+.*           Extracts the 4-bit track number to a register              01883300
+.*           (CCCCcccH to 0000000H). The input field is unchanged.      01916600
+.*                                                                      01950000
+.*      NEXTTRACK,cchh,REG=reg                                          02000000
+.*           Increments the track address by one track and increments   02050000
+.*           the cylinder number if necessary (CCCCcccH to CCCCcccH+1). 02075000
+.*           The modified value is returned in the input cchh field.    02100000
+.*           The register is used for scratch.                          02125000
+.*                                                                      02150000
+.*      NORMALIZE,cchh,REG=reg                                          02200000
+.*           Reverses the 16-bit and 12-bit portions of the cylinder    02250000
+.*           number and stores the result in the 32-bit register        02300000
+.*           with the H digit so you can use a simple unsigned          02350000
+.*           comparison.  The CCCCcccH becomes cccCCCCH.  Use           02400000
+.*           this when comparing one cchh against many of them.         02450000
+.*           Normalize each and do an unsigned comparison.              02500000
+.*                                                                      02550000
+.*      NORMTOABS,cchh,REG=(rega,regb)                                  02558300
+.*           Converts a normalized value (cccCCCCH) to absolute         02566600
+.*           format (CCCCcccH). cchh is the field containing the value  02571500
+.*           to convert, the converted value is returned in the         02576400
+.*           first register, the second register is used as a           02581300
+.*           work register.                                             02586200
+.*                                                                      02591500
+.*      RELTOABS,cchh,REG=reg                                           02600000
+.*           Converts a relative track number to CCCCcccH format in     02650000
+.*           the cchh field.  The register must be the first in an      02700000
+.*           even/odd pair.  The odd register must contain the          02750000
+.*           relative track number on the volume.  The macro            02800000
+.*           modifies both registers.  In 24-bit and 31-bit             02850000
+.*           addressing modes these are four-byte registers.            02900000
+.*           In 64-bit mode, they are eight-byte registers.             02950000
+.*                                                                      03000000
+.*      SETCYL,cchh,REG=reg                                             03050000
+.*           Stores the cylinder number from the register to the        03100000
+.*           28-bits in the cchh field and sets H to 0 (0cccCCCC to     03133300
+.*           CCCCccc0). The register is destroyed.                      03166600
+.*                                                                      03200000
+.*                                                                      03250000
+.*NOTES = May expand slightly more efficiently if in AMODE 64, which    03300000
+.*        is indicated by preceding this with SYSSTATE AMODE64=YES.     03350000
+.*                                                                      03400000
+.*        Each storage location can be specifed as a field name         03412500
+.*        or as a register in parentheses such as (R5) where the        03425000
+.*        register contains a pointer to the field to be operated on.   03437500
+.*                                                                      03450000
+.*MODULE-TYPE = Macro                                                   03500000
+.*                                                                      03550000
+.*PROCESSOR = Assembler                                                 03600000
+.*                                                                      03650000
+.*ATTRIBUTES = Executable Macro                                         03700000
+.*                                                                      03750000
+.*ENTRY-POINT = Macro Statement                                         03800000
+.*                                                                      03850000
+.*INPUT = See description under 'FUNCTION'                              03900000
+.*                                                                      03950000
+.*OUTPUT = See description under 'FUNCTION'                             04000000
+.*                                                                      04050000
+.*EXIT-NORMAL = MEND statement                                          04100000
+.*                                                                      04150000
+.*EXIT-ERROR  = MNOTE AND MEND STATEMENT.                               04200000
+.*                                                                      04250000
+.*EXTERNAL-REFERENCES = None                                            04300000
+.*                                                                      04350000
+.*TABLES = None                                                         04400000
+.*                                                                      04450000
+.*MACROS = None                                                         04500000
+.*                                                                      04550000
+.*CHANGE-ACTIVITY =                                                     04600000
+.*                                                                      04650000
+.*$L0=LARGEVOL,HDZ1A10,20060824,SJPLWER: Extended address volumes       04700000
+.*$P1=K1B0811 ,HDZ1B10,20090109,SJPLJBC: Removed 5 MNOTE comments @P1A  04716600
+.*                        as requested by MR1111085524            @P1A  04733200
+.*                                                                      04750000
+.**** END OF SPECIFICATIONS ******************************************  04800000
+.*                                                                      04850000
+         GBLC  &SYSAM64       AMODE 64 indicator                        04900000
+         LCLC  &OP            Operation to perform                      04950000
+         SYSSTATE TEST        Test for AMODE 64, setting &SYSAM64       05000000
+.*                                                                      05014200
+.*---------------------------------------------------------------*      05028400
+.*                                                               *      05042600
+.*   Set variables to reference the input value(s)               *      05056800
+.*                                                               *      05071000
+.*---------------------------------------------------------------*      05085200
+&AP0     SETC  '&A'           Assume the register form not coded        05100000
+&AP2     SETC  '&A+2'         Set to reference variable A+2             05150000
+&AP3     SETC  '&A+3'         Set to reference variable A+3             05200000
+&BP0     SETC  '&B'           Assume the register form not coded        05250000
+&BP2     SETC  '&B+2'         Set to reference variable B+2             05300000
+&BP3     SETC  '&B+3'         Set to reference variable B+3             05350000
+         AIF   ('&A'(1,1) NE '(').CHKB  Go if register form not coded   05400000
+.*---------------------------------------------------------------*      05412500
+.*   Handle 1st parameter in register form.                      *      05425000
+.*---------------------------------------------------------------*      05437500
+&AP0     SETC  '0&A'          Handle register form                      05450000
+&AP2     SETC  '2&A'          Set 2(A)                                  05500000
+&AP3     SETC  '3&A'          Set 3(A)                                  05550000
+.CHKB    AIF   ('&B' EQ '').SetOp       Go if second place not coded    05600000
+         AIF   ('&B'(1,1) NE '(').SetOp Go if register form not coded   05650000
+.*---------------------------------------------------------------*      05662500
+.*   Handle 2nd parameter in register form.                      *      05675000
+.*---------------------------------------------------------------*      05687500
+&BP0     SETC  '0&B'          Handle register form                      05700000
+&BP2     SETC  '2&B'          Set 2(B)                                  05750000
+&BP3     SETC  '3&B'          Set 3(B)                                  05778500
+.*                                                                      05807100
+.*---------------------------------------------------------------*      05814200
+.*                                                               *      05821300
+.*   Check the operation.                                        *      05828400
+.*                                                               *      05835500
+.*---------------------------------------------------------------*      05842600
+.SetOp   ANOP                                                           05850000
+&OP      SETC  (UPPER '&OPERATION')   Ensure the operand is upper case  05900000
+         AIF   ('&OP' EQ 'ABSTOREL').DoAToR                             05950000
+         AIF   ('&OP' EQ 'COMPARE').DoCompare                           06000000
+         AIF   ('&OP' EQ 'COUNTTRACKS').DoCount                         06050000
+         AIF   ('&OP' EQ 'EXTRACTCYL').DoExtCyl                         06100000
+         AIF   ('&OP' EQ 'EXTRACTTRK').DoExtTrk                         06150000
+         AIF   ('&OP' EQ 'NEXTTRACK').DoIncr                            06200000
+         AIF   ('&OP' EQ 'NORMALIZE').DoNormal                          06250000
+         AIF   ('&OP' EQ 'RELTOABS').DoRToA                             06300000
+         AIF   ('&OP' EQ 'SETCYL').DoSetCyl                             06350000
+         AIF   ('&OP' EQ 'NORMTOABS').DoNormAb                          06375000
+         MNOTE 8,'First operand must be ABSTOREL, COMPARE, EXTRACTCYL, X06400000
+               EXTRACTTRK, NEXTTRACK, NORMALIZE, NORMTOABS, RELTOABS orX06433300
+                SETCYL.'                                                06466600
+         MEXIT                                                          06500000
+.*                                                                      06550000
+.*---------------------------------------------------------------*      06566600
+.*                                                               *      06583200
+.*   Perform ABSTOREL.                                           *      06599800
+.*                                                               *      06616400
+.*---------------------------------------------------------------*      06633000
+.DoAToR  AIF   (N'&SYSLIST NE 2).ERR2   Must be 2 positional parms      06650000
+         AIF   (N'&REG NE 2).ERR5                                       06700000
+         AIF   ('&SYSAM64' EQ 'YES').DoAToR64 Branch if AMODE 64        06750000
+&Label   ICM   &Reg(1),B'1100',&AP2   Get 12 bits of cylinder           06800000
+         SRL   &Reg(1),4              Position for other 16 bits        06850000
+         ICM   &Reg(1),B'0011',&AP0   Get low order 16 bits.            06900000
+         MHI   &Reg(1),15             Multiply by tracks/cyl.           06950000
+         ICM   &Reg(2),B'1000',&AP3   Get low order byte (cH)           07000000
+         SLL   &Reg(2),4           Isolate four H bits                  07050000
+         SRL   &Reg(2),28          Shift to low order four bits         07100000
+         ALR   &Reg(1),&Reg(2)     Add tracks to tracks in cylinders    07150000
+         MEXIT                                                          07250000
+.DoAToR64 ANOP                     Handle 64-bit expansion              07300000
+&Label   ICMH  &Reg(1),B'1100',&AP2   Get 12 bits of cylinder           07350000
+         SRLG  &Reg(1),&Reg(1),36     Position for other 16 bits        07400000
+         ICM   &Reg(1),B'0011',&AP0   Get low order 16 bits.            07450000
+         MHI   &Reg(1),15             Multiply by tracks/cyl.           07500000
+         ICMH  &Reg(2),B'1000',&AP3   Get low order byte (cH)           07550000
+         SLLG  &Reg(2),&Reg(2),4      Isolate four H bits               07600000
+         SRLG  &Reg(2),&Reg(2),60  Shift to low order four bits         07650000
+         ALR   &Reg(1),&Reg(2)     Add tracks to tracks in cylinders    07700000
+         MEXIT                                                          07800000
+.*                                                                      07850000
+.*---------------------------------------------------------------*      07866600
+.*                                                               *      07883200
+.*   Perform COMPARE.                                            *      07899800
+.*                                                               *      07916400
+.*---------------------------------------------------------------*      07933000
+.DoCOMPARE AIF (N'&SYSLIST NE 3).ERR4  Must be 3 positional parms       07950000
+         AIF   (N'&REG NE 2).ERR5                                       08000000
+         AIF   ('&SYSAM64' EQ 'YES').CLC64  Branch if AMODE 64          08050000
+.* Expand COMPARE for AMODE 24 or AMODE 31.                             08100000
+&Label   ICM   &REG(1),B'0100',&AP3   ..cH....  From CCCCcccH           08150000
+         ICM   &REG(2),B'0100',&BP3   ..cH....                          08200000
+         ICM   &REG(1),B'0011',&AP2   ..cHcccH                          08250000
+         ICM   &REG(2),B'0011',&BP2   ..cHcccH                          08300000
+         RLL   &REG(1),&REG(1),28     H..cHccc                          08350000
+         RLL   &REG(2),&REG(2),28     H..cHccc                          08400000
+         ICM   &REG(1),B'1100',&AP0   CCCCHccc                          08450000
+         ICM   &REG(2),B'1100',&BP0   CCCCHccc                          08500000
+         RLL   &REG(1),&REG(1),20     cccCCCCH                          08550000
+         RLL   &REG(2),&REG(2),20     cccCCCCH                          08600000
+         CLR   &REG(1),&REG(2)        Compare normalized cccCCCCH       08650000
+* The condition code is set from the comparison.                        08700000
+         MEXIT                                                          08750000
+.* Expand COMPARE for AMODE 64, which is a little more efficient.       08800000
+.CLC64   ANOP        We can use the full 64-bit registers.              08850000
+&Label   ICMH  &REG(1),B'1100',&AP2   cccH.... ........ From CCCCcccH   08900000
+         ICMH  &REG(2),B'1100',&BP2   cccH.... ........                 08950000
+         SRLG  &REG(1),&REG(1),20     00000ccc H.......                 09000000
+         SRLG  &REG(2),&REG(2),20     00000ccc H.......                 09050000
+         SRL   &REG(1),28             00000ccc 0000000H                 09100000
+         SRL   &REG(2),28             00000ccc 0000000H                 09150000
+         ICM   &REG(1),B'1100',&AP0   00000ccc CCCC000H                 09200000
+         ICM   &REG(2),B'1100',&BP0   00000ccc CCCC000H                 09250000
+         CLGR  &REG(1),&REG(2)        Compare normalized cccCCCC000H    09300000
+* The condition code is set from the comparison.                        09350000
+         MEXIT                                                          09400000
+.*                                                                      09450000
+.*---------------------------------------------------------------*      09500000
+.*                                                               *      09550000
+.*   Perform EXTRACTCYL.                                         *      09600000
+.*                                                               *      09650000
+.*---------------------------------------------------------------*      09700000
+.DoExtCyl AIF  (N'&SYSLIST NE 2).ERR2 Must be 2 positional parms        09850000
+         AIF   (N'&REG NE 1).ERR3                                       09900000
+         AIF   ('&SYSAM64' EQ 'YES').ExtCyl64 Branch if AMODE 64        09950000
+&Label   ICM   &Reg(1),B'1100',&AP2   Get 12 bits of cylinder           10000000
+         SRL   &Reg(1),4              Position for other 16 bits        10050000
+         ICM   &Reg(1),B'0011',&AP0   Get low order 16 bits.            10100000
+         MEXIT                                                          10150000
+.ExtCyl64 ANOP                                                          10200000
+&Label   ICMH  &Reg(1),B'1100',&AP2   Get 12 bits of cylinder           10250000
+         SRLG  &Reg(1),&Reg(1),36     Position for other 16 bits        10300000
+         ICM   &Reg(1),B'0011',&AP0   Get low order 16 bits.            10350000
+         MEXIT                                                          10400000
+.*                                                                      10450000
+.*---------------------------------------------------------------*      10466600
+.*                                                               *      10483200
+.*   Perform EXTRACTTRK.                                         *      10499800
+.*                                                               *      10516400
+.*---------------------------------------------------------------*      10533000
+.DoExtTrk AIF  (N'&SYSLIST NE 2).ERR2   Must be 2 positional parms      10550000
+         AIF   (N'&REG NE 1).ERR3                                       10600000
+         AIF   ('&SYSAM64' EQ 'YES').ExtTrk64 Branch if AMODE 64        10650000
+&Label   ICM   &Reg(1),B'1000',&AP3                                     10700000
+         SLL   &Reg(1),4           Isolate four H bits                  10750000
+         SRL   &Reg(1),28          Shift to low lorder four bits        10800000
+         MEXIT                                                          10850000
+.ExtTrk64 ANOP                                                          10900000
+&Label   ICMH  &Reg(1),B'1000',&AP3                                     10950000
+         SLLG  &Reg(1),&Reg(1),4   Isolate four H bits                  11000000
+         SRLG  &Reg(1),&Reg(1),60  Shift to low lorder four bits        11050000
+         MEXIT                                                          11100000
+.*                                                                      11150000
+.*---------------------------------------------------------------*      11166600
+.*                                                               *      11183200
+.*   Perform NEXTTRACK.                                          *      11199800
+.*                                                               *      11216400
+.*---------------------------------------------------------------*      11233000
+.DoIncr  AIF   (N'&SYSLIST NE 2).ERR2  Must be 2 positional parms       11250000
+         AIF   (N'&REG NE 1).ERR3                                       11300000
+&Lab     SETC  'SYS&SYSNDX'        Make unique branch label             11350000
+&Label   LA    &REG(1),1           Increment track number (H) in        11400000
+         AL    &REG(1),&AP0          CCCCcccH                           11450000
+         TMLL  &REG(1),X'000F'     Branch if low order 4 bits           11500000
+         BRNO  &Lab                  now are not 1111                   11550000
+         SRL   &REG(1),4           0CCCCccc                             11600000
+         AHI   &REG(1),X'1000'     1CCCCccc Add 1, possible overflow    11650000
+         RLL   &REG(1),&REG(1),4   CCCCccc1                             11700000
+         TMLL  &REG(1),X'0001'     Branch if we did not have            11750000
+         BRNO  &Lab                  overflow of the CCCC bits          11800000
+         AHI   &REG(1),X'000F'     Increment ccc & clear the 1          11850000
+&Lab     ST    &REG(1),&AP0        Store CCCCcccH of next track         11900000
+         MEXIT                                                          11950000
+.*                                                                      12000000
+.*---------------------------------------------------------------*      12016600
+.*                                                               *      12033200
+.*   Perform NORMALIZE.                                          *      12049800
+.*                                                               *      12066400
+.*---------------------------------------------------------------*      12083000
+.DoNormal AIF  (N'&SYSLIST NE 2).ERR2  Must be 2 positional parms       12100000
+         AIF   (N'&REG NE 1).ERR3                                       12150000
+&Label   ICM   &REG(1),B'0100',&AP3   ..cH....  From CCCCcccH           12200000
+         ICM   &REG(1),B'0011',&AP2   ..cHcccH                          12250000
+         RLL   &REG(1),&REG(1),28     H..cHccc                          12300000
+         ICM   &REG(1),B'1100',&AP0   CCCCHccc                          12350000
+         RLL   &REG(1),&REG(1),20     cccCCCCH                          12400000
+         MEXIT                                                          12450000
+.*                                                                      12500000
+.*---------------------------------------------------------------*      12532100
+.*                                                               *      12564200
+.*   Perform RELTOABS.                                           *      12596300
+.*                                                               *      12628400
+.*   Converts a relative track number to absolute form in the    *      12660500
+.*   cchh field.  Specify a register that is the first in an     *      12692600
+.*   even/odd pair.  The odd register must contain the relative  *      12724700
+.*   track number on the volume.  The macro modifies both        *      12756800
+.*   registers.  In 24-bit and 31-bit addressing modes these are *      12788900
+.*   four-byte registers. In 64-but mode, they are eight-byte    *      12821000
+.*   registers.                                                  *      12853100
+.*                                                               *      12885200
+.*---------------------------------------------------------------*      12917300
+.DoRToA  AIF   (N'&SYSLIST NE 2).ERR2  Must be 2 positional parms       12950000
+         AIF   (N'&REG NE 1).ERR3                                       13000000
+         AIF   ('&SYSAM64' EQ 'YES').RToA64   Branch if AMODE 64        13050000
+         SLR   &Reg(1),&Reg(1)     Prepare for divide                   13100000
+         D     &Reg(1),=F'15'      Div by tracks/cylinder: 0cccCCCC     13150000
+.*       Track number is in first reg.  Cyl. number in second.          13200000
+         SLL   &Reg(1),12          0000000H->0000H000                   13250000
+         SLDL  &Reg(1),16          0000H000 0cccCCCC->H0000ccc CCCC0000 13300000
+         RLL   &Reg(1),&Reg(1),4   H0000ccc->0000cccH                   13350000
+         OR    &Reg(1),&Reg+1      CCCCcccH    OR remainder in          13400000
+         STCM  &Reg,X'F',&AP0      Store converted value                13450000
+         MEXIT                                                          13550000
+.RToA64  ANOP                 Do 64-bit optimized expansion             13600000
+         SLGR  &Reg(1),&Reg(1)     Prepare for divide                   13650000
+         DSGF  &Reg(1),=F'15'      Div by tracks/cylinder: 0cccCCCC     13700000
+         SLL   &Reg(1),12          0000000H->0000H000                   13750000
+         SLDL  &Reg(1),16          0000H000 0cccCCCC->H0000ccc CCCC0000 13800000
+         RLL   &Reg(1),&Reg(1),4   H0000ccc->0000cccH                   13850000
+         OR    &Reg(1),&Reg+1      CCCCcccH    OR remainder in          13900000
+         STCM  &Reg,X'F',&AP0      Store converted value                13950000
+         MEXIT                                                          14050000
+.*                                                                      14100000
+.*---------------------------------------------------------------*      14116600
+.*                                                               *      14133200
+.*   Perform SETCYL.                                             *      14149800
+.*                                                               *      14166400
+.*---------------------------------------------------------------*      14183000
+.DoSetCyl AIF  (N'&SYSLIST NE 2).ERR2                                   14200000
+         AIF   (N'&REG NE 1).ERR3                                       14250000
+&Label   STCM  &Reg(1),B'0011',&AP0   Set 16 low bits of cylinder       14300000
+         SRL   &Reg(1),16             Isolate 12 high order bits        14350000
+         SLL   &Reg(1),4              Position 12 high order bits       14400000
+         STCM  &Reg(1),B'0011',&AP2   Set low order 12 bits + track     14450000
+         MEXIT                                                          14550000
+.*                                                                      14600000
+.*---------------------------------------------------------------*      14601300
+.*                                                               *      14602600
+.*  Perform NORMTOABS.                                           *      14608400
+.*                                                               *      14614300
+.*---------------------------------------------------------------*      14615600
+.DoNormAb ANOP                                                          14616900
+         AIF  (N'&SYSLIST NE 2).ERR2  Must be 2 positional parms        14618200
+         AIF   (N'&REG NE 2).ERR5     Must be 2 regs                    14619500
+.*---------------------------------------------------------------*      14620800
+.* Initialize CCCCccc0 portion in output reg                     *      14622100
+.*---------------------------------------------------------------*      14623400
+&Label   ICM   &REG(1),B'1111',&AP0  cccCCCCH from input                14624700
+         SLL   &REG(1),12            CCCCH000 position the CCCC         14626000
+         ICM   &REG(1),B'0011',&AP0  CCCCcccC get cccC from input       14627300
+         SRL   &REG(1),4             0CCCCccc shift-out the C           14628600
+         SLL   &REG(1),4             CCCCccc0 shift back w/o C          14629900
+.*---------------------------------------------------------------*      14631200
+.* Use work reg to get H in proper position, then OR into REG(1) *      14632500
+.*---------------------------------------------------------------*      14633800
+         ICM   &REG(2),B'1000',&AP3  CH...... from input                14635100
+         SLL   &REG(2),4             H.......                           14636400
+         SRL   &REG(2),28            0000000H                           14637700
+         OR    &REG(1),&REG(2)       CCCCcccH OR-in the H               14639000
+         MEXIT                                                          14640300
+.*                                                                      14641600
+.*---------------------------------------------------------------*      14642900
+.*                                                               *      14644200
+.*   Issue MNOTEs.                                               *      14645500
+.*                                                               *      14646800
+.*---------------------------------------------------------------*      14648100
+.ERR2    MNOTE 8,'&OP requires two operands'                            14650000
+         MEXIT                                                          14700000
+.ERR3    MNOTE 8,'&OP requires one register in REG='                    14750000
+         MEXIT                                                          14800000
+.ERR4    MNOTE 8,'&OP requires three operands'                          14850000
+         MEXIT                                                          14900000
+.ERR5    MNOTE 8,'&OP requires two registers in REG='                   14950000
+         MEXIT                                                          15000000
+         MEND                                                           15050000
+* */                                                                    15100000
+*  TRKADDR:                                                             15150000
+*  MACRO                                                                15200000
+*  KEYS(INVAL,OUTVAL,WKAREA);                                           15250000
+*  ANS('?'!!MACLABEL!!'TRKADDRP '!!MACLIST!!MACKEYS!!';');              15300000
+*% END;                                                                 15350000

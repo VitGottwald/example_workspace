@@ -1,0 +1,778 @@
+*/********************************************************************/         
+*/*                                                                  */         
+*/* MACRO: VSMLOC                                                    */         
+*/*01* PROPRIETARY STATEMENT=                                        */         
+*/***PROPRIETARY_STATEMENT********************************************/         
+*/*                                                                  */         
+*/*                                                                  */         
+*/* LICENSED MATERIALS - PROPERTY OF IBM                             */         
+*/* 5650-A01 COPYRIGHT IBM CORP. 1981, 2017                          */         
+*/*                                                                  */         
+*/* STATUS= HBB77B0                                                  */         
+*/*                                                                  */         
+*/***END_OF_PROPRIETARY_STATEMENT*************************************/         
+*/* FUNCTION: INTERFACE TO VSMLOC ROUTINE (IGVSLOC)                  */         
+*/*                                                                  */         
+*/*01* EXTERNAL CLASSIFICATION: PI                                   */         
+*/*01* END OF EXTERNAL CLASSIFICATION:                               */         
+*/*                                                                  */         
+*/* SYNTAX: VSMLOC SQA!CSA!LSQA!PVT!CPOOLFIX!CPOOLPAG!CPOOLLCL,      */         
+*/*                AREA=(SYMBOL1,SYMBOL2)                            */         
+*/*                <,LINKAGE=SYSTEM!BRANCH>                          */         
+*/*                <,TCB=SYMBOL3>                                    */         
+*/*                                                                  */         
+*/*           SYMBOL1 = AREA ADDRESS (REGISTER 1-12: LR              */         
+*/*                                   RX ADDRESS: LA)                */         
+*/*                                                                  */         
+*/*           SYMBOL2 = AREA LENGTH (REGISTER 0 2-12: LR             */         
+*/*                                  SYMBOL: L                       */         
+*/*                                  DECIMAL DIGIT: L OR LA)         */         
+*/*                     ONLY REQUIRED WHEN SQA!CSA!LSQA!PVT          */         
+*/*                     IS SPECIFIED                                 */         
+*/*                                                                  */         
+*/*           SYMBOL3 = CONTAINS TCB ADDRESS                         */         
+*/*                     ONLY VALID WHEN SPECIFIED WITH PVT           */         
+*/*                                                                  */         
+*/*         VSMLOC (SQA!CSA!LSQA!PVT!CPOOLFIX!CPOOLPAG!CPOOLLCL)     */         
+*/*                 AREA(VARIABLE1!(VARIABLE1),VARIABLE2)            */         
+*/*                 <RTNCODE(VARIABLE3)> <OUTPUT(VARIABLE4)>         */         
+*/*                 <LINKAGE(SYSTEM!BRANCH)>                         */         
+*/*                 <TCB(VARIABLE5)>                                 */         
+*/*                                                                  */         
+*/*            VARIABLE1 = AREA ! (AREA ADDRESS)                     */         
+*/*                                                                  */         
+*/*            VARIABLE2 = AREA LENGTH                               */         
+*/*                        ONLY REQUIRED WHEN SQA!CSA!LSQA!PVT       */         
+*/*                        IS SPECIFIED                              */         
+*/*                                                                  */         
+*/*            VARIABLE3 = CONTAINS THE RETURN CODE                  */         
+*/*                                                                  */         
+*/*            VARIABLE4 = CONTAINS THE OUTPUT                       */         
+*/*                                                                  */         
+*/*            VARIABLE5 = CONTAINS THE TCB ADDRESS                  */         
+*/*                        ONLY VALID WHEN SPECIFIED WITH PVT        */         
+*/*                                                                  */         
+*/* NOTE: THE DEFAULT FOR THE LINKAGE OPERAND IS 'SYSTEM'            */         
+*/*                                                                  */         
+*/* MACROS: NONE                                                     */         
+*/*                                                                  */         
+*/* EXTERNAL MACRO VARIABLES : EHAREGS, EHAMAPS (PLS ONLY)           */         
+*/*                                                                  */         
+*/* CHANGE ACTIVITY: PCC0796 - WRONG CVT OFFSET FOR BRANCH ENTRY     */         
+*/*                                                                  */         
+*/*                  $L1=DCR0002, JBB2220, 840618, PDFT:             */         
+*/*                      NEW PARAMETERS 'CPOOLFIX', 'CPOOLPAG',      */         
+*/*                      'CPOOLLCL' ADDED INTO VSMLOC SERVICE.   @L1A*/         
+*/*                                                                  */         
+*/*                  $L2=DIV, JBB2220, 840618, PDFT:                 */         
+*/*                      OBTAIN TCB ADDRESS BY SPECIFYING NEW        */         
+*/*                      'TCB' KEYWORD WITH 'PVT'                @L2A*/         
+*/*                                                                  */         
+*/*                  $P1=PA20294, JBB2220, 850605, PDFT:             */         
+*/*                      WRONG OFFSET FOR BRANCHING AROUND DATA  @P1A*/         
+*/*                  $P2=PKB0212, HBB4430, 920617, PDXB: Flows       */         
+*/*                      for STM...LM                                */         
+*/* $P3=xxxxxxxx HBB6606 980115 PDXB: Make VSMLOC work for PLS       */         
+*/* $L3=64BITVSM HBB7703 981204 PD00XB: ESAME                        */         
+*/* $L4=LXREU    HBB7709 030801 PD00XB: ASN-and-LX-Reuse Facility    */         
+*/* $P4=ME12444  HBB7705 080301 PD00KC: Remove comments from         */         
+*/*                                     Col 72                       */         
+*/* $P5=ME13365  HBB7760 080515 PD00OH: Fix prolog                   */         
+*/* $L5=W155942  HBB77B0 170124 PD00XB: zPLX                         */         
+*/* $P6=W395136  HBB77D0 201123 PD00FX: Fix GEN line wrap            */         
+*/*                                                                  */         
+*/********************************************************************/         
+*/* A - 000000-999999                                        @G860P9T*/         
+*  @EJECT;                                                                      
+* %/*                                                                           
+         MACRO                                                                  
+&LABEL   VSMLOC &TYPE,&TCB=,&AREA=,&LINKAGE=SYSTEM                 @L2C         
+         GBLC  &SYSOSREL                                           @L4A         
+         GBLC  &SYSOSREL_ZOSV1R6                                   @L4A         
+         SYSSTATE TEST                                             @L4A         
+         LCLC  &LINK,&ITYPE                                                     
+         LCLC  &IBTCB,&ITCB                                        @L2A         
+         LCLC  &GNAME                                              @L1A         
+         LCLA  &ERROR                                                           
+.*                                                                              
+.*       CHECK VALIDITY OF MACRO OPERANDS                                       
+.*                                                                              
+&GNAME   SETC 'IHB'.'&SYSNDX'                                      @L1A         
+&ERROR   SETA 0                                                                 
+&IBTCB   SETC  '0'                      ASSUME TCB NOT SPECIFIED   @L2A         
+         AIF ('&TYPE(1)' NE '').TYPE  IF NO TYPE SPECIFIED                      
+         MNOTE  12,'IHB313 STORAGE TYPE IS REQUIRED BUT IS NOT SUPPLIED+        
+               . NO TEXT IS GENERATED.'                                         
+         AGO  .AREACK                                                           
+&ERROR   SETA 1                                                                 
+.TYPE    ANOP                                                                   
+         AIF (N'&TYPE LT 2).TYPE1   IF TOO MANY TYPE SUBFIELDS                  
+         MNOTE 4,'IHB331 MACLIST &TYPE IS TOO LONG. ARGUMENTS ARE IGNOR+        
+               ED AFTER &TYPE(1)..'                                             
+.TYPE1   ANOP                                                                   
+         AIF (N'&SYSLIST LT 2).TYPE4   IF TOO MANY POSITIONAL OPERANDS          
+         MNOTE 4,'IHB331 MACLIST IS TOO LONG. ARGUMENTS ARE IGNORED AFT+        
+               ER &SYSLIST(1)..'                                                
+.TYPE4   ANOP                                                                   
+         AIF ('&TYPE(1)' NE 'SQA').NOTSQA IF SQA SPECIFIED                      
+&ITYPE   SETC '0'                                                               
+         AGO  .AREACK                                                           
+.NOTSQA  ANOP                                                                   
+         AIF ('&TYPE(1)' NE 'CSA').NOTCSA IF CSA SPECIFIED                      
+&ITYPE   SETC '1'                                                               
+         AGO  .AREACK                                                           
+.NOTCSA  ANOP                                                                   
+         AIF ('&TYPE(1)' NE 'LSQA').NOTLSQA IF LSQA SPECIFIED                   
+&ITYPE   SETC '2'                                                               
+         AGO  .AREACK                                                           
+.NOTLSQA ANOP                                                                   
+         AIF ('&TYPE(1)' NE 'PVT').NOTPVT IF PVT SPECIFIED                      
+&ITYPE   SETC '3'                                                               
+         AGO  .AREACK                                                           
+.NOTPVT  ANOP                                                                   
+         AIF ('&TYPE(1)' NE 'CPOOLFIX').NOTCPFIX                   @L1A         
+&ITYPE   SETC '4'                                                  @L1A         
+         AGO  .AREACP                                              @L1A         
+.NOTCPFIX ANOP                                                     @L1A         
+          AIF ('&TYPE(1)' NE 'CPOOLPAG').NOTCPPAG                  @L1A         
+&ITYPE   SETC '5'                                                  @L1A         
+         AGO  .AREACP                                              @L1A         
+.NOTCPPAG ANOP                                                     @L1A         
+          AIF ('&TYPE(1)' NE 'CPOOLLCL').NOTCPLCL                  @L1A         
+&ITYPE   SETC '6'                                                  @L1A         
+         AGO  .AREACP                                              @L1A         
+.NOTCPLCL ANOP                                                     @L1A         
+         MNOTE 12,'IHB343 STORAGE TYPE MUST BE SQA, CSA, LSQA, PVT, CPO+        
+               OLFIX, CPOOLPAG, OR CPOOLLCL. NO TEXT IS GENERATED.'    +        
+                                                                   @L1C         
+&ERROR   SETA 1                                                                 
+.AREACK  ANOP                                                                   
+         AIF ('&AREA(1)' NE '' AND '&AREA(2)' NE '').AREA                       
+.*                                  IF AREA OR SUBFIELDS ARE MISSING            
+         MNOTE 12,'IHB313 AREA ADDRESS AND LENGTH IS REQUIRED BUT IS NO+        
+               T SUPPLIED. NO TEXT IS GENERATED.'                               
+&ERROR   SETA 1                                                                 
+         AGO  .AREAOK                                              @L1A         
+.AREA    ANOP                                                                   
+         AIF (N'&AREA LT 3).AREA1   IF TOO MANY AREA SUBFIELDS     @L1C         
+         MNOTE 4,'IHB331 AREA=&AREA IS TOO LONG. ARGUMENTS ARE IGNORED +        
+               AFTER &AREA(2)..'                                                
+.AREA1   ANOP                                                      @L1A         
+&IAREA   SETC  '&AREA(1)'                                          @L1A         
+         AGO  .AREAOK                                              @L1A         
+.AREACP  ANOP                                                      @L1A         
+         AIF ('&AREA(1)' NE '').AREACP1  IF AREA IS MISSING.       @L1A         
+         MNOTE 12,'IHB313 AREA ADDRESS IS REQUIRED BUT IS NOT SUPPLIED.+        
+                NO TEXT IS GENERATED.'                             @L1A         
+&ERROR   SETA 1                                                    @L1A         
+         AGO  .AREAOK                                              @L1A         
+.AREACP1 ANOP                                                      @L1A         
+         AIF (N'&AREA LT 2).AREACP2 IF TOO MANY SUBFIELDS          @L1A         
+         MNOTE 12,'IHB313 AREA=&AREA IS TOO LONG. NO TEXT IS GENERATED.+        
+                '                                                  @L1A         
+&ERROR   SETA 1                                                    @L1A         
+         AGO   .AREAOK                                             @L1A         
+.AREACP2 ANOP                                                      @L1A         
+&IAREA   SETC  '&AREA'            SAVE AREA SPECIFICATION          @L1A         
+.AREAOK  ANOP                                                                   
+         AIF (N'&LINKAGE LT 2).LINKCK  IF TOO MANY LINKAGE SUBFIELDS            
+         MNOTE 4,'IHB331 LINKAGE=&LINKAGE IS TOO LONG. ARGUMENTS ARE IG+        
+               NORED AFTER &LINKAGE(1)..'                                       
+.LINKCK  ANOP                                                                   
+&LINK    SETC  '&LINKAGE(1)'                                                    
+         AIF ('&LINKAGE' EQ '').TCBCK   IF LINKAGE SPECIFIED       @L2C         
+         AIF ('&LINKAGE(1)' EQ 'SYSTEM' OR '&LINKAGE(1)' EQ            +        
+               'BRANCH').TCBCK      IF INCORRECT LINKAGE SPECIFIED @L2C         
+         MNOTE 12,'IHB343 LINKAGE=&LINKAGE MUST BE SYSTEM OR BRANCH. NO+        
+                TEXT IS GENERATED.'                                             
+&ERROR   SETA  1                                                                
+.TCBCK   ANOP                                                      @L2A         
+         AIF ('&TCB' EQ '').SEMEND  IF TCB NOT SPECIFIED           @L2A         
+         AIF (N'&TCB LT 2).TCB1   IF TOO MANY TCB SUBFIELDS        @L2A         
+         MNOTE 4,'IHB331 TCB=&TCB IS TOO LONG.  ARGUMENTS ARE IGNORED A+        
+               FTER &TCB(1)..'                                     @L2A         
+&ITCB    SETC  '&TCB(1)'          SAVE TCB SPECIFICATION           @L2A         
+&IBTCB   SETC  '1'                TCB SPECIFIED                    @L2A         
+         AGO   .SEMAN                                              @L2A         
+.TCB1    ANOP                                                      @L2A         
+&ITCB    SETC  '&TCB'             SAVE TCB SPECIFICATION           @L2A         
+&IBTCB   SETC  '1'                TCB SPECIFIED                    @L2A         
+.******************************************************************@L2A         
+.*    SEMANTIC CHECK                                               @L2A         
+.*    . TCB CAN ONLY BE SPECIFIED WITH PVT                         @L2A         
+.******************************************************************@L2A         
+.SEMAN   ANOP                                                      @L2A         
+         AIF ('&TYPE(1)' EQ 'PVT').SEMEND                          @L2A         
+         MNOTE 12,'IHB343 TCB IS INVALID WITH SQA, CSA, LSQA, CPOOLFIX,+        
+                CPOOLPAG, OR CPOOLLCL. NO TEXT IS GENERATED.'      @L2A         
+&ERROR   SETA 1                                                    @L2A         
+.******************************************************************             
+.*       GENERATE TEXT                                                          
+.******************************************************************             
+.SEMEND  ANOP                                                      @L1A         
+         AIF (&ERROR EQ 0).GENOK    IF ERROR OCCURRED                           
+         MEXIT                                                                  
+.GENOK   ANOP                                                                   
+         AIF ('&LABEL' EQ '').NOLABEL IF A LABEL SPECIFIED                      
+&LABEL   DS  0H                                                                 
+.NOLABEL ANOP                                                                   
+         AIF ('&IAREA'(1,1) NE '(').NOTREGA IF AREA ADDRESS IS A                
+.*                                  REGISTER                       @L1C         
+&IAREA   SETC '&IAREA'(2,K'&IAREA-2) STRIP PARENTHESES             @L1A         
+         AIF ('&IAREA' EQ '1').GENLEN     IF AREA ADDRESS IS NOT       +        
+                                    REGISTER 1                     @L1C         
+         LR  1,&IAREA               ADDRESS OF AREA                @L1C         
+         AGO .GENLEN                                                            
+.NOTREGA ANOP                                                                   
+         LA  1,&IAREA               ADDRESS OF AREA                             
+.GENLEN  ANOP                                                                   
+         AIF (&ITYPE GE 4).GENLINK                                 @L1A         
+         AIF ('&AREA(2)'(1,1) NE '(').NOTREGB IF AREA LENGTH IS A               
+.*                                  REGISTER                                    
+         AIF ('&AREA(2,1)' EQ '0').GENLINK IF AREA LENGTH IS NOT                
+.*                                  REGISTER 0                                  
+         LR  0,&AREA(2,1)           LENGTH OF AREA                              
+         AGO .GENLINK                                                           
+.NOTREGB ANOP                                                                   
+         AIF (T'&AREA(2) NE 'N').ADCON IF LENGTH IS A SYMBOL OR                 
+         AIF (&AREA(2) LE 4095).USELA  GREATER THAN 4095                        
+.ADCON   ANOP                                                                   
+         L   0,=A(&AREA(2))         LENGTH OF AREA                              
+         AGO .GENLINK                                                           
+.USELA   ANOP                                                                   
+         LA  0,&AREA(2).(0,0)       LENGTH OF AREA                              
+.GENLINK ANOP                                                                   
+         AIF ('&LINK' NE 'BRANCH').SYSLINK IF BRANCH SPECIFIED                  
+         AIF ('&ITCB' EQ '').GENRG2      IF TCB NOT SPECIFIED      @L2A         
+         CNOP 0,4                   ALIGN DATA IN FULL WORD BNDY   @L1A         
+         B    *+8                   BRANCH PAST DATA               @P1A         
+&GNAME.F DC   AL1(&ITYPE)           POSITION STORAGE TYPE          @L1A         
+         DC   BL1'&IBTCB.0000000'   POSITION STORAGE FLAGS         @L2A         
+         DC   AL2(0)                RESERVED                       @L1A         
+         L    2,&GNAME.F            STORAGE TYPE                   @L1A         
+         AGO .TYPE2                                                @L1A         
+.GENRG2 ANOP                                                       @L1A         
+         LA  2,&ITYPE.(0,0)         STORAGE TYPE                                
+         AIF ('&ITYPE' EQ '0').TYPE2 IF TYPE IS NOT SQA                         
+         SLL 2,24                   POSITION STORAGE TYPE                       
+.TYPE2   ANOP                                                                   
+         L   15,16(,0)              OBTAIN CVT ADDRESS                          
+         L   15,1148(,15)           VSMLOC ENTRY ADDRESS   @ZMC0796             
+         BASSM 14,15                BRANCH TO VSMLOC ROUTINE                    
+         AIF ('&ITCB' NE '').SAVETCB  IF TCB  SPECIFIED            @L2A         
+         MEXIT                                                                  
+.SYSLINK ANOP                                                                   
+         AIF  (&SYSOSREL GE &SYSOSREL_ZOSV1R6).ITISR6A             @L4A         
+         ESAR 15                    GET SECONDARY ASN                           
+         STM  15,12,16(13)          SAVE REGISTERS                              
+.ITISR6A ANOP                                                      @L4A         
+         AIF ('&ITCB' EQ '').GENRG15    IF TCB NOT SPECIFIED       @L2A         
+         CNOP 0,4                   ALIGN DATA IN FULL WORD BNDY   @L1A         
+         B    *+8                   BRANCH AROUND DATA             @P1A         
+&GNAME.F DC   AL1(&ITYPE)           POSITION STORAGE TYPE          @L1A         
+         DC   BL1'&IBTCB.0000000'   POSITION STORAGE FLAGS         @L2A         
+         DC   AL2(0)                RESERVED                       @L1A         
+         L    15,&GNAME.F           STORAGE TYPE                   @L1A         
+         AGO .TYPE3                                                @L1A         
+.GENRG15 ANOP                                                      @L1A         
+         LA  15,&ITYPE.(0,0)        STORAGE TYPE                                
+         AIF ('&ITYPE' EQ '0').TYPE3 IF TYPE IS NOT SQA                         
+         SLL 15,24                  POSITION STORAGE TYPE                       
+.TYPE3   ANOP                                                                   
+         L    14,16(0,0)            OBTAIN CVT ADDRESS                          
+         L    14,772(,14)           ADDRESS OF SYSTEM LINKAGE TABLE             
+         L    14,92(,14)            OBTAIN PC NUMBER                            
+         PC   0(14)                 PC TO VSMLOC ROUTINE                        
+         AIF  (&SYSOSREL GE &SYSOSREL_ZOSV1R6).ITISR6B             @L4A         
+         L    2,16(,13)             RESTORE SECONDARY ASN                       
+         SSAR 2                     RESTORE SECONDARY ASN                       
+         LM   2,12,28(13)           RESTORE REGISTERS                           
+.ITISR6B ANOP                                                      @L4A         
+         AIF ('&ITCB' EQ '').MMEND      IF TCB NOT SPECIFIED       @L2A         
+.SAVETCB ANOP                                                      @L2A         
+         AIF ('&ITCB'(1,1) NE '(').NOTREG     NOT REGISTER         @L2A         
+&ITCB    SETC '&ITCB'(2,K'&ITCB-2)    STRIP PARENTHESES            @L2A         
+         AIF ('&ITCB' EQ '1').ISREG1     NOT REGISTER              @L2A         
+         LR  &ITCB,1                SAVE TCB ADDRESS               @L2A         
+.ISREG1  ANOP                                                      @L1A         
+         MEXIT                                                     @L1A         
+.NOTREG  ST   1,&ITCB               OBTAIN TCB ADDRESS             @L2A         
+.MMEND   MEND                                                      @L1C         
+* */                                                                            
+*  @EJECT;                                                                      
+* VSMLOC:                                                                       
+*  MACRO KEYS(TCB,AREA,RTNCODE,LINKAGE,OUTPUT,PLX);  /*        931119*/         
+*    DCL SYSOSREL CHAR EXT;         /* DEFINE GLOBAL OS RELEASE  @L4A*/         
+*    DCL SYSOSREL_ZOSV1R6 CHAR EXT; /* ZOS R6 VALUE              @L4A*/         
+*    ANS('?SYSSTATE (TEST);') RESCAN;                         /* @L4A*/         
+*                                                                               
+*  DCL                                                                          
+*                                                                               
+*    EHAMAPS CHAR EXTERNAL,         /* INTERFACE TO EPILOG MACRO     */         
+*    EHAREGS CHAR EXTERNAL,         /* INTERFACE TO EPILOG MACRO     */         
+*    ERROR FIXED,                   /* MACRO ISSUED ERROR MESSAGES   */         
+*    IREGS CHAR,                    /* RESTRICTS REGISTER 15         */         
+*    IRTNCODE CHAR,                 /* INTERNAL RTNCODE VALUE        */         
+*    ITYPE CHAR,                    /* INTERNAL STORAGE TYPE         */         
+*    IADDR CHAR,                    /* INTERNAL AREA ADDRESS         */         
+*    IBTCB CHAR,                    /* INTERNAL TCB BIT          @L2A*/         
+*    IFLAG FIXED,                   /* INTERNAL FLAG             @L1A*/         
+*    IFLAGSTR CHAR,                 /* INT FLAG OUTPUT STRING    @L1A*/         
+*    ITYPESTR CHAR,                 /* INT TYPE OUTPUT STRING    @L1A*/         
+*    ILEN  CHAR,                    /* INTERNAL AREA ADDRESS         */         
+*    ILINK CHAR,                    /* INTERNAL LINKAGE              */         
+*    ITCB  CHAR,                    /* INTERNAL TCB              @L2A*/         
+*    WARN  FIXED;                   /* MACRO ISSUED WARNING MESSAGES */         
+*                                                                               
+*  /******************************************************************/         
+*  /*                                                                */         
+*  /* INITIALIZE VARIABLES                                           */         
+*  /*                                                                */         
+*  /******************************************************************/         
+*                                                                               
+*  ERROR=0;                         /* ASSUME NO ERRORS              */         
+*  WARN=0;                          /* ASSUME NO WARNINGS            */         
+*  IREGS='';                        /* DON'T RESTRICT ANY REGISTERS  */         
+*  IFLAG=0;                         /* ASSUME NO FLAGS           @L1A*/         
+*  IBTCB='0';                      /* INDICATE TCB NOT SPECIFIED @L2A*/         
+*                                                                               
+*  @EJECT;                                                                      
+*                                                                               
+*  /******************************************************************/         
+*  /*                                                                */         
+*  /* CHECK VALIDITY OF MACRO OPERANDS AND OBTAIN VALUES             */         
+*  /*                                                                */         
+*  /******************************************************************/         
+*                                                                               
+*  IF MACLIST(1) = '' THEN          /* IF STORAGE TYPE NOT SPECIFIED */         
+*    DO;                                                                        
+*      ERROR=1;                     /* INDICATE ERROR MESSAGE        */         
+*      ANS MSG('AHA0013 STORAGE TYPE IS REQUIRED BUT IS NOT SUPPLIED.'          
+*              !! ' NO TEXT IS GENERATED.') NORESCAN;                           
+*    END;                                                                       
+*  ELSE                             /* STORAGE TYPE SPECIFIED        */         
+*    DO;                                                                        
+*      IF NUMBER(MACLIST) > 1 THEN  /* IF TOO MANY POSITIONALS       */         
+*        DO;                                                                    
+*          WARN=1;                  /* INDICATE WARNING MESSAGE      */         
+*          ANS MSG('AHA0031 '!!MACLIST!!' IS TOO LONG. ARGUMENTS ' !!           
+*                  'ARE IGNORED AFTER '!!MACLIST(1)!!'.') NORESCAN;             
+*        END;                                                                   
+*      IF MACLIST(1) = 'SQA' THEN   /* IF SQA SPECIFIED              */         
+*        ITYPE='0';                 /* INDICATE SQA STORAGE          */         
+*      ELSE                                                                     
+*        IF MACLIST(1) = 'CSA' THEN /* IF CSA SPECIFIED              */         
+*          ITYPE='1';               /* INDICATE CSA STORAGE          */         
+*        ELSE                                                                   
+*          IF MACLIST(1) = 'LSQA' THEN /* IF LSQA SPECIFIED          */         
+*            ITYPE='2';             /* INDICATE LSQA STORAGE         */         
+*          ELSE                                                                 
+*            IF MACLIST(1) = 'PVT' THEN /* IF PVT SPECIFIED          */         
+*              ITYPE='3';           /* INDICATE PVT STORAGE          */         
+*            ELSE                   /* IF CPOOL-FIX!PAG!LCL      @L1A*/         
+*              IF MACLIST(1) = 'CPOOLFIX' THEN /* IF CPOOLFIX SPECIFIED         
+*                                                                @L1A*/         
+*                ITYPE='4';         /* INDICATE CPOOL GLB FIX    @L1A*/         
+*              ELSE                 /* NOT CPOOLFIX              @L1A*/         
+*                IF MACLIST(1) = 'CPOOLPAG' THEN /* IF CPOOLPAG                 
+*                                      SPECIFIED                 @L1A*/         
+*                  ITYPE='5';       /* INDICATE CPOOL GLB PAGEABLE              
+*                                                                @L1A*/         
+*                ELSE               /* NOT CPOOLPAG              @L1A*/         
+*                  IF MACLIST(1) = 'CPOOLLCL' THEN /* IF CPOOLLCL               
+*                                      SPECIFIED                 @L1A*/         
+*                    ITYPE='6';     /* INDICATE CPOOL LOCAL      @L1A*/         
+*                  ELSE             /* INCORRECT STORAGE TYPE        */         
+*                    DO;                                                        
+*                      ERROR=1;     /* INDICATE ERROR MESSAGE        */         
+*                      ANS MSG('AHA0043 STORAGE TYPE MUST BE SQA, CSA,'         
+*                      !! ' LSQA, PVT, CPOOLFIX, CPOOLPAG OR CPOOLLCL.'         
+*                      !! ' NO TEXT IS GENERATED.') NORESCAN;/*  @L1C*/         
+*                    END;                                                       
+*    END;                                                                       
+*                                                                               
+*  IF TCB ^= '' THEN                /* IF TCB SPECIFIED          @L2A*/         
+*    DO;                            /* PROCESS TCB KEYWORD       @L2A*/         
+*      IF NUMBER(TCB) > 1 THEN      /* IF MORE THAN ONE SUBFIELD @L2A*/         
+*        DO;                        /* PROCESS TCB SUBFIELD      @L2A*/         
+*          WARN=1;                  /* INDICATE WARNING MESSAGE  @L2A*/         
+*          ANS MSG('AHA0031 TCB'!!TCB!!' IS TOO LONG. ' !!                      
+*                  'ARGUMENTS ARE IGNORED AFTER '!!TCB(1)!!'.')                 
+*                  NORESCAN;        /* WARNING MESSAGE           @L2A*/         
+*        END;                       /* PROCESS TCB SUBFIELD      @L2A*/         
+*      IF TCB = 'TCB'       THEN    /* MISSING TCB SUBFIELD      @L2A*/         
+*        DO;                        /* PROCESS TCB SUBFIELD      @L2A*/         
+*          WARN=1;                  /* INDICATE WARNING MESSAGE  @L2A*/         
+*          ANS MSG('AHA0061 TCB SUBFIELD IS NOT SPECIFIED BUT MAY ' !!          
+*              'BE REQUIRED.') NORESCAN;/*                       @L2A*/         
+*        END;                       /* PROCESS TCB SUBFIELD      @L2A*/         
+*      IBTCB = '1' ;                /* SET BIT INDICATES TCB WAS                
+*                                      SPECIFIED                 @L2A*/         
+*      ITCB=TCB(1);                 /* OBTAIN TCB SUBFIELD       @L2A*/         
+*    END;                           /* PROCESS TCB KEYWORD       @L2A*/         
+*                                                                               
+*  IF ITYPE < '4' THEN              /* IF NOT CPOOL TYPE         @L1A*/         
+*    DO;                            /* PROCESS TYPE < 4          @L1A*/         
+*  IF AREA(1) = '' ! AREA(2) = '' THEN  /* IF AREA AND TWO SUBFIELDS            
+*                                      ARE NOT SPECIFIED             */         
+*    DO;                                                                        
+*      ERROR=1;                     /* INDICATE ERROR MESSAGE        */         
+*      ANS MSG('AHA0013 AREA ADDRESS AND LENGTH IS REQUIRED BUT IS ' !!         
+*              'NOT SUPPLIED. NO TEXT IS GENERATED.') NORESCAN;                 
+*    END;                                                                       
+*  ELSE                             /* AREA AND TWO SUBFIELDS                   
+*                                      SPECIFIED                     */         
+*    DO;                                                                        
+*      IF NUMBER(AREA) > 2 THEN     /* IF TOO MANY SUBFIELDS                    
+*                                      SPECIFIED                     */         
+*        DO;                                                                    
+*          WARN=1;                  /* INDICATE WARNING MESSAGE      */         
+*          ANS MSG('AHA0031 AREA'!!AREA!!' IS TOO LONG. ARGUMENTS '!!           
+*                  'ARE IGNORED AFTER '!!AREA(2)!!'.') NORESCAN;                
+*        END;                                                                   
+*      IF AREA(1,1:1) = '(' &                                                   
+*         AREA(1,LENGTH(AREA(1)):LENGTH(AREA(1))) = ')' THEN /*                 
+*                                      IF AREA ADDRESS               */         
+*        IADDR=AREA(1,1);           /* OBTAIN AREA ADDRESS           */         
+*      ELSE                                                                     
+*        IADDR='ADDR('!!AREA(1)!!')'; /* OBTAIN AREA VALUE           */         
+*      ILEN=AREA(2);                /* OBTAIN AREA LENGTH            */         
+*    END;                                                                       
+*  END;                             /* PROCESS TYPE < 4          @L1A*/         
+*    ELSE                           /* CPOOL TYPE                @L1A*/         
+*      DO;                          /* PROCESS CPOOL ADDR        @L1A*/         
+*        IF AREA(1) = ''  THEN      /* IF ADDR NOT SPECIFIED     @L1A*/         
+*          DO;                      /* PROCESS ERROR             @L1A*/         
+*            ERROR = 1;             /* INDICATE ERROR MESSAGE    @L1A*/         
+*            ANS MSG('AHA0013 AREA ADDRESS IS REQUIRED BUT IS NOT ' !!          
+*                  'SUPPLIED. NO TEXT IS GENERATED.') NORESCAN;/*               
+*                                                                @L1A*/         
+*          END;                     /* PROCESS ERROR             @L1A*/         
+*        ELSE;                      /* ADDR IS SPECIFIED         @L1A*/         
+*          DO;                      /* PROCESS ADDR              @L1A*/         
+*            IF NUMBER(AREA) > 1 THEN /* TOO MANY SUBFIELDS                     
+*                                        SPECIFIED               @L1A*/         
+*              DO;                  /* PROCESS ERROR             @L1A*/         
+*                ERROR=1;           /* INDICATE ERROR MESSAGE    @L1A*/         
+*                ANS MSG('AHA0013 AREA'!!AREA!!' IS TOO LONG.' !!               
+*                'NO TEXT IS GENERATED.') NORESCAN;/*            @L1A*/         
+*              END;                 /* PROCESS ERROR             @L1A*/         
+*            ELSE                   /* PROCESS AREA ADDR         @L1A*/         
+*               IF AREA(1:1) = '(' &                                            
+*                  AREA(LENGTH(AREA):LENGTH(AREA)) = ')' THEN /*                
+*                                               IF AREA ADDRESS  @L1A*/         
+*                 IADDR=AREA(1,1);  /* OBTAIN AREA ADDRESS       @L1A*/         
+*               ELSE                /*                           @L1A*/         
+*                 IADDR='ADDR('!!AREA!!')';    /* OBTAIN AREA VALUE             
+*                                                                @L1A*/         
+*          END;                     /* PROCESS ADDR              @L1A*/         
+*      END;                         /* PROCESS CPOOL ADDR        @L1A*/         
+*                                                                               
+*  IF LINKAGE = '' THEN             /* IF LINKAGE NOT SPECIFIED      */         
+*    ILINK='PC';                    /* INDICATE PC LINKAGE           */         
+*  ELSE                             /* LINKAGE SPECIFIED             */         
+*    DO;                                                                        
+*      IF NUMBER(LINKAGE) > 1 THEN  /* IF TOO MANY SUBFIELDS                    
+*                                      SPECIFIED                     */         
+*        DO;                                                                    
+*          WARN=1;                  /* INDICATE WARNING MESSAGE      */         
+*          ANS MSG('AHA0031 LINKAGE'!!LINKAGE!!' IS TOO LONG. ' !!              
+*                  'ARGUMENTS ARE IGNORED AFTER '!!LINKAGE(1)!!                 
+*                  '.') NORESCAN;                                               
+*        END;                                                                   
+*      IF LINKAGE(1) = 'SYSTEM' THEN /* IF SYSTEM SPECIFIED          */         
+*        ILINK='PC';                /* INDICATE PC LINKAGE           */         
+*      ELSE                                                                     
+*        IF LINKAGE(1) = 'BRANCH' THEN /* IF BRANCH SPECIFIED        */         
+*          ILINK='BASSM';           /* INDICATE BASSM LINKAGE        */         
+*        ELSE                       /* INCORRECT LINKAGE SPECIFIED   */         
+*          DO;                                                                  
+*            ILINK='PC';            /* INDICATE PC LINKAGE           */         
+*            IF LINKAGE(1) = '' THEN /* IF NO SUBFIELDS              */         
+*              DO;                                                              
+*                WARN=1;            /* INDICATE WARNING MESSAGE      */         
+*               ANS MSG('AHA0061 LINKAGE TYPE IS NOT SPECIFIED BUT ' !!         
+*                    'MAY BE REQUIRED.') NORESCAN;                              
+*              END;                                                             
+*            ELSE                   /* A SUBFIELD WAS SPECIFIED      */         
+*              DO;                                                              
+*                ERROR=1;           /* INDICATE ERROR MESSAGE        */         
+*                ANS MSG('AHA0043 LINKAGE'!!LINKAGE!!' MUST BE SYSTEM '         
+*                    !!'OR BRANCH. NO TEXT IS GENERATED.') NORESCAN;            
+*              END;                                                             
+*          END;                                                                 
+*    END;                                                                       
+*                                                                               
+*  IF RTNCODE(1) ^= '' THEN         /* IF RTNCODE OPERAND AND SUBFIELD          
+*                                       SPECIFIED                    */         
+*    DO;                                                                        
+*      IRTNCODE=RTNCODE(1);         /* OBTAIN RTNCODE VALUE          */         
+*      IREGS=IREGS!!',GPR15F';      /* NEED TO RESTRICT REGISTER 15  */         
+*      IF NUMBER(RTNCODE) > 1 THEN  /* IF MORE THAN ONE SUBFIELD     */         
+*        DO;                                                                    
+*          WARN=1;                  /* INDICATE WARNING MESSAGE      */         
+*          ANS MSG('AHA0031 RTNCODE'!!RTNCODE!!' IS TOO LONG. ' !!              
+*                  'ARGUMENTS ARE IGNORED AFTER '!!RTNCODE(1)!!'.')             
+*                  NORESCAN;                                                    
+*        END;                                                                   
+*    END;                                                                       
+*  ELSE                             /* RTNCODE SUBFIELD NOT                     
+*                                      SPECIFIED                     */         
+*    IF RTNCODE ^= '' THEN          /* IF RTNCODE OPERAND SPECIFIED  */         
+*      DO;                                                                      
+*        WARN=1;                    /* INDICATE WARNING MESSAGE      */         
+*        ANS MSG('AHA0061 RTNCODE VARIABLE IS NOT SPECIFIED BUT MAY' !!         
+*                'BE REQUIRED.') NORESCAN;                                      
+*      END;                                                                     
+*                                                                               
+*  IF OUTPUT(1) ^= '' THEN          /* IF OUTPUT OPERAND AND SUBFIELD           
+*                                       SPECIFIED                    */         
+*    DO;                                                                        
+*      IOUT=OUTPUT(1);              /* OBTAIN OUTPUT VALUE           */         
+*      IF NUMBER(OUTPUT) > 1 THEN   /* IF MORE THAN ONE SUBFIELD     */         
+*        DO;                                                                    
+*          WARN=1;                  /* INDICATE WARNING MESSAGE      */         
+*          ANS MSG('AHA0031 OUTPUT'!!OUTPUT!!' IS TOO LONG. ' !!                
+*                  'ARGUMENTS ARE IGNORED AFTER '!!OUTPUT(1)!!'.')              
+*                  NORESCAN;                                                    
+*        END;                                                                   
+*    END;                                                                       
+*  ELSE                             /* OUTPUT SUBFIELD NOT                      
+*                                      SPECIFIED                     */         
+*    IF OUTPUT ^= '' THEN           /* IF OUTPUT OPERAND SPECIFIED   */         
+*      DO;                                                                      
+*        WARN=1;                    /* INDICATE WARNING MESSAGE      */         
+*        ANS MSG('AHA0061 OUTPUT VARIABLE IS NOT SPECIFIED BUT MAY ' !!         
+*                'BE REQUIRED.') NORESCAN;                                      
+*      END;                                                                     
+*                                                                               
+*  IF ILINK='BASSM' THEN            /* IF BRANCH LINKAGE             */         
+*    IREGS=IREGS!!',GPR02F';        /* RESTRICT REGISTERS 2 AND 15   */         
+*  ELSE                             /* PC LINKAGE                    */         
+*    DO;                                                                        
+*   IF SYSOSREL < SYSOSREL_ZOSV1R6 THEN /*                       @L4A*/         
+*    IREGS=IREGS!!',GPR02P';        /* RESTRICT REGISTER 2           */         
+*   ELSE                            /*                           @L4A*/         
+*    IF INDEX(IREGX,'GPR14F') = 0 THEN  /*                       @L4A*/         
+*      IREGS=IREGS!!',GPR14F';      /* RESTRICT REGISTER 14      @L4A*/         
+*      IF IRTNCODE='' THEN          /* IF REGISTER 15 NOT ALREADY               
+*                                      RESTRICTED                    */         
+*       IF INDEX(IREGS,'GPR15F') = 0 THEN /*                     @L4A*/         
+*        IREGS=IREGS!!',GPR15F';    /* RESTRICT IT                   */         
+*    END;                                                                       
+*                                                                               
+*  /******************************************************************/         
+*  /*                                                                */         
+*  /* CONSISTENCY CHECK SUPPLIED PARAMETERS. SEARCH FOR DISALLOWED   */         
+*  /* COMBINATIONS.                                                  */         
+*  /*                                                                */         
+*  /*************************************************************@L1A*/         
+*                                                                               
+*  IF (IBTCB = '1')                 /* IF TCB WAS SPECIFIED      @L2A*/         
+*    &(ITYPE ^= '3') THEN           /* AND STOR TYPE IS NOT PVT  @L2A*/         
+*    DO;                            /* PROCESS ERROR             @L2A*/         
+*      ERROR=1;                     /* INDICATE ERROR MESSAGE    @L2A*/         
+*      ANS MSG('AHA0051 TCB ONLY VALID WITH PVT. '                              
+*                 !!'NO TEXT IS GENERATED.') NORESCAN;/*         @L2A*/         
+*    END;                           /* PROCESS ERROR             @L2A*/         
+*                                                                               
+*  /******************************************************************/         
+*  /*                                                                */         
+*  /* GENERATE STORAGE FORM REQUEST TYPE, AND TCB FLAGS.             */         
+*  /*                                                                */         
+*  /*************************************************************@L1A*/         
+*                                                                               
+*  IF IBTCB = '1' THEN              /* IF TCB WAS SPECIFIED      @L2A*/         
+*    IFLAG=IFLAG+128;               /* SET FLAG FIELD            @L2A*/         
+*  IFLAGSTR= '+((' !! CHAR(IFLAG) !! ')*65536)'; /* SET FLAG OUTPUT             
+*                                      STRING                    @L1A*/         
+*  ITYPESTR= '((' !! ITYPE !! ')*16777216)'; /* SET TYPE OUTPUT                 
+*                                      STRING                    @L1A*/         
+*                                                                               
+*  @EJECT;                                                                      
+*                                                                               
+*  /******************************************************************/         
+*  /*                                                                */         
+*  /* GENERATE TEXT                                                  */         
+*  /*                                                                */         
+*  /******************************************************************/         
+*                                                                               
+*  ANS (MACLABEL) COL(MACLMAR) NORESCAN;                                        
+*  ANS ('DO; /* '!!MACNAME!!' '!!MACLIST!!' '!!MACKEYS!!' */')                  
+*      COL(MACCOL) NORESCAN;                                                    
+*  IF ERROR = 0 THEN                /* IF NO ERROR MESSAGES          */         
+*    DO;                                                                        
+*      IF INDEX(EHAMAPS,'XM@') = 0 THEN                                         
+*        EHAMAPS=EHAMAPS!!'XM@';                                                
+*      IF INDEX(EHAREGS,'00F') = 0 THEN                                         
+*        EHAREGS=EHAREGS!!'00F';                                                
+*      IF INDEX(EHAREGS,'01P') = 0 THEN                                         
+*        EHAREGS=EHAREGS!!'01P';                                                
+*      ANS('RFY (GPR00F,GPR01P'!!IREGS!!') RSTD;')                              
+*         COL(MACCOL+2) NORESCAN;                                               
+*      ANS('GPR01P='!!IADDR!!'; /* ADDRESS OF AREA */')                         
+*         COL(MACCOL+2) NORESCAN;                                               
+*      IF ITYPE < '4' THEN          /* IF CPOOL WAS SPECIFIED    @L1A*/         
+*      ANS('GPR00F='!!ILEN!!'; /* LENGTH OF AREA */')                           
+*         COL(MACCOL+2) NORESCAN;                                               
+*      IF ILINK='BASSM' THEN        /* IF BRANCH ENTRY LINKAGE       */         
+*        DO;                                                                    
+*          IF INDEX(EHAREGS,'02F') = 0 THEN                                     
+*            EHAREGS=EHAREGS!!'02F';                                            
+*          IF IBTCB='1' THEN        /* IF TCB WAS SPECIFIED      @L2A*/         
+*          ANS('GPR02F='!!ITYPESTR!!IFLAGSTR !! '; /* STORAGE TYPE */')         
+*             COL(MACCOL+2) NORESCAN; /*                         @L2A*/         
+*          ELSE                     /* TCB NOT SPECIFIED         @L1A*/         
+*            ANS('GPR02F=' !! ITYPESTR !! '; /* STORAGE TYPE */')               
+*             COL(MACCOL+2) NORESCAN; /*                         @L1C*/         
+*          ANS('CALL ((XM@CVT+1148)->I031P)->IPDEF; '!!                         
+*             '/* INVOKE VSMLOC ROUTINE */')                                    
+*             COL(MACCOL+2) NORESCAN;  /*                    @ZMC0796*/         
+*        END;                                                                   
+*      ELSE                         /* IF PC LINKAGE                 */         
+*        DO;                                                                    
+*          IF INDEX(EHAREGS,'02P') = 0 THEN                                     
+*            EHAREGS=EHAREGS!!'02P';                                            
+*          IF INDEX(EHAREGS,'13P') = 0 THEN                                     
+*            EHAREGS=EHAREGS!!'13P';                                            
+*          IF INDEX(EHAREGS,'14F') = 0 THEN                                     
+*            EHAREGS=EHAREGS!!'14F';                                            
+*          IF INDEX(EHAREGS,'15F') = 0 THEN                                     
+*            EHAREGS=EHAREGS!!'15F';                                            
+*  IF SYSOSREL < SYSOSREL_ZOSV1R6 THEN                        /* @L4A*/         
+*  DO;                                                        /* @L4A*/         
+*          ANS('GEN CODE(ESAR  15);  /* SECONDARY ASN */')                      
+*             COL(MACCOL+2) NORESCAN;                                           
+*  END;                                                       /* @L4A*/         
+*          IF PLX = '' ! PLX(1) = 'NO' THEN       /*           931119*/         
+*          DO;                                    /*           931119*/         
+*  IF SYSOSREL < SYSOSREL_ZOSV1R6 THEN                        /* @L4A*/         
+*  DO;                                                        /* @L4A*/         
+*          /* The GEN FLOWS will enable the compiler to understand              
+*             that when it gets to the target, it has the same                  
+*             register contents as at the time of this STM       @P2A*/         
+*          ANS('GEN FLOWS(VL' !! MACINDEX !! 'A)' !!                            
+*                 ' CODE(STM   15,12,16(GPR13P)); '!!                           
+*             '/* SAVE REGISTERS */')                                           
+*             COL(MACLMAR+2) NORESCAN;      /*                   @P6C*/         
+*  END;                                                       /* @L4A*/         
+*          IF IBTCB='1' THEN        /* IF TCB WAS SPECIFIED      @L2A*/         
+*          ANS('GPR15F='!!ITYPESTR!!IFLAGSTR !! '; /* STORAGE TYPE */')         
+*             COL(MACCOL+2) NORESCAN; /*                         @L2A*/         
+*          ELSE                     /* TCB NOT SPECIFIED         @L1A*/         
+*            ANS('GPR15F=' !! ITYPESTR !! '; /* STORAGE TYPE */')               
+*             COL(MACCOL+2) NORESCAN; /*                         @L1C*/         
+*          ANS('RFY GPR14F RSTD;')                                              
+*             COL(MACCOL+2) NORESCAN;                                           
+*          ANS('GPR14F=XM@(24); '!!                                             
+*             '/* OBTAIN PC NUMBER */')                                         
+*             COL(MACCOL+2) NORESCAN;                                           
+*          ANS('PC(GPR14F); '!!                                                 
+*             '/* PC TO VSMLOC ROUTINE */')                                     
+*             COL(MACCOL+2) NORESCAN;                                           
+*          ANS('RFY GPR14F UNRSTD;')                                            
+*             COL(MACCOL+2) NORESCAN;                                           
+*  IF SYSOSREL < SYSOSREL_ZOSV1R6 THEN                        /* @L4A*/         
+*  DO;                                                        /* @L4A*/         
+*          ANS('GEN CODE(L    2,16(GPR13P));' !!                                
+*             '/* RESTORE SECONDARY ASN */')                                    
+*             COL(MACCOL+2) NORESCAN;                                           
+*          ANS('GEN CODE(SSAR 2);' !!                                           
+*             '/* RESTORE SECONDARY ASN */')                                    
+*             COL(MACCOL+2) NORESCAN;                                           
+*          ANS('GEN CODE(LM   2,12,28(GPR13P)); '!!                             
+*             '/* RESTORE REGISTERS */')                                        
+*             COL(MACCOL+2) NORESCAN;                                           
+*          ANS('VL' !! MACINDEX !! 'A:;'!!                                      
+*             '/* FLOWS LABEL FOR OPTIMIZATION */')                             
+*             COL(MACCOL+2) NORESCAN;        /*                  @P2A*/         
+*               /* The following DS 0H tells PL/X not to over-       */         
+*               /* optimize where it puts the label VL. That         */         
+*               /* would be a problem when there is an ELSE after    */         
+*               /* VSMLOC                                        @L5A*/         
+*          ANS('GEN (DS 0H);') SKIP;                          /* @L5A*/         
+*  END;                                                       /* @L4A*/         
+*          END;                                   /*           931119*/         
+*          ELSE DO;                               /* PL/X      931119*/         
+*            IF INDEX(EHAREGS,'14F') = 0 THEN                                   
+*              EHAREGS=EHAREGS!!'14F';                                          
+*            VSMLOCSTRING = 'VSMLOC_' !! MACINDEX;  /*         931119*/         
+*          STORTYPESTRING = 'STORAGETYPE_' !! MACINDEX;   /*     @P3C*/         
+*          ANS('DCL ' !! STORTYPESTRING !! ' REG(*);')                          
+*             COL(MACCOL+2) NORESCAN; /*                         @P3C*/         
+*          IF IBTCB='1' THEN        /* IF TCB WAS SPECIFIED      @L2A*/         
+*           ANS(STORTYPESTRING !! '='                                           
+*                       !!ITYPESTR!!IFLAGSTR !! '; /* STORAGE TYPE */')         
+*             COL(MACCOL+2) NORESCAN; /*                         @P3C*/         
+*          ELSE                     /* TCB NOT SPECIFIED         @L1A*/         
+*            ANS(STORTYPESTRING !! '='                                          
+*                          !! ITYPESTR !! '; /* STORAGE TYPE */')               
+*             COL(MACCOL+2) NORESCAN; /*                         @P3C*/         
+*          ANS('RFY GPR14F RSTD; ')                                             
+*             COL(MACCOL+2) NORESCAN;                                           
+*          ANS('GPR14F=XM@(24); '!!                                             
+*             '/* OBTAIN PC NUMBER */')                                         
+*             COL(MACCOL+2) NORESCAN;                                           
+*          /* Note that the entire linkage is GEN'd in this path                
+*             so that the routine can be INLINEd. If the non-PLX                
+*             path is taken, the GEN FLOWs preclude inlining.                   
+*                                                              931119*/         
+*  IF SYSOSREL < SYSOSREL_ZOSV1R6 THEN                        /* @L4A*/         
+*          ANS('GEN REFS(GPR13P,' !! STORTYPESTRING !! ')' !!                   
+*                              ' SETS(GPR14F,GPR15F) ' !!                       
+*             '/* PC TO VSMLOC ROUTINE */' !! ';')                              
+*             COL(MACCOL+2) NORESCAN;             /*             @P3C*/         
+*  ELSE                                                       /* @L4A*/         
+*          ANS('GEN REFS(' !! STORTYPESTRING !! ')' !!                          
+*                              ' SETS(GPR14F,GPR15F) ' !!                       
+*             '/* PC TO VSMLOC ROUTINE */' !! ';')                              
+*             COL(MACCOL+2) NORESCAN;             /*             @P3C*/         
+*  IF SYSOSREL < SYSOSREL_ZOSV1R6 THEN                        /* @L4A*/         
+*  DO;                                                        /* @L4A*/         
+*          ANS('STM   15,12,16(GPR13P)')                                        
+*             SKIP NORESCAN COL(10);              /*           931119*/         
+*  END;                                                       /* @L4A*/         
+*          ANS('LR    15,' !! STORTYPESTRING)                                   
+*             SKIP NORESCAN COL(10);              /*           931119*/         
+*          ANS('PC    0(GPR14F)')                                               
+*             SKIP NORESCAN COL(10);              /*           931119*/         
+*  IF SYSOSREL < SYSOSREL_ZOSV1R6 THEN                        /* @L4A*/         
+*  DO;                                                        /* @L4A*/         
+*          ANS('L     2,16(GPR13P)')                                            
+*             SKIP NORESCAN COL(10);              /*           931119*/         
+*          ANS('SSAR  2')                                                       
+*             SKIP NORESCAN COL(10);              /*           931119*/         
+*          ANS('LM    2,12,28(GPR13P)')                                         
+*             SKIP NORESCAN COL(10);              /*           931119*/         
+*  END;                                                       /* @L4A*/         
+*          ANS('@ENDGEN;  */') SKIP NORESCAN;     /*           931119*/         
+*          ANS('RFY GPR14F UNRSTD; ')                                           
+*             COL(MACCOL+2) NORESCAN;                                           
+*          END;                                   /*           931119*/         
+*        END;                                                                   
+*      IF IOUT ^= '' THEN           /* IF OUT OPERAND SPECIFIED      */         
+*        ANS(IOUT!!'=GPR00F; /* SAVE OUTPUT */')                                
+*           COL(MACCOL+2) NORESCAN;                                             
+*      IF IRTNCODE ^= '' THEN       /* IF RTNCODE OPERAND SPECIFIED  */         
+*        DO;                                                                    
+*          IF INDEX(EHAREGS,'15F') = 0 THEN                                     
+*            EHAREGS=EHAREGS!!'15F';                                            
+*          ANS(IRTNCODE!!'=GPR15F; /* SAVE RETURN CODE */')                     
+*             COL(MACCOL+2) NORESCAN;                                           
+*        END;                                                                   
+*      IF ITCB ^= '' THEN           /* IF TCB KEYWORD SPECIFIED  @L2A*/         
+*          ANS(ITCB!!'=GPR01P; /* SAVE TCB ADDRESS */')                         
+*             COL(MACCOL+2) NORESCAN;/*                          @L2A*/         
+*      ANS('RFY (GPR00F,GPR01P'!!IREGS!!') UNRSTD;')                            
+*         COL(MACCOL+2) NORESCAN;                                               
+*    END;                                                                       
+*  ANS('END; /* '!!MACNAME!!' '!!MACLIST!!' '!!MACKEYS!!' */')                  
+*     COL(MACCOL) NORESCAN;                                                     
+*  IF ERROR = 1 THEN                /* IF ERROR MESSAGES ISSUED      */         
+*    RETURN CODE(12);                                                           
+*  ELSE                                                                         
+*    IF WARN = 1 THEN               /* IF WARNING MESSAGES ISSUED    */         
+*      RETURN CODE(4);                                                          
+*    ELSE                           /* NO MESSAGES ISSUED            */         
+*      RETURN CODE(0);                                                          
+*%END VSMLOC;                                                                   

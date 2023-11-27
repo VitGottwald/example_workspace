@@ -1,0 +1,316 @@
+         MACRO                                                          00050000
+&LABEL   IKJTERM &TYPNAM,&OPTION,&OPTION2,&OPTION3,&OPTION4,&PROMPT=,  *00100000
+               &RSVWD=,&DEFAULT=,&TYPE=ANY,&SBSCRPT=,&VALIDCK=,&HELP=   00150000
+.**01* PROPRIETARY STATEMENT=                                         * 00160001
+.* **PROPRIETARY_STATEMENT********************************************* 00170001
+.*                                                                    * 00180001
+.*                                                                    * 00190001
+.*  LICENSED MATERIALS - PROPERTY OF IBM                              * 00191001
+.*  5650-ZOS COPYRIGHT IBM CORP. 1981, 2013                           * 00192001
+.*                                                                    * 00193001
+.*  STATUS= HTE7790                                                   * 00194001
+.*                                                                    * 00195001
+.* **END_OF_PROPRIETARY_STATEMENT************************************** 00196001
+.*                                                                      00197001
+.**01* EXTERNAL CLASSIFICATION: PI                                 @L1A 00198001
+.**01* END OF EXTERNAL CLASSIFICATION:                             @L1A 00199001
+.*                                                                      00199101
+.*                                                                      00250000
+.* TITLE  -  IKJTERM MACRO (SYMBOLIC DEBUG PROJECT)                     00300000
+.*                                                                      00350000
+.* FUNCTION  -  THE IKJTERM MACRO IS USED BY COMMAND PROCESSORS TO      00400000
+.*              DEFINE TO PARSE THE EXPECTED FORMAT OF A TERM-TYPE      00450000
+.*              PARAMETER.                                              00500000
+.*                                                            @E2115KD* 00550000
+.*                                                                    * 00950000
+.* INPUT  -  THE PROTOTYPE STATEMENT IS AS DEFINED ABOVE. IT'S          01150000
+.*           PARAMETERS REPRESENT THE FOLLOWING:                        01200000
+.*               &LABEL   - STATEMENT LABEL IS REQUIRED                 01250000
+.*               &TYPNAM  - A PARAMETER TYPE IS REQUIRED                01300000
+.*               &OPTION,&OPTION2,OPTION3, AND &OPTION4  -              01350000
+.*                          FOUR POSSIBLE POSITIONAL PARAMETERS,        01400000
+.*                          LIST,RANGE,SBSCRPT, AND ASIS/UPPERCASE.     01450000
+.*               &RSVWD   - SPECIFIES THE PCE-LABEL WHICH WILL          01500000
+.*                          DESCRIBE POSSIBLE LITERAL CONSTANTS.        01550000
+.*               &TYPE    - INDICATES THE TYPE OF TERM TO BE            01600000
+.*                          SCANNED FOR - VARIABLE,CONSTANT,            01650000
+.*                          STATEMENT NUMBER, OR ANY(VARIABLE OR        01700000
+.*                          CONSTANT). DEFAULT IS ANY.                  01750000
+.*               &SBSCRPT - SPECIFIES THE PCE-LABEL WHICH WILL          01800000
+.*                          DESCRIBE THE POSSIBLE SUBSCRIPT ON          01850000
+.*                          THIS TERM.                                  01900000
+.*               &HELP    - SUPPLIES SECOND-LEVEL MESSAGES.             01950000
+.*               &VALIDCK - SPECIFIES THE ADDRESS OF A USER-SUPPLIED    02000000
+.*                          VALIDITY CHECK EXIT ROUTINE.                02050000
+.*               &PROMPT  - SUPPLIES DATA TO BE USED IF PROMPTING FOR   02100000
+.*                          A MISSING PARAMETER.                        02150000
+.*               &DEFAULT - SUPPLIES VALUE TO BE USED IF THE PARAMETER  02200000
+.*                          IS NOT ENTERED.                             02250000
+.*                                                                      02300000
+.* OUTPUT  -  THIS MACRO PRODUCES A PARAMETER CONTROL ENTRY (PCE) TO BE 02350000
+.*            PASSED TO THE PARSE SERVICE ROUTINE.                      02400000
+.*            IF AN ERROR IS ENCOUNTERED IN PROCESSING THE MACRO        02450000
+.*            INSTRUCTION ENTERED BY THE CP, AN APPROPRIATE ERROR       02500000
+.*            MESSAGE IS PRINTED AND THE PCE IS NOT GENERATED.          02550000
+.*                                                                      02600000
+.*                                                                      02700000
+.* THE FOLLOWING CODE DEFINES VARIABLES TO BE USED IN THE MACRO         02750000
+.*     EXPANSION.                                                       02800000
+.*        GLOBALS   -   IKJCSNM - CSECT NAME FROM IKJPARM MCARO LABEL   02850000
+.*                      IKJDSNM - DSECT NAME FOR PDL                    02900000
+.*        LOCALS(ARITHMETIC)  -  T - USED AS COUNTER FOR HELP MSG.      02950000
+.*                               END - SECOND COUNTER FOR HELP MSG.     03000000
+.*                               PDESIZE - AMOUNT OF SPACE FOR PDE      03050000
+.*              (BINARY)      -  FLAGS FOR VARIOUS OPTIONS AND TO       03100000
+.*                               INDICATE THAT NO PCE IS TO BE          03150000
+.*                               GENERATED.                             03200000
+.*              (CHARACTER)   -  QUOTE - USED WHEN QUOTES ARE MISSING   03250000
+.*                               FROM &TYPNAM                           03300000
+.*                                                                      03350000
+.*  CHANGE-ACTIVITY =                                                   03370001
+.*                                                                      03370101
+.*                  E2115KD - JBB2115 TSO/E FOR MVS/XA        @E2115KD* 03370201
+.*                                                                      03371001
+.* FLAG REASON   RELEASE DATE     ORIGIN                           @L1A 03380001
+.* ---- ------   ------- -------- ------                           @L1A 03390001
+.* $L1= MG08414  HTE7790 120619   MPK: ALLOW FOR USE WITHIN RSECT  @L1A 03391001
+.*                                                                      03392001
+         GBLC  &IKJCSNM,&IKJDSNM                                        03400000
+         LCLA  &T,&PDESIZE,&END                                         03450000
+         LCLB  &FLIST,&FRANGE,&FASIS,&FPRPT,&FDFLT,&FHELP,&FVALID       03500000
+         LCLB  &FENDBIT,&FSUBSC,&FRSVWD,&FSTMT,&FVAR,&FCNST,&FANY       03550000
+         LCLB  &SUBTRM                                                  03600000
+         LCLC  &QUOTE                                                   03650000
+&FENDBIT SETB  0                                                        03700000
+.*                                                                      03750000
+.* DETERMINE IF EXTRANEOUS POSITIONAL PARAMETERS HAVE BEEN SPECIFIED.   03800000
+.*                                                                      03850000
+         AIF   (N'&SYSLIST LT 6).GOOD                                   03900000
+         MNOTE 8,'NO MORE THAN 5 POSITIONAL PARAMETERS ALLOWED'         03950000
+&FENDBIT SETB  1                                                        04000000
+.*                                                                      04050000
+.* DETERMINE IF TYPE NAME HAS BEEN ENTERED.                             04100000
+.*                                                                      04150000
+.GOOD    AIF   ('&TYPNAM' EQ 'LIST' OR '&TYPNAM' EQ 'RANGE' OR         *04200000
+               '&TYPNAM' EQ 'ASIS' OR '&TYPNAM' EQ 'UPPERCASE' OR      *04250000
+               '&TYPNAM' EQ '').BAD                                     04300000
+         AGO   .GOOD1                                                   04350000
+.BAD     MNOTE 8,'PARAMETER TYPE MISSING BUT REQUIRED'                  04400000
+&FENDBIT SETB  1                                                        04450000
+.*                                                                      04500000
+.* DETERMINE IF CSECT NAME IS MISSING.                                  04550000
+.*                                                                      04600000
+.GOOD1   AIF   ('&IKJCSNM' NE '').GOOD2                                 04650000
+         MNOTE 8,'CSECT NAME (FROM IKJPARM MACRO LABEL) IS MISSING'     04700000
+&FENDBIT SETB  1                                                        04750000
+.*                                                                      04800000
+.* DETERMINE IF STATEMENT LABEL WAS ENTERED.                            04850000
+.*                                                                      04900000
+.GOOD2   AIF   ('&LABEL' NE '').GOOD3                                   04950000
+         MNOTE 8,'STATEMENT LABEL MISSING BUT REQUIRED'                 05000000
+&FENDBIT SETB  1                                                        05050000
+.GOOD3   ANOP                                                           05100000
+.*                                                                      05150000
+.* THE FOLLOWING CODE SETS FLAGS INDICATING THE OPTIONS SPECIFIED       05200000
+.*   ON POSITIONAL PARAMETERS.                                          05250000
+.*                                                                      05300000
+&FLIST   SETB  ('&OPTION' EQ 'LIST' OR '&OPTION2' EQ 'LIST' OR         *05350000
+               '&OPTION3' EQ 'LIST' OR '&OPTION4' EQ 'LIST')            05400000
+&FRANGE  SETB  ('&OPTION' EQ 'RANGE' OR '&OPTION2' EQ 'RANGE' OR       *05450000
+               '&OPTION3' EQ 'RANGE' OR '&OPTION4' EQ 'RANGE')          05500000
+&FASIS   SETB  ('&OPTION' EQ 'ASIS' OR '&OPTION2' EQ 'ASIS' OR         *05550000
+               '&OPTION3' EQ 'ASIS' OR '&OPTION4' EQ 'ASIS')            05600000
+&SUBTRM   SETB  ('&OPTION' EQ 'SBSCRPT' OR '&OPTION2' EQ 'SBSCRPT' OR  *05650000
+               '&OPTION3' EQ 'SBSCRPT' OR '&OPTION4' EQ 'SBSCRPT')      05700000
+.*                                                                      05750000
+.* THE FOLLOWING CODE DETERMINES IF INCORRECT POSITIONAL PARAMETERS     05800000
+.*   HAVE BEEN ENTERED.                                                 05850000
+.*                                                                      05900000
+         AIF   ('&OPTION' EQ 'LIST' OR '&OPTION' EQ 'RANGE' OR         *05950000
+               '&OPTION' EQ 'ASIS' OR '&OPTION' EQ 'UPPERCASE' OR      *06000000
+               '&OPTION' EQ '' OR '&OPTION' EQ 'SBSCRPT').OPT1          06050000
+         MNOTE 8,'''&OPTION'' IS AN INVALID POSITIONAL PARAMETER'       06100000
+&FENDBIT SETB  1                                                        06150000
+.OPT1    AIF   ('&OPTION2' EQ 'LIST' OR '&OPTION2' EQ 'RANGE' OR       *06200000
+               '&OPTION2' EQ 'ASIS' OR '&OPTION2' EQ 'UPPERCASE' OR    *06250000
+               '&OPTION2' EQ '' OR '&OPTION2' EQ 'SBSCRPT').OPT2        06300000
+         MNOTE 8,'''&OPTION2'' IS AN INVALID POSITIONAL PARAMETER'      06350000
+&FENDBIT SETB  1                                                        06400000
+.OPT2    AIF   ('&OPTION3' EQ 'LIST' OR '&OPTION3' EQ 'RANGE' OR       *06450000
+               '&OPTION3' EQ 'ASIS' OR '&OPTION3' EQ 'UPPERCASE' OR    *06500000
+               '&OPTION3' EQ '' OR '&OPTION3' EQ 'SBSCRPT').OPT3        06550000
+         MNOTE 8,'''&OPTION3'' IS AN INVALID POSITIONAL PARAMETER'      06600000
+&FENDBIT SETB  1                                                        06650000
+.OPT3    AIF   ('&OPTION4' EQ 'LIST' OR '&OPTION4' EQ 'RANGE' OR       *06700000
+               '&OPTION4' EQ 'ASIS' OR '&OPTION4' EQ 'UPPERCASE' OR    *06750000
+               '&OPTION4' EQ '' OR '&OPTION4' EQ 'SBSCRPT').OPT4        06800000
+         MNOTE 8,'''&OPTION4'' IS AN INVALID POSITIONAL PARAMETER'      06850000
+&FENDBIT SETB  1                                                        06900000
+.*                                                                      06950000
+.* UPPERCASE AND ASIS CANNOT BOTH BE SPECIFIED.                         07000000
+.*                                                                      07050000
+.OPT4    AIF   (('&OPTION' EQ 'UPPERCASE' OR '&OPTION2' EQ             *07100000
+               'UPPERCASE' OR '&OPTION3' EQ 'UPPERCASE') AND           *07150000
+               &FASIS).ERROR3                                           07200000
+         AGO   .A1                                                      07250000
+.ERROR3  MNOTE 8,'BOTH ''UPPERCASE'' AND ''ASIS'' CANNOT BE SPECIFIED'  07300000
+&FENDBIT SETB  1                                                        07350000
+.A1      ANOP                                                           07400000
+.*                                                                      07450000
+.* THE FOLLOWING CODE SETS FLAGS INDICATING KEYWORD OPTIONS.            07500000
+.*                                                                      07550000
+&FPRPT   SETB  ('&PROMPT' NE '')                                        07600000
+&FDFLT   SETB  ('&DEFAULT' NE '')                                       07650000
+&FHELP   SETB  ('&HELP' NE '')                                          07700000
+&FVALID  SETB  ('&VALIDCK' NE '')                                       07750000
+&FSUBSC  SETB  ('&SBSCRPT' NE '')                                       07800000
+&FRSVWD  SETB  ('&RSVWD' NE '')                                         07850000
+&FSTMT   SETB  ('&TYPE' EQ 'STMT')                                      07900000
+&FVAR    SETB  ('&TYPE' EQ 'VAR')                                       07950000
+&FCNST   SETB  ('&TYPE' EQ 'CNST')                                      08000000
+&FANY    SETB  ('&TYPE' EQ 'ANY')                                       08050000
+.*                                                                      08100000
+         AIF  (&FRANGE AND &SUBTRM).BAD3                                08150000
+         AGO   .GOODI4                                                  08200000
+.BAD3    ANOP                                                           08250000
+         MNOTE 4,'RANGE OPTION ILLEGAL WITH "SBSCRPT". IGNORED'         08300000
+&FRANGE  SETB  0                                                        08350000
+.GOODI4  AIF   (&FLIST AND &SUBTRM).BAD4                                08400000
+         AGO   .GOODI5                                                  08450000
+.BAD4    ANOP                                                           08500000
+         MNOTE 4,'LIST OPTION ILLEGAL WITH "SBSCRPT". IGNORED.'         08550000
+&FLIST   SETB  0                                                        08600000
+.GOODI5  AIF (NOT(&SUBTRM AND &FSUBSC)).GOODI6                          08650000
+         MNOTE 8,'"SBSCRPT" OPTION ILLEGAL WITH "SBSCRPT=LABEL" OPTION' 08700000
+&FENDBIT SETB  1                                                        08750000
+.GOODI6  ANOP                                                           08800000
+.*                                                                      08850000
+.* THE ONLY VALID 'TYPE' PARAMETERS ARE VAR,STMT,CNST, AND ANY          08900000
+.*                                                                      08950000
+         AIF   ('&TYPE' NE 'STMT' AND '&TYPE' NE 'VAR' AND '&TYPE' NE  *09000000
+               'CNST' AND '&TYPE' NE 'ANY').ERROR                       09050000
+         AGO   .GOOD9                                                   09100000
+.ERROR   MNOTE 8,'INVALID ''TYPE'' PARAMETER'                           09150000
+&FENDBIT SETB  1                                                        09200000
+.*                                                                      09250000
+.* PROMPT AND DEFAULT CANNOT BOTH BE SPECIFIED.                         09300000
+.*                                                                      09350000
+.GOOD9   AIF   (NOT(&FDFLT AND &FPRPT)).GOOD4                           09400000
+         MNOTE 8,'PARAMETER CANNOT BOTH DEFAULT AND REQUIRE PROMPTING'  09450000
+&FENDBIT SETB  1                                                        09500000
+.*                                                                      09550000
+.* RSVWD IS IGNORED IF TYPE=VAR OR TYPE=STMT.                           09600000
+.*                                                                      09650000
+.GOOD4   AIF   (('&TYPE' EQ 'VAR' OR '&TYPE' EQ 'STMT') AND            *09700000
+               &FRSVWD).ERROR1                                          09750000
+         AGO   .GOOD5                                                   09800000
+.ERROR1  MNOTE 4,'''RSVWD'' IGNORED WITH ''&TYPE'''                     09850000
+&FRSVWD  SETB  0                                                        09900000
+.*                                                                      09950000
+.* SBSCRPT IS IGNORED IF TYPE=STMT OR TYPE=CNST.                        10000000
+.*                                                                      10050000
+.GOOD5   AIF   (('&TYPE' EQ 'STMT' OR '&TYPE' EQ 'CNST') AND           *10100000
+               &FSUBSC).ERROR2                                          10150000
+         AGO   .GOOD6                                                   10200000
+.ERROR2  MNOTE 4,'''SBSCRPT'' IGNORED WITH ''&TYPE'''                   10250000
+&FSUBSC  SETB  0                                                        10300000
+.*                                                                      10350000
+.* IF AN ERROR HAS BEEN ENCOUNTERED DO NOT GENERATE PCE.                10400000
+.*                                                                      10450000
+.GOOD6   AIF   (NOT &FENDBIT).GEN                                       10500000
+         MEXIT                                                          10550000
+.GEN     ANOP                                                           10600000
+&IKJCSNM CSECT ,                                                        10650000
+* FLAGS - BIT3=PROMPT, BIT4=DEFAULT, BIT5=NEW FORMAT,BIT6=HELP,@E2115KD 10700000
+*         BIT7=VALIDCK,   BIT8=LIST,    BIT9=ASIS,    BIT10=RANGE,      10750000
+*         BIT11=SBSCRPT,  BIT12=RSVWD                                   10800000
+DENT&SYSNDX EQU *                                                       10850000
+&LABEL   EQU   *                                                        10900000
+.*  BIT 5 IS USED TO INDICATE A NEW FORMAT PCE HAS BEEN        @E2115KD 10950000
+.*  GENERATED                                                  @E2115KD 11000000
+         DC    BL2'110&FPRPT&FDFLT.1&FHELP&FVALID&FLIST&FASIS&FRANGE&FS*11050000
+               UBSC&FRSVWD.000'      FLAGS                     @E2115KD 11100000
+         DC    AL2(DEND&SYSNDX-DENT&SYSNDX)      LENGTH OF PCE          11150000
+         AIF   (&SUBTRM).GOODI7                                         11200000
+         DC    AL2(LAB&SYSNDX-&IKJDSNM)          OFFSET TO PDE          11250000
+         AGO   .GOODI8                                                  11300000
+.GOODI7  DC   AL2(0)        NO PDE OFFSET - PREVIOUSLY ALLOCATED        11350000
+.GOODI8  ANOP                                                           11400000
+* TYPES - BIT0=STMT, BIT1=VAR, BIT2=CNST, BIT3=ANY,BIT4=SBSCRPT         11450000
+         DC    BL1'&FSTMT&FVAR&FCNST&FANY&SUBTRM.000'   TYPE SPECIFIED  11500000
+.*                                                                      11550000
+.* THE FOLLOWING CODE SUPPLIES QUOTES TO &TYPNAM IF THEY ARE MISSING.   11600000
+.*                                                                      11650000
+&QUOTE   SETC  '&TYPNAM'(1,1)                                           11700000
+         AIF   ('&QUOTE' EQ '''').QUOT                                  11750000
+&QUOTE   SETC  ''''                                                     11800000
+         DC    AL2(IKJ@&SYSNDX-*),AL2(18),C&QUOTE&TYPNAM&QUOTE    PARAM*11850000
+               ETER TYPE MESSAGE SEGMENT                                11900000
+         AGO   .EQUGEN1                                                 11950000
+.QUOT    ANOP                                                           12000000
+         DC    AL2(IKJ@&SYSNDX-*),AL2(18),C&TYPNAM    PARAMETER TYPE ME*12050000
+               SSAGE SEGMENT                                            12100000
+.EQUGEN1 ANOP                                                           12150000
+IKJ@&SYSNDX EQU *                                                       12200000
+         AIF   (&FPRPT).PRPT      PROMPT SPECIFIED                      12250000
+         AIF   (NOT &FDFLT).NPRDF                                       12300000
+         DC    AL1(IKJ$&SYSNDX-*-2),C&DEFAULT        DEFAULT DATA       12350000
+         AGO   .EQUGEN                                                  12400000
+.PRPT    DC     AL1(IKJ$&SYSNDX-*-2),C&PROMPT        PROMPT DATA        12450000
+.EQUGEN  ANOP                                                           12500000
+IKJ$&SYSNDX EQU *                                                       12550000
+.NPRDF   ANOP                                                           12600000
+         AIF   (NOT &FSUBSC).NOSUBSC                                    12650000
+         DC    AL2(&SBSCRPT-&IKJCSNM)    OFFSET TO SUBSCRIPT PCE        12700000
+.NOSUBSC AIF   (NOT &FRSVWD).NORSWD                                     12750000
+         DC    AL2(&RSVWD-&IKJCSNM)       OFFSET TO RESERVE WORD PCE    12800000
+.NORSWD  ANOP                                                           12850000
+IKJA&SYSNDX EQU *                                                       12900000
+         AIF   (NOT &FHELP).NOHELP     IS HELP SPECIFIED                12950000
+         DC    AL2(IKJB&SYSNDX-*)      LENGTH OF HELP DATA              13000000
+&T       SETA  1                                                        13050000
+.HELPLP  ANOP                                                           13100000
+&T       SETA  &T+1                                                     13150000
+         AIF   (&T EQ 256).HELPER                                       13200000
+         AIF   (&T LE N'&HELP).HELPLP                                   13250000
+         AGO   .HELPCT                                                  13300000
+.HELPER  MNOTE 4,'ONLY 255 LEVELS OF HELP AVAILABLE. OTHERS IGNORED'    13350000
+&T       SETA  &T+1                                                     13400000
+.HELPCT  ANOP                                                           13450000
+&T       SETA  &T-1                                                     13500000
+         DC    AL1(&T)             NUMBER OF HELP MESSAGES              13550000
+&END     SETA  &T                                                       13600000
+&T       SETA  1                                                        13650000
+.HELPLPA ANOP                                                           13700000
+         DC    AL2(IKJ&SYSNDX.&T-*),AL2(00),C&HELP(&T) HELP MSG SEGMENT 13750000
+IKJ&SYSNDX.&T EQU *                                                     13800000
+&T       SETA  &T+1                                                     13850000
+         AIF   (&T LE &END).HELPLPA                                     13900000
+IKJB&SYSNDX EQU *                                                       13950000
+.NOHELP  AIF   (NOT &FVALID).NOVALID     IS VALIDCK SPECIFIED           14000000
+         DC    AL4(&VALIDCK)       VALIDCK ROUTINE ADDRESS     @E2115KD 14050000
+.NOVALID ANOP                                                           14100000
+DEND&SYSNDX EQU *                                                       14150000
+         AIF (&SUBTRM).NOALLOC                                          14200000
+&IKJDSNM DSECT                                                          14250000
+&PDESIZE SETA  41                                                       14300000
+         AIF   (&FLIST AND &FRANGE AND &FSUBSC).DSECT                   14350000
+&PDESIZE SETA  40                                                       14400000
+         AIF   (&FRANGE AND &FSUBSC).DSECT                              14450000
+&PDESIZE SETA  21                                                       14500000
+         AIF   (&FLIST AND &FSUBSC).DSECT                               14550000
+&PDESIZE SETA  20                                                       14600000
+         AIF   (&FSUBSC).DSECT                                          14650000
+&PDESIZE SETA  11                                                       14700000
+         AIF   (&FLIST AND &FRANGE).DSECT  IS LIST AND RANGE SPECIFIED  14750000
+&PDESIZE SETA  10                                                       14800000
+         AIF   (&FRANGE).DSECT                                          14850000
+&PDESIZE SETA  6                                                        14900000
+         AIF   (&FLIST).DSECT                                           14950000
+&PDESIZE SETA  5                                                        15000000
+.DSECT   ANOP                                                           15050000
+LAB&SYSNDX   DS    &PDESIZE.F      ALLOCATE PDE SPACE                   15100000
+.NOALLOC  ANOP                                                          15150000
+&SYSECT  &SYSSTYP ,            RESUME USERS CSECT OR RSECT         @L1A 15200001
+         MEXIT                                                          15250000
+         MEND                                                           15300000

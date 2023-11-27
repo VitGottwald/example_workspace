@@ -1,0 +1,766 @@
+*/*** START OF SPECIFICATIONS ****************************************  00010000
+*                                                                       00020000
+*01* MACRO NAME = STCKSYNC                                              00030000
+*                                                                       00040000
+*01*  DESCRIPTIVE NAME = STCKSYNC Macro                                 00050000
+*                                                                       00060000
+*01* PROPRIETARY STATEMENT =                                       @L3C 00070000
+*    LICENSED MATERIALS - PROPERTY OF IBM                               00080004
+*    5694-A01 COPYRIGHT IBM CORP. 1990, 2005                       @P1C 00090005
+*                                                                       00100000
+*01* STATUS =  HBB7720                                             @L3C 00110004
+*                                                                       00120000
+*01* EXTERNAL CLASSIFICATION:                                           00130000
+*02*         GUPI:BASE                                                  00140000
+*01* END OF EXTERNAL CLASSIFICATION:                                    00150000
+*                                                                       00160000
+*01* FUNCTION =                                                         00170000
+*     Provide the interface to the STCKSYNC service routine (IEATSTCK). 00180000
+*                                                                       00190000
+*02* OPERATION =                                                        00200000
+*     The STCKSYNC macro parses the keywords supplied.  In the          00210000
+*     event of an error, syntax checking will attempt to continue       00220000
+*     for the remainder of the input.  No data will be generated.       00230000
+*                                                                       00240000
+*     If there are no syntax errors, the macro will invoke the correct  00250000
+*     entry point in IEATSTCK.  The entry point to invoke is determined 00260000
+*     by the setting of SYSSTATE and the presence of the ETRID keyword. 00270000
+*                                                                       00280000
+*01*  SYNTAX =  (BAL)                                                   00290000
+*                                                                       00300000
+*    STCKSYNC                                                           00310000
+*             ! TOD=TOD-clock-return-area-RX-address                    00320000
+*             ! ETOD=128-bit TOD-clock-return-area-RX-address           00330000
+*                                                                       00340000
+*               {<,ETRID=1 byte ETR-ID-return-area-RX-address>}         00350000
+*               {<,CTNID=16 byte CTN-ID-return-area-RX-address>}        00360000
+*                                                                       00370000
+*                                                                       00380000
+*01*  SYNTAX =  (PLAS)                                                  00390000
+*                                                                       00400000
+*   ?STCKSYNC                                                           00410000
+*             ! TOD(TOD-clock-return-area)                              00420000
+*             ! ETOD(128-bit TOD-clock-return-area)                     00430000
+*                                                                       00440000
+*               {<ETRID(1 byte ETR-id-return-area)>}                    00450000
+*               {<CTNID(16 byte CTN-id-return-area)>} ;                 00460000
+*                                                                       00470000
+*       Where:                                                          00480000
+*            ! indicates that one of the two options is required,       00490000
+*              but not both.                                            00500000
+*            { indicates that these options are optional but only       00510000
+*              one may be specified at a time.                          00520000
+*                                                                       00530000
+*01*  NOTES =                                                           00540000
+*                                                                       00550000
+*02*    RESTRICTIONS = Invoker must be in 31-bit addressing mode.       00560000
+*                                                                       00570000
+*02*    DEPENDENCIES = None                                             00580000
+*                                                                       00590000
+*03*      CHARACTER-CODE DEPENDENCIES= EBCDIC                           00600000
+*                                                                       00610000
+*01*  MODULE TYPE = MACRO                                               00620000
+*                                                                       00630000
+*02*    PROCESSOR = ASSEMBLER,PLAS (BILINGUAL)                          00640000
+*                                                                       00650000
+*02*    INVOCATION = See MACRO definition                               00660000
+*                                                                       00670000
+*01*  COMPONENT  =  SC1CV (TIMER SUPERVISION)                           00680000
+*                                                                       00690000
+*01*  DISTRIBUTION LIBRARY = AMACLIB                                    00700000
+*                                                                       00710000
+*01*  CHANGE ACTIVITY =                                                 00720000
+*   $L0=CLOCK    HBB4410  871102  PD16CU: ETR                           00730000
+*   $L1=PROD410  HBB4410  890814  PD162M: ETR                           00740000
+*   $L2=STCKE    HBB6608  980530  B7HGH5: 128 bit TOD support           00750000
+*   $L3=STSTP    HBB7720  040215  B7HGH5: STP support                   00760000
+*   $01=OA39631  HBB7790  120531  B7HGH5: Generates incorrect call when 00770001
+*                                         ETRID is specified (rollup)   00780001
+*   $P1=ME24296  HBB7790  120615  B7HGH5: Fix copyright statement       00790006
+*                                                                       00800000
+****** END OF SPECIFICATIONS *****************************************  00810000
+         MACRO                                                          00820000
+&NAME    STCKSYNC  &TOD=+,          TOD OUTPUT AREA ADDRESS  (INPUT)   X00830000
+               &ETOD=+,         ETOD OUTPUT AREA ADDRESS(INPUT)    @L2AX00840000
+               &ETRID=+,  OPTIONAL ETRID OUTPUT AREA ADDRESS  (INPUT)  X00850000
+               &CTNID=+   OPTIONAL CTNID OUTPUT AREA ADDRESS(INPUT)@L3A 00860000
+.*                                                                      00870000
+.********************************************************************   00880000
+.*      PUT OUT BAL MACDATE COMMENT LINE REGARDLESS OF ERRORS       *   00890000
+.********************************************************************   00900000
+*              MACDATE = 05/31/12                                  @01C 00910001
+.*                                                                      00920000
+.*                                                                      00930000
+         GBLC    &SYSASCE                  SYSSTATE TEST RESULT.        00940000
+.*                                                                      00950000
+         SYSSTATE TEST                     CALL SYSSTATE MACRO TO       00960000
+.*                                         DETERMINE ASC MODE.          00970000
+.*                                         NOTE: GLOBAL VAR &SYSASCE    00980000
+.*                                               WILL BE SET.           00990000
+.*                                                                      01000000
+.********************************************************************   01010000
+.*      VARIABLE DECLARATIONS                                       *   01020000
+.********************************************************************   01030000
+.*                                                                      01040000
+         LCLB    &ETR                      FLAG->WAS ETRID RETURN       01050000
+.*                                         AREA SPECIFIED?              01060000
+         LCLB    &CTN                      FLAG->WAS CTNID RETURN  @L3A 01070000
+.*                                         AREA SPECIFIED?              01080000
+         LCLB    &TODE                     FLAG->WAS ETOD RETURN   @L2A 01090000
+.*                                         AREA SPECIFIED?              01100000
+         LCLB    &ERR                      FLAG->WAS AN ERROR FOUND?    01110000
+.*                                                                      01120000
+         LCLC    &KEY                      KEYWORD FOR ERROR MESSAGE.   01130000
+.*                                                                      01140000
+&ETR     SETB    0                         ETRID DEFAULT (NO REQUEST).  01150000
+.*                                                                      01160000
+&CTN     SETB    0                         CTNID DEFAULT (NO CTNID)@L3A 01170000
+.*                                                                      01180000
+.*                                                                      01190000
+&TODE    SETB    0                         ETOD DEFAULT (NO ETOD)  @L2A 01200000
+.*                                                                      01210000
+&ERR     SETB    0                         ERROR DEFAULT (NO ERRORS).   01220000
+.*                                                                      01230000
+.*                                                                      01240000
+.*                                                                      01250000
+.********************************************************************   01260000
+.*     CHECK FOR POSITIONAL PARAMETERS                              *   01270000
+.********************************************************************   01280000
+.*                                                                      01290000
+         AIF    (N'&SYSLIST GE 1).ERR01    TOO MANY POSITIONALS?        01300000
+.*                                                                      01310000
+.NOPOS   ANOP   ,                          -NO-                         01320000
+.*                                                                      01330000
+.********************************************************************   01340000
+.*     VALIDATE TOD!ETOD PARAMETER /ONE REQUIRED/                   *   01350000
+.********************************************************************   01360000
+.*                                                                      01370000
+         AIF    ('&TOD' EQ '+').VALETOD    IF REQUIRED PARAMETER   @L2A 01380000
+.*                                         MISSING, ISSUE ERROR.        01390000
+&KEY     SETC   'TOD'                      VALIDATING TOD PARAMETER.    01400000
+.*                                                                      01410000
+         AIF    ('&TOD' EQ '').ERR04       IF NULL PARAMETER GIVEN,     01420000
+.*                                         ISSUE ERROR.                 01430000
+.*                                                                      01440000
+         AIF    ('&TOD'(1,1) EQ '(').ERR03 IF TOO MANY SUBLISTS,        01450000
+.*                                         ISSUE ERROR.                 01460000
+.*                                                                      01470000
+         AIF    ('&ETOD' NE '+').ERR05                             @L2A 01480000
+         AGO    .VALETR                                            @L2A 01490000
+.*                                                                      01500000
+.VALETOD ANOP   ,                                                  @L2A 01510000
+&KEY     SETC   'ETOD'                     VALIDATING ETOD PARAM   @L2A 01520000
+.*                                                                      01530000
+         AIF    ('&ETOD' EQ '+').ERR02     IF REQUIRED PARAMETER   @L2A 01540000
+.*                                         MISSING, ISSUE ERROR.        01550000
+         AIF    ('&ETOD' EQ '').ERR04      IF NULL PARAMETER,      @L2A 01560000
+.*                                         ISSUE ERROR.                 01570000
+.*                                                                      01580000
+         AIF    ('&ETOD'(1,1) EQ '(').ERR03 IF TOO MANY SUBLISTS, @L2A  01590000
+.*                                         ISSUE ERROR.                 01600000
+&TODE    SETB   1                          ETOD SPECIFIED.         @L2A 01610000
+.*                                                                      01620000
+.********************************************************************   01630000
+.*       VALIDATE ETRID KEYWORD IF PRESENT                          *   01640000
+.********************************************************************   01650000
+.*                                                                      01660000
+.VALETR  ANOP   ,                                                       01670000
+.*                                                                      01680000
+&KEY     SETC   'ETRID'                    VALIDATING ETRID PARAMETER.  01690000
+.*                                                                      01700000
+         AIF    ('&ETRID' EQ '+').VALCTN   ETRID REQUESTED?        @L3C 01710000
+.*                                         NO- EXIT ETRID VALIDATION.   01720000
+.*                                                                      01730000
+         AIF    ('&ETRID' EQ '').ERR04     IF NULL PARAMETER GIVEN,     01740000
+.*                                         ISSUE ERROR.                 01750000
+.*                                                                      01760000
+         AIF    ('&ETRID'(1,1) EQ '(').ERR03  IF TOO MANY SUBLISTS,     01770000
+.*                                            ISSUE ERROR.              01780000
+         AIF    ('&CTNID' NE '+').ERR08                            @L3A 01790000
+&ETR     SETB   1                          INDICATE ETRID               01800001
+.*                                         REQUESTED.              @01M 01810001
+         AGO    .STRGEN                                            @01C 01820001
+.*                                                                      01830000
+.********************************************************************   01840000
+.*       VALIDATE CTNID KEYWORD IF PRESENT                          *   01850000
+.********************************************************************   01860000
+.*                                                                      01870000
+.VALCTN  ANOP   ,                                                  @L3A 01880000
+.*                                                                      01890000
+&KEY     SETC   'CTNID'                    VALIDATING CTNID PARAM  @L3A 01900000
+.*                                                                      01910000
+         AIF    ('&CTNID' EQ '+').STRGEN   CTNID REQUESTED?        @L3A 01920000
+.*                                         NO- EXIT CTNID VALIDATION.   01930000
+.*                                                                      01940000
+         AIF    ('&CTNID' EQ '').ERR07     NULL PARAMETER GIVEN,   @L3A 01950000
+.*                                         ISSUE ERROR.                 01960000
+.*                                                                      01970000
+         AIF    ('&CTNID'(1,1) EQ '(').ERR06  TOO MANY SUBLISTS,   @L3A 01980000
+.*                                            ISSUE ERROR.              01990000
+.*                                                                      02000000
+&CTN     SETB   1                          CTNID REQUESTED         @L3A 02010000
+.*                                                                      02020000
+.********************************************************************   02030000
+.*     PROVIDE  LINKAGE TO IEATSTCK SERVICE ROUTINE                 *   02040000
+.********************************************************************   02050000
+.*                                                                      02060000
+.STRGEN  ANOP   ,                                                       02070000
+.*                                                                      02080000
+         AIF    (&ERR EQ 0).NOERR          IF NO ERRORS, CONTINUE.      02090000
+         MEXIT                             ELSE QUIT.                   02100000
+.*                                                                      02110000
+.NOERR   ANOP   ,                                                       02120000
+.*                                                                      02130000
+&NAME    DS     0H                                                 @L1C 02140000
+.*                                                                      02150000
+         AIF    (&ETR EQ 0).LOADCTN        IF ETRID REQ., LOAD IT.      02160000
+         LAE    0,&ETRID                   LOAD AR/GR 0 WITH ETRID      02170000
+.*                                         OUTPUT AREA ADDRESS.         02180000
+.LOADCTN ANOP   ,                                                  @L3A 02190000
+         AIF    (&CTN EQ 0).LOADTOD        IF CTNID REQ., LOAD IT. @L3A 02200000
+         LAE    0,&CTNID                   LOAD AR/GR 0 WITH CTNID @L3A 02210000
+.*                                         OUTPUT AREA ADDRESS.         02220000
+.*                                                                      02230000
+.LOADTOD ANOP   ,                                                       02240000
+         AIF    (&TODE EQ 1).LDETOD                                @L2A 02250000
+         LAE    1,&TOD                     LOAD AR/GR 1 WITH TOD        02260000
+.*                                         OUTPUT AREA ADDRESS.         02270000
+         AGO    .CONTIN                                            @L2A 02280000
+.LDETOD  ANOP   ,                                                       02290000
+         LAE    1,&ETOD                    LOAD AR/GR 1 WITH ETOD  @L2A 02300000
+.*                                         OUTPUT AREA ADDRESS.         02310000
+         LA     15,1                       CREATE MASK FOR HI BIT. @L2A 02320000
+         SLL    15,31                                              @L2A 02330000
+         OR     1,15                       INDICATE ETOD SPECIFIED @L2A 02340000
+.*                                                                      02350000
+.CONTIN  ANOP   ,                                                  @L2A 02360000
+         AIF    ('&SYSASCE'(1,1) EQ 'P').NONAR    ARE WE IN AR MODE?    02370000
+.*                                                                      02380000
+         AIF    (&CTN EQ 1).ARCTN          CTNID REQUESTED?        @L3A 02390000
+         AIF    (&ETR EQ 1).ARETR          -YES- WAS ETRID REQUESTED?   02400000
+.*                                                                      02410000
+.********************************************************************   02420000
+.*    ESTABLISH BASR LINKAGE TO IEATSTCK SERVICE ROUTINE FOR        *   02430000
+.*    ENTRY: AR MODE, ETRID/CTNID NOT REQUESTED (IEATSTC3).     @L3C*   02440000
+.********************************************************************   02450000
+.*                                                                      02460000
+         L      15,X'10'(0,0)              GET ADDRESS OF CVT.          02470000
+         L      15,X'8C'(15,0)             GET ADDRESS OF ECVT.         02480000
+*        L      15,X'20'(15,0)             GET ENTRY FOR SERVICE.       02490000
+         L      15,X'20'(15,0)             ENTRY FOR AR, NO ID     @L3C 02500000
+.*                                                                      02510000
+         BASR   14,15                      ACCESS IEATSTCK SERVICE.     02520000
+         MEXIT                                                          02530000
+.*                                                                      02540000
+.*                                                                      02550000
+.ARETR   ANOP   ,                                                       02560000
+.********************************************************************   02570000
+.*    ESTABLISH BASR LINKAGE TO IEATSTCK SERVICE ROUTINE FOR        *   02580000
+.*    ENTRY: AR MODE, ETRID REQUESTED (IEATSTC4).                   *   02590000
+.********************************************************************   02600000
+.*                                                                      02610000
+         L      15,X'10'(0,0)              GET ADDRESS OF CVT.          02620000
+         L      15,X'8C'(15,0)             GET ADDRESS OF ECVT.         02630000
+*        L      15,X'24'(15,0)             GET ENTRY FOR SERVICE.       02640000
+         L      15,X'24'(15,0)             ENTRY FOR AR, ETRID     @L3C 02650000
+.*                                                                      02660000
+         BASR   14,15                      ACCESS IEATSTCK SERVICE.     02670000
+         MEXIT                                                          02680000
+.*                                                                      02690000
+.ARCTN   ANOP   ,                                                  @L3A 02700000
+.********************************************************************   02710000
+.*    ESTABLISH BASR LINKAGE TO IEATSTCK SERVICE ROUTINE FOR        *   02720000
+.*    ENTRY: AR MODE, CTNID REQUESTED (IEATSTC5).                   *   02730000
+.********************************************************************   02740000
+.*                                                                      02750000
+         L      15,X'10'(0,0)              GET ADDRESS OF CVT.     @L3A 02760000
+         L      15,X'8C'(15,0)             GET ADDRESS OF ECVT.    @L3A 02770000
+*        L      15,X'338'(15,0)            GET ENTRY FOR SERVICE.  @L3A 02780000
+         L      15,X'338'(15,0)            ENTRY FOR AR, CTNID     @L3A 02790000
+.*                                                                      02800000
+         BASR   14,15                      ACCESS IEATSTCK SERVICE @L3A 02810000
+         MEXIT                                                     @L3A 02820000
+.*                                                                      02830000
+.*                                                                      02840000
+.*                                                                      02850000
+.********************************************************************   02860000
+.*                                                                      02870000
+.NONAR  ANOP   ,                                                        02880000
+         AIF    (&CTN EQ 1).NARCTN         CTNID REQUESTED?        @L3A 02890000
+         AIF    (&ETR EQ 1).NARETR         WAS ETRID REQUESTED?         02900000
+.*                                                                      02910000
+.********************************************************************   02920000
+.*    ESTABLISH BASR LINKAGE TO IEATSTCK SERVICE ROUTINE FOR        *   02930000
+.*    ENTRY: PRIMARY MODE, ETRID/CTNID NOT REQUESTED (IEATSTC1) @L3C*   02940000
+.********************************************************************   02950000
+.*                                                                      02960000
+         L      15,X'10'(0,0)              GET ADDRESS OF CVT.          02970000
+         L      15,X'8C'(15,0)             GET ADDRESS OF ECVT.         02980000
+*        L      15,X'18'(15,0)             GET ENTRY FOR SERVICE.       02990000
+         L      15,X'18'(15,0)             ENTRY FOR NON-AR, NO ID @L3C 03000000
+.*                                                                      03010000
+         BASR   14,15                      ACCESS IEATSTCK SERVICE.     03020000
+         MEXIT                                                          03030000
+.*                                                                      03040000
+.NARETR  ANOP   ,                                                       03050000
+.*                                                                      03060000
+.********************************************************************   03070000
+.*    ESTABLISH BASR LINKAGE TO IEATSTCK SERVICE ROUTINE FOR        *   03080000
+.*    ENTRY: PRIMARY MODE, ETRID REQUESTED (IEATSTC2).              *   03090000
+.********************************************************************   03100000
+.*                                                                      03110000
+         L      15,X'10'(0,0)              GET ADDRESS OF CVT           03120000
+         L      15,X'8C'(15,0)             GET ADDRESS OF ECVT          03130000
+*        L      15,X'1C'(15,0)             GET ENTRY FOR SERVICE        03140000
+         L      15,X'1C'(15,0)             ENTRY FOR NON-AR, ETRID @L3C 03150000
+.*                                                                      03160000
+         BASR   14,15                      ACCESS IEATSTCK SERVICE.     03170000
+         MEXIT                                                          03180000
+.*                                                                      03190000
+.NARCTN  ANOP   ,                                                  @L3A 03200000
+.*                                                                      03210000
+.********************************************************************   03220000
+.*    ESTABLISH BASR LINKAGE TO IEATSTCK SERVICE ROUTINE FOR        *   03230000
+.*    ENTRY: PRIMARY MODE, CTNID REQUESTED (IEATSTC6).              *   03240000
+.********************************************************************   03250000
+.*                                                                      03260000
+         L      15,X'10'(0,0)              GET ADDRESS OF CVT      @L3A 03270000
+         L      15,X'8C'(15,0)             GET ADDRESS OF ECVT     @L3A 03280000
+*        L      15,X'33C'(15,0)            GET ENTRY FOR SERVICE   @L3A 03290000
+         L      15,X'33C'(15,0)            ENTRY FOR NON-AR, CTNID @L3A 03300000
+.*                                                                      03310000
+         BASR   14,15                      ACCESS IEATSTCK SERVICE @L3A 03320000
+         MEXIT                                                     @L3A 03330000
+.*                                                                      03340000
+.*                                                                      03350000
+.*                                                                      03360000
+.********************************************************************   03370000
+.*      MNOTES                                                      *   03380000
+.********************************************************************   03390000
+.*                                                                      03400000
+.ERR01   ANOP   ,                                                       03410000
+         MNOTE  8,'EXCESSIVE POSITIONAL PARAMETERS WERE SPECIFIED.'     03420000
+&ERR     SETB   1                                                       03430000
+         AGO    .NOPOS                                                  03440000
+.*                                                                      03450000
+.ERR02   ANOP   ,                                                       03460000
+         MNOTE  8,' ''TOD'' or ''ETOD'' IS REQUIRED, BUT IS NOT SUPPLIEx03470000
+               D.'                                                 @L2C 03480000
+&ERR     SETB   1                                                       03490000
+         AGO    .VALETR                                                 03500000
+.*                                                                      03510000
+.ERR03   ANOP   ,                                                       03520000
+         MNOTE  8,'&KEY PARAMETER CONTAINS TOO MANY SUBLISTS.'          03530000
+&ERR     SETB   1                                                       03540000
+         AIF    ('&KEY' NE 'ETRID').VALETR                         @L2C 03550000
+         MEXIT                                                          03560000
+.*                                                                      03570000
+.ERR04   ANOP   ,                                                       03580000
+         MNOTE  8,'&KEY PARAMETER REQUIRES A VALUE.'                    03590000
+&ERR     SETB   1                                                       03600000
+         AIF    ('&KEY' NE 'ETRID').VALETR                         @L2C 03610000
+         MEXIT                                                          03620000
+.*                                                                      03630000
+.ERR05   ANOP   ,                                                  @L2A 03640000
+         MNOTE  8,' SPECIFIY EITHER ''TOD'' OR ''ETOD'', NOT BOTH.'     03650000
+.*                                                                 @L2A 03660000
+&ERR     SETB   1                                                  @L2A 03670000
+         MEXIT                                                     @L2A 03680000
+.*                                                                      03690000
+.ERR06   ANOP   ,                                                       03700000
+         MNOTE  8,'&KEY PARAMETER CONTAINS TOO MANY SUBLISTS.'     @L3A 03710000
+&ERR     SETB   1                                                  @L3A 03720000
+         AIF    ('&KEY' NE 'CTNID').VALCTN                         @L3A 03730000
+         MEXIT                                                     @L3A 03740000
+.*                                                                      03750000
+.ERR07   ANOP   ,                                                  @L3A 03760000
+         MNOTE  8,'&KEY PARAMETER REQUIRES A VALUE.'               @L3A 03770000
+&ERR     SETB   1                                                  @L3A 03780000
+         AIF    ('&KEY' NE 'CTNID').VALCTN                         @L3A 03790000
+         MEXIT                                                     @L3A 03800000
+.*                                                                 @L3A 03810000
+.ERR08   ANOP   ,                                                  @L2A 03820000
+         MNOTE  8,' SPECIFIY EITHER ''ETRID'' OR ''CTNID'', NOT BOTH.'  03830000
+.*                                                                 @L3A 03840000
+&ERR     SETB   1                                                  @L3A 03850000
+         MEXIT                                                     @L3A 03860000
+.*                                                                      03870000
+.EXIT    ANOP   ,                                                       03880000
+.*                                                                      03890000
+         MEND                                                           03900000
+*                                                                    */ 03910000
+*@EJECT;                                                                03920000
+*                                                                       03930000
+*%STCKSYNC: MACRO KEYS(TOD,         /* TOD clock return area.        */ 03940000
+*                      ETOD,        /* ETOD clock return area.   @L2A*/ 03950000
+*                      ETRID,       /* ETRID return area.        @L3C*/ 03960000
+*                      CTNID);      /* ETRID return area.        @L3A*/ 03970000
+*/********************************************************************/ 03980000
+*/* Define external macro variables.                                 */ 03990000
+*/********************************************************************/ 04000000
+*                                                                       04010000
+*   DECLARE                                                             04020000
+*     EHAREGS CHARACTER EXT,        /* Contains declared register       04030000
+*                                      numbers.                      */ 04040000
+*     SYSASCE CHARACTER EXT,        /* AR or PRIMARY mode indicator     04050000
+*                                      set by SYSSTATE macro.        */ 04060000
+*     EHARC   FIXED EXT;            /* Return Code variable.         */ 04070000
+*                                                                       04080000
+*   EHARC=0;                        /* Default return code=no errors.*/ 04090000
+*/*                                                                  */ 04100000
+*/********************************************************************/ 04110000
+*/* Define internal macro variables.                                 */ 04120000
+*/********************************************************************/ 04130000
+*                                                                       04140000
+*   DCL                                                                 04150000
+*     EM(6) CHARACTER;              /* Error messages - defined. @L3C*/ 04160000
+*   DCL                                                                 04170000
+*     ERR FIXED;                    /* Error severity value.         */ 04180000
+*   DCL                                                                 04190000
+*     ERRMSG CHARACTER;             /* Error message to print.       */ 04200000
+*   DCL                                                                 04210000
+*     IHBERR FIXED;                 /* Highest error level              04220000
+*                                      encountered.                  */ 04230000
+*   DCL                                                                 04240000
+*     INCMNT FIXED;                 /* Indent value for error           04250000
+*                                      comments.                     */ 04260000
+*   DCL                                                                 04270000
+*     INDENT FIXED;                 /* Starting column for all output   04280000
+*                                      text except DO and END           04290000
+*                                      statements.                   */ 04300000
+*   DCL                                                                 04310000
+*     IVDOCMT CHARACTER;            /* Comment for DO and END           04320000
+*                                      statements.                   */ 04330000
+*   DCL                                                                 04340000
+*     MPREFIX CHARACTER;            /* Error message prefix.         */ 04350000
+*/********************************************************************/ 04360000
+*/* Initialize internal macro variables.                             */ 04370000
+*/********************************************************************/ 04380000
+*                                                                       04390000
+*   ERR=8;                          /* Error severity.               */ 04400000
+*   IHBERR=0;                       /* Indicate NO ERROR condition.  */ 04410000
+*   INCMNT=MACLMAR;                 /* Indent for error comments.    */ 04420000
+*   INDENT=MACCOL+2;                /* Indent two columns.           */ 04430000
+*   IVDOCMT='?STCKSYNC '!!MACLIST!!' '!!MACKEYS!!' '!!'03/30/03';/*     04440000
+*                                      Set up DO - END comment.  @L3C*/ 04450000
+*   ANS('?SYSSTATE (TEST);');       /* Set the SYSASCE variable.     */ 04460000
+*   MPREFIX='?STCKSYNC --> ';       /* Error message prefix.         */ 04470000
+*/********************************************************************/ 04480000
+*/* Error Messages:                                                  */ 04490000
+*/*                                                                  */ 04500000
+*/* Processing will continue as far as possible when an error        */ 04510000
+*/* occurs.                                                          */ 04520000
+*/********************************************************************/ 04530000
+*                                                                       04540000
+*   EM(1)='EXCESSIVE POSITIONAL PARAMETERS WERE SPECIFIED.';            04550000
+*   EM(2)=                          /* keyword                       */ 04560000
+*       ' PARAMETER REQUIRES A VALUE.';                                 04570000
+*   EM(3)=                          /* keyword                       */ 04580000
+*       ' PARAMETER CONTAINS TOO MANY SUBLISTS.';                       04590000
+*   EM(4)=                          /* keyword                       */ 04600000
+*       ' IS REQUIRED, BUT IS NOT SUPPLIED.';                           04610000
+*   EM(5)= ' ''TOD'' OR ''ETOD'' IS REQUIRED, BUT NOT BOTH.'; /* @L2A*/ 04620000
+*   EM(6)= 'SPECIFIY EITHER ''ETRID'' OR ''CTNID'', NOT BOTH.'; /*      04630000
+*                                                                @L2A*/ 04640000
+*                                                                       04650000
+*/********************************************************************/ 04660000
+*/* Set up the macro invocation comment.                             */ 04670000
+*/********************************************************************/ 04680000
+*                                                                       04690000
+*   ANS(MACLABEL) NORESCAN COL(MACLMAR);/* Put out the labels.       */ 04700000
+*   ANS('BEGIN;') COL(MACCOL);      /* Put out 'BEGIN'.              */ 04710000
+*   ANS(COMMENT(IVDOCMT));          /* List macro parameters.        */ 04720000
+*/********************************************************************/ 04730000
+*/* Process maclist.                                                 */ 04740000
+*/********************************************************************/ 04750000
+*                                                                       04760000
+*   IF NUMBER(MACLIST)^=0 THEN      /* Too many arguments in MACLIST?*/ 04770000
+*     DO;                           /* Yes -                         */ 04780000
+*       IHBERR=ERR;                 /* Indicate error                */ 04790000
+*       ERRMSG=MPREFIX!!EM(1);      /* Build message.                */ 04800000
+*       ANS MSG(ERRMSG) NORESCAN;   /* Issue message.                */ 04810000
+*       ANS(COMMENT(ERRMSG)) COL(INCMNT);/* Generate comment.        */ 04820000
+*     END;                                                              04830000
+*                                                                       04840000
+*/********************************************************************/ 04850000
+*/*                                                                  */ 04860000
+*/* Validate TOD!ETOD keywords.                                      */ 04870000
+*/*                                                                  */ 04880000
+*/********************************************************************/ 04890000
+*                                                                       04900000
+*   IF(TOD='') THEN                 /* If TOD was not specified, then   04910000
+*                                      check for ETOD                */ 04920000
+*     DO;                                                               04930000
+*       IF(ETOD='') THEN            /* Indicate Error.           @L2A*/ 04940000
+*         DO;                                                 /* @L2A*/ 04950000
+*           IHBERR=ERR;             /* Indicate Error.           @L2A*/ 04960000
+*           ERRMSG=MPREFIX!!'TOD OR ETOD'!!EM(4);/* Build message. /*   04970000
+*                                                                @L2A*/ 04980000
+*           ANS MSG(ERRMSG) NORESCAN;    /* Issue message.       @L2A*/ 04990000
+*           ANS(COMMENT(ERRMSG)) COL(INCMNT);/* Generate comment.@L2A*/ 05000000
+*         END;                                                /* @L2A*/ 05010000
+*       ELSE                                                  /* @L2A*/ 05020000
+*         IF(NUMBER(ETOD)>1) THEN   /* If there are too many sublists,  05030000
+*                                      the invocation is invalid @L2A*/ 05040000
+*           DO;                                               /* @L2A*/ 05050000
+*             IHBERR=ERR;           /* Indicate Error.           @L2A*/ 05060000
+*             ERRMSG=MPREFIX!!'ETOD'!!EM(3); /* Build msg.       @L2A*/ 05070000
+*             ANS MSG(ERRMSG) NORESCAN;    /* Issue msg.         @L2A*/ 05080000
+*             ANS(COMMENT(ERRMSG)) COL(INCMNT);/* Generate comment.     05090000
+*                                                                @L2A*/ 05100000
+*           END;                                              /* @L2A*/ 05110000
+*         ELSE                                                /* @L2A*/ 05120000
+*           IF ETOD(1)='' THEN      /* If there are no ETOD arguments,  05130000
+*                                      the invocation is invalid @L2A*/ 05140000
+*             DO;                                             /* @L2A*/ 05150000
+*               IHBERR=ERR;         /* Indicate Error.        /* @L2A*/ 05160000
+*               ERRMSG=MPREFIX!!'ETOD'!!EM(2); /* Build message. @L2A*/ 05170000
+*               ANS MSG(ERRMSG) NORESCAN;    /* Issue message.   @L2A*/ 05180000
+*               ANS(COMMENT(ERRMSG)) COL(INCMNT);/* Generate comment.   05190000
+*                                                                @L2A*/ 05200000
+*             END;                                            /* @L2A*/ 05210000
+*     END;                                                              05220000
+*   ELSE                                                                05230000
+*     IF(NUMBER(TOD)>1) THEN        /* If there are too many sublists,  05240000
+*                                      the invocation is invalid.    */ 05250000
+*       DO;                                                             05260000
+*         IHBERR=ERR;               /* Indicate Error.               */ 05270000
+*         ERRMSG=MPREFIX!!'TOD'!!EM(3);    /* Build msg.             */ 05280000
+*         ANS MSG(ERRMSG) NORESCAN;        /* Issue msg.             */ 05290000
+*         ANS(COMMENT(ERRMSG)) COL(INCMNT);/* Generate comment.      */ 05300000
+*       END;                                                            05310000
+*     ELSE                                                              05320000
+*       IF TOD(1)='' THEN           /* If there are no TOD arguments,   05330000
+*                                      the invocation is invalid.    */ 05340000
+*         DO;                                                           05350000
+*           IHBERR=ERR;             /* Indicate Error.               */ 05360000
+*           ERRMSG=MPREFIX!!'TOD'!!EM(2);    /* Build message.       */ 05370000
+*           ANS MSG(ERRMSG) NORESCAN;        /* Issue message.       */ 05380000
+*           ANS(COMMENT(ERRMSG)) COL(INCMNT);/* Generate comment.    */ 05390000
+*         END;                                                          05400000
+*       ELSE                                                  /* @L2A*/ 05410000
+*         IF ETOD ^= '' THEN                                  /* @L2A*/ 05420000
+*           DO;                                               /* @L2A*/ 05430000
+*             IHBERR=ERR;           /* Indicate Error.           @L2A*/ 05440000
+*             ERRMSG=MPREFIX!!EM(5); /* Build message.           @L2A*/ 05450000
+*             ANS MSG(ERRMSG) NORESCAN;  /* Issue message.       @L2A*/ 05460000
+*             ANS(COMMENT(ERRMSG)) COL(INCMNT);/* Generate comment.     05470000
+*                                                                @L2A*/ 05480000
+*           END;                                              /* @L2A*/ 05490000
+*/********************************************************************/ 05500000
+*/* Validate ETRID keyword if present.                               */ 05510000
+*/********************************************************************/ 05520000
+*                                                                       05530000
+*   IF(ETRID^='') THEN              /* If the ETRID keyword is          05540000
+*                                      present, validate it.         */ 05550000
+*     IF(NUMBER(ETRID)>1) THEN      /* If there are to many sublists,   05560000
+*                                      the invocation is invalid.    */ 05570000
+*       DO;                                                             05580000
+*         IHBERR=ERR;               /* Indicate Error.               */ 05590000
+*         ERRMSG=MPREFIX!!'ETRID'!!EM(3);  /* Build msg.             */ 05600000
+*         ANS MSG(ERRMSG) NORESCAN;        /* Issue msg.             */ 05610000
+*         ANS(COMMENT(ERRMSG)) COL(INCMNT);/* Generate comment.      */ 05620000
+*       END;                                                            05630000
+*     ELSE                                                              05640000
+*       IF ETRID(1)='' THEN         /* If there are no ETRID            05650000
+*                                      arguments, the invocation is     05660000
+*                                      invalid.                      */ 05670000
+*         DO;                                                           05680000
+*           IHBERR=ERR;             /* Indicate Error.               */ 05690000
+*           ERRMSG=MPREFIX!!'ETRID'!!EM(2);  /* Build message.       */ 05700000
+*           ANS MSG(ERRMSG) NORESCAN;        /* Issue message.       */ 05710000
+*           ANS(COMMENT(ERRMSG)) COL(INCMNT);/* Generate comment.    */ 05720000
+*         END;                                                          05730000
+*/********************************************************************/ 05740000
+*/* Validate CTNID keyword if present.                               */ 05750000
+*/********************************************************************/ 05760000
+*                                                                       05770000
+*   IF(CTNID^='' & ETRID^='') THEN  /* If CTNID and ETRID keywords      05780000
+*                                      were specified            @L3A*/ 05790000
+*     DO;                                                     /* @L3A*/ 05800000
+*       IHBERR=ERR;                 /* Indicate Error.           @L3A*/ 05810000
+*       ERRMSG=MPREFIX!!EM(6);      /* Build msg.           @L3A*/      05820000
+*       ANS MSG(ERRMSG) NORESCAN;   /* Issue msg.                @L3A*/ 05830000
+*       ANS(COMMENT(ERRMSG)) COL(INCMNT);  /* Generate comment.  @L3A*/ 05840000
+*     END;                                                    /* @L3A*/ 05850000
+*   ELSE                                                                05860000
+*     IF(CTNID^='') THEN            /* If the ETRID keyword is          05870000
+*                                      present, validate it.     @L3A*/ 05880000
+*       IF(NUMBER(CTNID)>1) THEN    /* If there are to many sublists,   05890000
+*                                      the invocation is invalid @L3A*/ 05900000
+*         DO;                                                 /* @L3A*/ 05910000
+*           IHBERR=ERR;             /* Indicate Error.           @L3A*/ 05920000
+*           ERRMSG=MPREFIX!!'CTNID'!!EM(3);  /* Build msg.       @L3A*/ 05930000
+*           ANS MSG(ERRMSG) NORESCAN;      /* Issue msg.         @L3A*/ 05940000
+*           ANS(COMMENT(ERRMSG)) COL(INCMNT);/* Generate comment @L3A*/ 05950000
+*         END;                                                /* @L3A*/ 05960000
+*       ELSE                                                  /* @L3A*/ 05970000
+*         IF CTNID(1)='' THEN       /* If there are no CTNID            05980000
+*                                      arguments, the invocation is     05990000
+*                                      invalid.                  @L3A*/ 06000000
+*           DO;                                               /* @L3A*/ 06010000
+*             IHBERR=ERR;           /* Indicate Error.           @L3A*/ 06020000
+*             ERRMSG=MPREFIX!!'CTNID'!!EM(2);  /* Build message. @L3A*/ 06030000
+*             ANS MSG(ERRMSG) NORESCAN;      /* Issue message.   @L3A*/ 06040000
+*             ANS(COMMENT(ERRMSG)) COL(INCMNT);/* Gen comment    @L3A*/ 06050000
+*           END;                                              /* @L3A*/ 06060000
+*                                                                       06070000
+*/********************************************************************/ 06080000
+*/* If there were no invocation errors, generate code.               */ 06090000
+*/********************************************************************/ 06100000
+*                                                                       06110000
+*   IF IHBERR=0 THEN                /* If there were no invocation      06120000
+*                                      errors, generate the code.    */ 06130000
+*     DO;                                                               06140000
+*                                                                       06150000
+*/********************************************************************/ 06160000
+*/* Define macro control block pointers                              */ 06170000
+*/********************************************************************/ 06180000
+*                                                                       06190000
+*       ANS(('DCL  STK@CVT   PTR(31) LOCATION(16);')!!COMMENT(          06200000
+*           'Declare pointer to CVT.')) COL(INDENT) SKIP(1) NORESCAN;   06210000
+*                                   /* Declare pointer to CVT.       */ 06220000
+*       ANS(('DCL  STK@ECVT  PTR(31) BASED(STK@CVT) POS(141);')!!       06230000
+*           COMMENT('Declare pointer to ECVT.')) COL(INDENT) SKIP(1)    06240000
+*           NORESCAN;               /* Declare pointer to ECVT.      */ 06250000
+*       ANS(('RFY (GPR01P,GPR14P,GPR15P) RSTD; ')) COL(INDENT) SKIP(1)  06260000
+*           NORESCAN;               /* Restrict required registers.  */ 06270000
+*       IF TOD ^= '' THEN                                     /* @L2A*/ 06280000
+*         ANS(('GPR01P = ADDR('!!TOD(1)!!'); ')!!COMMENT(               06290000
+*           'Load GPR01 with the address of TOD parameter.')) COL(      06300000
+*           INDENT) SKIP(1) NORESCAN; /* Load GPR01 with address of     06310000
+*                                        TOD parameter.              */ 06320000
+*       ELSE                                                  /* @L2A*/ 06330000
+*         DO;                                                 /* @L2A*/ 06340000
+*           ANS(('GPR01P = ADDR('!!ETOD(1)!!'); ')!!COMMENT(            06350000
+*             'Load GPR01 with the address of ETOD parameter.')) COL(   06360000
+*             INDENT) SKIP(1) NORESCAN; /* Load GPR01 with address of   06370000
+*                                        ETOD parameter.         @L2A*/ 06380000
+*           ANS(('GPR01P = GPR01P ! ''80000000''X; ')!!                 06390000
+*             COMMENT('Indicate that ETOD was specified.')) COL(INDENT) 06400000
+*             SKIP(1) NORESCAN;                               /* @L2A*/ 06410000
+*         END;                                                /* @L2A*/ 06420000
+*       IF ETRID^= '' THEN          /* Was an ETRID requested?       */ 06430000
+*         DO;                       /* YES                           */ 06440000
+*           ANS(('RFY GPR00P RSTD; ')) COL(INDENT) SKIP(1) NORESCAN;/*  06450000
+*                                      Restrict required register.   */ 06460000
+*           ANS(('GPR00P = ADDR('!!ETRID(1)!!'); ')!!COMMENT(           06470000
+*               'Load GPR00 with the address of ETRID parameter.')) COL 06480000
+*               (INDENT) SKIP(1) NORESCAN;/* Load GPR00 with address    06490000
+*                                           of ETRID param.          */ 06500000
+*           IF SYSASCE='P' THEN                                         06510000
+*             ANS(('GPR15P = (STK@ECVT + 28)->I031P; ')!!COMMENT(       06520000
+*                 'Load GPR15 with address of entry point.')) COL(      06530000
+*                 INDENT) SKIP(1) NORESCAN; /* ENTRY POINT: NON-AR,     06540000
+*                                              ETRID requested.      */ 06550000
+*           ELSE                                                        06560000
+*             DO;                                                       06570000
+*               ANS(('GPR15P = (STK@ECVT + 36)->I031P; ')!!COMMENT(     06580000
+*                  'Load GPR15 with address of Entry Point.')) COL(     06590000
+*                  INDENT) SKIP(1) NORESCAN; /* Entry point: AR, ETRID  06600000
+*                                               requested.           */ 06610000
+*               ANS(('SAR(GPR00F,ALET('!!ETRID(1)!!')); ')!!COMMENT(    06620000
+*                  'Load AR0 with the ALET of ETRID parameter.')) COL(  06630000
+*                  INDENT) SKIP(1) NORESCAN;/* Load AR0 with ALET of    06640000
+*                                              ETRID parameter.      */ 06650000
+*             END;                                                      06660000
+*         END;                                                          06670000
+*       IF CTNID^= '' THEN          /* Was an CTNID requested?   @L3A*/ 06680000
+*         DO;                       /* YES                       @L3A*/ 06690000
+*           ANS(('RFY GPR00P RSTD; ')) COL(INDENT) SKIP(1) NORESCAN;/*  06700000
+*                                      Restrict required register@L3A*/ 06710000
+*           ANS(('GPR00P = ADDR('!!CTNID(1)!!'); ')!!COMMENT(           06720000
+*               'Load GPR00 with the address of CTNID parameter.')) COL 06730000
+*               (INDENT) SKIP(1) NORESCAN;/* Load GPR00 with address    06740000
+*                                           of CTNID param.      @L3A*/ 06750000
+*           IF SYSASCE='P' THEN                               /* @L3A*/ 06760000
+*             ANS(('GPR15P = (STK@ECVT + 828)->I031P; ')!!COMMENT(      06770000
+*                 'Load GPR15 with address of entry point.')) COL(      06780000
+*                 INDENT) SKIP(1) NORESCAN; /* ENTRY POINT: NON-AR,     06790000
+*                                              CTNID requested.  @L3A*/ 06800000
+*           ELSE                                              /* @L3A*/ 06810000
+*             DO;                                             /* @L3A*/ 06820000
+*               ANS(('GPR15P = (STK@ECVT + 824)->I031P; ')!!COMMENT(    06830000
+*                  'Load GPR15 with address of Entry Point.')) COL(     06840000
+*                  INDENT) SKIP(1) NORESCAN; /* Entry point: AR, CTNID  06850000
+*                                               requested.       @L3A*/ 06860000
+*               ANS(('SAR(GPR00F,ALET('!!CTNID(1)!!')); ')!!COMMENT(    06870000
+*                  'Load AR0 with the ALET of CTNID parameter.')) COL(  06880000
+*                  INDENT) SKIP(1) NORESCAN;/* Load AR0 with ALET of    06890000
+*                                              CTNID parameter.  @L3A*/ 06900000
+*             END;                                            /* @L3A*/ 06910000
+*         END;                                                /* @L3A*/ 06920000
+*       IF ETRID = '' & CTNID = '' THEN                       /* @L3C*/ 06930000
+*         DO;                                                 /* @L3A*/ 06940000
+*         IF SYSASCE='P' THEN                                           06950000
+*           ANS(('GPR15P = (STK@ECVT + 24)->I031P; ')!!COMMENT(         06960000
+*               'Load GPR15 with address of Entry Point.')) COL(INDENT) 06970000
+*               SKIP(1) NORESCAN;   /* Entry point: non-AR, no ID       06980000
+*                                      requested.                @L3C*/ 06990000
+*         ELSE                                                          07000000
+*           ANS(('GPR15P = (STK@ECVT + 32)->I031P; ')!!COMMENT(         07010000
+*               'Load GPR15 with address of Entry Point.')) COL(INDENT) 07020000
+*               SKIP(1) NORESCAN;   /* Entry point: AR, no ID           07030000
+*                                      requested.                @L3A*/ 07040000
+*         END;                                                /* @L3A*/ 07050000
+*       IF SYSASCE ^= 'P' THEN                                          07060000
+*         IF TOD ^= '' THEN                                   /* @L2A*/ 07070000
+*           ANS(('SAR(GPR01F,ALET('!!TOD(1)!!')); ')!!COMMENT(          07080000
+*              'Load AR1 with the ALET of TOD parameter.')) COL(INDENT) 07090000
+*              SKIP(1) NORESCAN;       /* Load AR1 with ALET of TOD     07100000
+*                                         parameter.                 */ 07110000
+*         ELSE                                                /* @L2A*/ 07120000
+*           ANS(('SAR(GPR01F,ALET('!!ETOD(1)!!')); ')!!COMMENT(         07130000
+*             'Load AR1 with the ALET of ETOD parameter.')) COL(INDENT) 07140000
+*              SKIP(1) NORESCAN;       /* Load AR1 with ALET of ETOD    07150000
+*                                         parameter.             @L2A*/ 07160000
+*       ANS('GENERATE REFS(GPR15P) SETS(GPR14P,GPR15F) ') COL(10) SKIP( 07170000
+*           1) NORESCAN;                                                07180000
+*       ANS('(BASR GPR14P,GPR15P); '!!COMMENT(                          07190000
+*           'Generate Service Routine linkage.')) COL(INDENT) SKIP(1)   07200000
+*           NORESCAN;               /* Generate Service Routine         07210000
+*                                      linkage.                      */ 07220000
+*       IF ETRID^='' ! CTNID^='' THEN /* If ETRID requested, ... @L3C*/ 07230000
+*         ANS(('RFY GPR00P UNRSTD; ')) COL(INDENT) SKIP(1)              07240000
+*             NORESCAN;              /* Free register.               */ 07250000
+*       ANS(('RFY (GPR01P,GPR14P,GPR15P) UNRSTD; ')) COL(INDENT)        07260000
+*           SKIP(1) NORESCAN;       /* Free registers.               */ 07270000
+*     END;                                                              07280000
+*                                                                       07290000
+*/********************************************************************/ 07300000
+*/* Set up the macro end comment.                                    */ 07310000
+*/********************************************************************/ 07320000
+*                                                                       07330000
+*   ANS('END; ') COL(MACCOL);       /* Put out 'END'.                */ 07340000
+*   ANS(COMMENT(IVDOCMT));          /* List macro parameters.        */ 07350000
+*/********************************************************************/ 07360000
+*/* Set up register declarations.                                    */ 07370000
+*/********************************************************************/ 07380000
+*                                                                       07390000
+*   IF ETRID^='' ! CTNID^='' THEN   /* IF an ETRID or CTNID was         07400000
+*                                      requested ...             @L3A*/ 07410000
+*     DO;                                                               07420000
+*       IF INDEX(EHAREGS,'00P')=0 THEN /* IF register 0 not defined, */ 07430000
+*         EHAREGS=EHAREGS!!'00P';      /* then, define register 0.   */ 07440000
+*       IF INDEX(EHAREGS,'00F')=0 THEN /* IF register 0 not defined, */ 07450000
+*         EHAREGS=EHAREGS!!'00F';      /* then, define register 0.   */ 07460000
+*     END;                                                              07470000
+*   IF INDEX(EHAREGS,'01P')=0 THEN  /* If register 1 not defined,       07480000
+*                                      define it.                    */ 07490000
+*     EHAREGS=EHAREGS!!'01P';       /* Define register 1.            */ 07500000
+*   IF INDEX(EHAREGS,'01F')=0 THEN  /* If register 1 not defined,       07510000
+*                                      define it.                    */ 07520000
+*     EHAREGS=EHAREGS!!'01F';       /* Define register 1.            */ 07530000
+*   IF INDEX(EHAREGS,'14P')=0 THEN  /* If register 14 not defined,      07540000
+*                                      define it.                    */ 07550000
+*     EHAREGS=EHAREGS!!'14P';       /* Define register 14.           */ 07560000
+*   IF INDEX(EHAREGS,'15F')=0 THEN  /* If register 15 not defined,      07570000
+*                                      define it.                    */ 07580000
+*     EHAREGS=EHAREGS!!'15F';       /* Define register 15.           */ 07590000
+*   IF INDEX(EHAREGS,'15P')=0 THEN  /* If register 15 not defined,      07600000
+*                                      define it.                    */ 07610000
+*     EHAREGS=EHAREGS!!'15P';       /* Define register 15.           */ 07620000
+*   IF IHBERR^=0 THEN               /* Set return code on error.     */ 07630000
+*     EHARC=IHBERR;                                                     07640000
+*   RETURN CODE(EHARC);             /* Return with return code.      */ 07650000
+*   %END STCKSYNC;                                                      07660000

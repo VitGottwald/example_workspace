@@ -1,0 +1,353 @@
+*%/*    Start of comment to bypass asm definition in PL/X invocatio@L1A 00010000
+         MACRO                                                          00020000
+&NAME    DCBE  &BLKSIZE=,  Block size                              @L3MX00030000
+               &BLOCKTOKENSIZE=,  Use three-byte or four-byte TTRs @L4AX00040000
+               &BYPASS_AUTH=,      Bypass authority checks         @L8AX00041001
+               &BYPASS_EXTENT_CHECK=NO, Bypass Extent Check        @04AX        
+               &FIXED=,    User has taken care of page fixing areas@L5AX00050000
+               &CAPACITYMODE=,  Device capacity mode               @L3AX00060000
+               &DSENCRYPT=NOTOK, User acknowledges basic/large encr@03AX00060100
+               &LOC=,      XTIOT, DSABs and UCBs supt in 31-bit    @L7AX00070000
+               &EADSCB=,   Extended attributes in DSCBs supported  @L6AX00080000
+               &EODAD=0,   End of data rtn addr, may point above 16MB  X00090000
+               &GETSIZE=NO, OPEN should return size of data set        x00100000
+               &HYPERWRITE=NO,    SAM zHyperwrite request          @02AX00105000
+               &MULTSDN=0, Multiplier of system-suggested NCP          X00110000
+               &MULTACC=0, Multiplier of default accumulation value    X00120000
+               &NOVER=NO,  YES-OPEN not to verify stripes              X00130000
+               &PASTEOD=NO, Continue reading past apparent end of data X00140000
+               &CONCURRENTRW=NO, Concurrent read and write         @01AX00150000
+               &RMODE31=NONE,  Whether OPEN may get buffers above 16MB X00160000
+               &SYNAD=0,   I/O error routine, synchronous to user      X00170000
+               &SYNC=,     Synchronization option                  @L8CX00180001
+               &VERSION=   DCBE Version                            @L8A 00181001
+.*                                                                 @L3A 00190000
+.* Function - Create data control block extension (DCBE) for SAM.       00200000
+.*            It can reside above or below the 16MB line.               00210000
+.* Parameters - See others above.                                       00220000
+.*      BLKSIZE=   Coding any non-negative value requests LBI,     @L3A 00230000
+.*                 large block interface.                          @L3A 00240003
+.*      BLOCKTOKENSIZE=SMALL or LARGE.  With BSAM/BPAM NOTE/POINT  @L4A 00250000
+.*                 the block token is 3 or 4 bytes.  With EXCP,    @L4A 00260000
+.*                 user will call TTR conversion routines with     @L4A 00270000
+.*                 three-byte TTR or four-byte TTTR.  LARGE also   @L4A 00280000
+.*                 means user can handle DEBNMTRKHI and DS1TTTHI.  @L4A 00290000
+.*      BYPASS_AUTH=YES or NO. If the BSAM/QSAM caller has APF     @L8A 00291001
+.*                 authorization or is in system key or supervisor @L8A 00292001
+.*                 state, YES indicates that DASD authorization    @L8A 00293002
+.*                 checking should be bypassed. Option only valid  @L8A 00294002
+.*                 with a version 1 DCBE.                          @L8A 00295002
+.*      BYPASS_EXTENT_CHECK=YES or NO. YES indicates Bypass Extent @04A         
+.*                 Check should be used. Only supported for        @04A         
+.*                 authorized callers.                             @04A         
+.*      FIXED = USER. If the BSAM caller has APF authorization     @L5A 00300000
+.*                 or is in system key or supervisor state,        @L5A 00310000
+.*                 the user coding this option has taken care of   @L5A 00320000
+.*                 page fixing all the data areas.                 @L5A 00330000
+.*      CAPACITYMODE=  The only supported non-null value is XCAP,  @L3A 00340000
+.*                 which means "extended capacity".  Switch the    @L3A 00350000
+.*                 device to 32-bit block numbers if possible.     @L3A 00360000
+.*      CONCURRENTRW=YES or NO. If the user has specified the DCBE @L9A 00361006
+.*                 option CONCURRENTRW=(YES,TRKLOCK), this means   @L9A 00361106
+.*                 the application can tolerate inconsistent read  @L9A 00363006
+.*                 data due to concurrent writes to other tracks.  @L9A 00364006
+.*                 CONCURRENTRW=(YES,TRKLOCK) has an effect only   @L9A 00366006
+.*                 when the device is defined read-only.           @L9A 00367006
+.*      DSENCRYPT=OK or NOTOK. If the user specifies DSENCRYPT=OK, @03A 00367007
+.*                 they acknowledge their program is suitable and  @03A 00367008
+.*                 capable of basic and large format data set      @03A 00367009
+.*                 encryption processing. Meaningful only for      @03A 00367010
+.*                 EXCP users.                                     @03A 00367020
+.*      EADSCB=OK or NOTOK. Extended attributes in DSCBs are       @L6A 00370000
+.*                 supported by the application.  This includes    @L6A 00380000
+.*                 28-bit cylinder addressing.                     @L6A 00390000
+.*      HYPERWRITE=YES or NO. YES indicates zHyperwrite should be  @02A 00395000
+.*                 used. Only supported for authorized callers.    @02A 00396000
+.*      MULTACC=n  A non-zero value requests BSAM to accumulate    @L3A 00400000
+.*                 READ or WRITE requests before starting them.    @L3A 00410000
+.*                 OPEN calculates an appropriate number to        @L3A 00420000
+.*                 accumulate and multiplies it by this value and  @L3A 00430000
+.*                 limits the result to the NCP value.             @L3A 00440000
+.*      MULTSDN=n  A non-zero value here and a zero value for NCP  @L3A 00450000
+.*                 requests BSAM OPEN to calculate a value for NCP,@L3A 00460000
+.*                 multiply it by the MULTSDN value and store the  @L3A 00470000
+.*                 result in DCBNCP.  Result is limited to 255.    @L3A 00480000
+.*      RMODE31=BUFF means for OPEN to get QSAM buffers above the  @L3A 00490000
+.*                 16 MB line and to free them in CLOSE.           @L3A 00500000
+.*      SYNC=      SYSTEM means the system will choose when to     @L3A 00510000
+.*                 synchronize buffers to the medium.  It will     @L3A 00520000
+.*                 be in CHECK, STOW or CLOSE macros.  NONE        @L3A 00530000
+.*                 allows the system to synchronize after CLOSE.   @L3A 00540000
+.*                 Default currently is SYSTEM. If two values are  @L3A 00550002
+.*                 coded, the first must be NUMFILES and the       @L9A 00551002
+.*                 second must be a number of tape files.          @L9A 00552002
+.*      LOC=BELOW or ANY.  XTIOT, DSABs and UCBs may be in 31-bit  @L7A 00560000
+.*                 storage if LOC=ANY is specified.                @L7A 00570000
+.*      VERSION=0 or 1. The version 1 DCBE is longer and allows    @L8A 00571001
+.*                 for the following keywords:                     @L8A 00572001
+.*                   BYPASS_AUTH                                   @L8A 00573001
+.*                                                                 @L3A 00580000
+.* Processor - High Level Assembler                                @L3C 00590000
+.*PROPRIETARY V3 STATEMENT                                              00600000
+.*LICENSED MATERIALS - PROPERTY OF IBM                                  00610000
+.*"RESTRICTED MATERIALS OF IBM"                                         00620000
+.*5650-ZOS                                                              00630000
+.*COPYRIGHT IBM CORP. 1984,2019                                         00640002
+.*END PROPRIETARY V3 STATEMENT                                          00650000
+.* Changes -                                                            00660000
+.* $L0=STRIPING,JDZ1110,920224,SJPLWER: SAM Striping & 31-bit SAM @L0A  00670000
+.* $L1=xxxxxxxx,JDZ1110,930930,SJPLMET: PLX support                @L1A 00680000
+.* $L2=GT32K,HDZ11F0,990128,SJPLRK: BLKSIZE keyword                @L2A 00690000
+.* $L3=OW49831,HDZ11F0,010720,SJPLWER: IBM 3590 capacity, perf.    @L3A 00700000
+.* $L4=LARGE,HDZ11K0,031215,SJPLWER: BLOCKTOKENSIZE for large DS   @L4A 00710000
+.* $L5=BAMPERF,HDZ1190,060516,SVLPF: FIXED Long-term page fix bfrs @L5A 00720000
+.* $L6=EAV  ,HDZ1A10,070112,SJPLGSR: EADSCB= keyword for EAV       @P0C 00730000
+.* $P0=K1A0544,HDZ1A10,070425,SVLPF: Replace keyword               @P0A 00740000
+.* $L7=XTIOT,HDZ1C10,090311,SJPLLM: LOC=ANY support                @L7A 00750000
+.* $01=OA35999,HDZ1D10,20110406,sjpllm:                            @01A 00760000
+.*   1. Support CONCURRENTRW                                            00761001
+.* $MA=SM01921,HDZ2220,11082013,SJPLJAL: TAPE PERFORMANCE          @MAA 00770000
+.* $L8=OA48124,HDZ2220,20150904,sjplccl:                           @L8A 00780101
+.*   1. Bypass authority checking; Support version 1 DCBE          @L8A 00780201
+.* $L9=ROAVOLS,HDZ2230,160404,MDCASAD: READ-ONLY VOLUMES           @L9A 00781001
+.* $02=OA51385,HDZ2230,20161004,SJPLJRB:                           @02A 00782000
+.*   1. SAM support for zHyperwrite                                @02A 00783000
+.* $03=W314810,HDZ2240,20190617,TUCJRB: Basic/Large DS Encrypt     @03A 00783100
+.* $04=OA61271,HDZ2250,20210415,eseftel:                           @04A         
+.*   1. Support for Bypass Extent Check                            @04A         
+.*                                                                      00790000
+         LCLB  &RM,&PAST,&CRW,&NOV,&GS,&BS,&CM,&A7,&SN             @L3C 00800000
+         LCLB  &C0,&C1,&C2,&C3,&C4,&C5,&C6,&C7      DCBEFLG3 flgs  @L3C 00810001
+         LCLB  &BA,&D1,&D2,&D3,&D4,&D5,&D6,&D7      DCBEFLG4 flgs  @L8A 00811001
+         LCLB  &E0,&E1,&E2,&BEC,&E4,&DSENC,&HW,&CRWLOCK DCBEFLG5   @04C         
+         LCLB  &ERROR         Error found, suppress macro expansion     00820000
+         LCLC  &RETURN        Subroutine return symbol                  00830000
+         LCLC  &KEYWORD       Name of keyword in error                  00840000
+         LCLC  &TEMP          Scratch variable to prettify expansion    00850000
+         LCLB  &BANO          BYPASS_AUTH=NO specified             @L8A 00850104
+         LCLA  &VERSN         Version to be used for this expansion@L8A 00852001
+&VERSN   SETA  0              Version 0 DCBE                       @L8A 00853001
+&DCBELEN SETA  56             Version 0 DCBE length                @L8A 00854001
+.*                                                                      00860000
+.* Check for all possible syntax errors before starting macro expansion 00870000
+.*                                                                 @L6A 00880000
+&C3      SETB  ('&LOC' EQ 'ANY')    Set bit if LOC=ANY             @L7A 00890000
+         AIF   ('&LOC' EQ '' OR '&LOC' EQ 'ANY' OR                     X00900000
+               '&LOC' EQ 'BELOW').CKEADSCB Check next keywork      @L7A 00910000
+         MNOTE 8,'LOC VALUE MUST BE ANY, BELOW OR OMITTED'         @L7A 00920000
+.*                                                                 @L7A 00930000
+.CKEADSCB ANOP                                                     @L7A 00940000
+&C2      SETB  ('&EADSCB' EQ 'OK')  Set bit if EADSCB=OK           @L6A 00950000
+         AIF   ('&EADSCB' EQ '' OR '&EADSCB' EQ 'OK' OR                X00960000
+               '&EADSCB' EQ 'NOTOK').CKLARGE Check next keyword    @L6A 00970000
+         MNOTE 8,'EADSCB VALUE MUST BE OK, NOTOK OR OMITTED'       @L6A 00980000
+&ERROR   SETB  1                    Suppress expansion             @L6A 00990000
+.*                                                                 @L6A 01000000
+.CKLARGE ANOP                                                      @L6A 01010000
+&C0      SETB  ('&BLOCKTOKENSIZE' EQ 'LARGE')  Set bit             @L4A 01020000
+         AIF   ('&BLOCKTOKENSIZE' EQ '' OR '&BLOCKTOKENSIZE' EQ 'SMALL'X01030000
+               OR '&BLOCKTOKENSIZE' EQ 'LARGE').CHKFIXED           @L5C 01040000
+         MNOTE 8,'BLOCKTOKENSIZE VALUE MUST BE SMALL, LARGE OR OMITTED' 01050000
+&ERROR   SETB  1              Suppress expansion                   @L4A 01060000
+.*                                                                 @L5A 01070000
+.CHKFIXED ANOP                                                     @L5A 01080000
+&C1      SETB  ('&FIXED' EQ 'USER')            Set bit             @L5A 01090000
+         AIF   ('&FIXED' EQ '' OR '&FIXED' EQ 'USER').CHKEODAD     @L5A 01100000
+         MNOTE 8,'FIXED VALUE MUST BE USER OR OMITTED'             @L5A 01110000
+&ERROR   SETB  1              Suppress expansion                   @L5A 01120000
+.*                                                                 @L4A 01130000
+.CHKEODAD AIF  ('&EODAD'(1,1) NE '(').CHKGETS                      @L4C 01140000
+         MNOTE 8,'EODAD MUST NOT BE IN PARENTHESES'                     01150000
+&ERROR   SETB  1              Suppress expansion                        01160000
+.*                                                                      01170000
+.CHKGETS ANOP                                                           01180000
+&GS      SETB  ('&GETSIZE' EQ 'YES')   Set GETSIZE bit                  01190000
+         AIF   ('&GETSIZE' EQ 'YES' OR '&GETSIZE' EQ 'NO').CHKMODE @L3C 01200000
+         MNOTE 8,'GETSIZE VALUE MUST BE YES OR NO'                      01210000
+&ERROR   SETB  1              Suppress expansion                        01220000
+.*                                                                 @L3A 01230000
+.CHKMODE ANOP                                                      @L3A 01240000
+&CM      SETB  ('&CAPACITYMODE' EQ 'XCAP')    Remember XCAP        @L3A 01250000
+         AIF   ('&CAPACITYMODE' EQ 'XCAP' OR                           X01260000
+               '&CAPACITYMODE' EQ '').CHKNOV  Branch if valid      @L3A 01270000
+         MNOTE 8,'CAPACITYMODE VALUE MUST BE XCAP OR OMITTED'      @L3A 01280000
+&ERROR   SETB  1              Suppress expansion                   @L3A 01290000
+.*                                                                      01300000
+.CHKNOV  ANOP                                                           01310000
+&NOV     SETB  ('&NOVER' EQ 'YES')     Set NOVER bit (no stripe verify) 01320000
+         AIF   ('&NOVER' EQ 'YES' OR '&NOVER' EQ 'NO').CHKPAST          01330000
+         MNOTE 8,'NOVER VALUE MUST BE YES OR NO'                        01340000
+&ERROR   SETB  1              Suppress expansion                        01350000
+.*                                                                      01360000
+.CHKPAST ANOP                                                           01370000
+&PAST    SETB  ('&PASTEOD' EQ 'YES')    Set PASTEOD bit                 01380000
+         AIF   ('&PASTEOD' EQ 'YES' OR '&PASTEOD' EQ 'NO').CHKCRW  @01C 01390000
+         MNOTE 8,'PASTEOD VALUE MUST BE YES OR NO'                      01400000
+&ERROR   SETB  1              Suppress expansion                        01410000
+.*                                                                      01420000
+.CHKCRW  ANOP                                                      @01A 01430000
+&CRW     SETB  ('YES' EQ UPPER('&CONCURRENTRW(1)'))                @L9C 01440009
+         AIF   ('YES' EQ UPPER('&CONCURRENTRW(1)')).CHKCRWY        @L9C 01441009
+         AIF   ('NO'  EQ UPPER('&CONCURRENTRW(1)')).CHKCRWN        @L9C 01442009
+         MNOTE 8,'CONCURRENTRW VALUE MUST BE YES OR NO'            @01A 01470000
+&ERROR   SETB  1              Suppress expansion                   @01A 01480000
+         AGO   .CHKRMODE31                                         @L9A 01481001
+.CHKCRWN AIF   (N'&CONCURRENTRW EQ 1).CHKRMODE31                   @L9A 01482001
+         MNOTE 8,'SECOND VALUE NOT ALLOWED ON CONCURRENTRW(NO)'    @01A 01483000
+&ERROR   SETB  1              Suppress expansion                   @01A 01484000
+         AGO   .CHKRMODE31                                         @L9A 01485001
+.CHKCRWY AIF   (N'&CONCURRENTRW EQ 2).CHKCRWY2                     @L9A 01486001
+         AIF   (N'&CONCURRENTRW LT 2).CHKRMODE31                   @L9A 01486101
+         MNOTE 8,'THIRD VALUE NOT ALLOWED ON CONCURRENTRW(YES)'    @01A 01487000
+&ERROR   SETB  1              Suppress expansion                   @01A 01488000
+         AGO   .CHKRMODE31                                         @L9A 01489001
+.CHKCRWY2 ANOP                                                     @L5A 01489105
+&CRWLOCK SETB  ('TRKLOCK' EQ UPPER('&CONCURRENTRW(2)'))            @L9A 01489209
+         AIF   (&CRWLOCK).CHKRMODE31                               @L9A 01489302
+         AIF   ('EXTLOCK' EQ UPPER('&CONCURRENTRW(2)')).CHKRMODE31 @L9A 01489409
+         MNOTE 8,'SECOND VALUE ON CONCURRENTRW MUST BE TRKLOCK OR EXTLO*01489600
+               CK'                                                 @L5A 01489700
+&ERROR   SETB  1              Suppress expansion                   @01A 01489800
+.*                                                                 @01A 01490000
+.CHKRMODE31 ANOP                                                        01500000
+&RM      SETB  ('&RMODE31' EQ 'BUFF')   Set RMODE bit                   01510000
+         AIF   ('&RMODE31' EQ 'BUFF' OR '&RMODE31' EQ 'NONE').CHKSYNAD  01520000
+         MNOTE 8,'RMODE31 VALUE MUST BE BUFF OR NONE'                   01530000
+&ERROR   SETB  1              Suppress expansion                        01540000
+.*                                                                      01550000
+.CHKSYNAD AIF  ('&SYNAD'(1,1) NE '(').CHKSYNC                      @L3C 01560000
+         MNOTE 8,'&SYNAD MUST NOT BE IN PARENTHESES'                    01570000
+&ERROR   SETB  1              Suppress expansion                        01580000
+.*                                                                 @L3A 01590000
+.CHKSYNC ANOP                                                      @L3C 01600000
+&C5      SETB  ('&SYNC' EQ 'NONE')   Set combination of bits for   @L3A 01610000
+&C6      SETB  ('&SYNC' EQ 'NONE')     the SYNC value.             @L3A 01620000
+&C7      SETB  ('&SYNC' EQ 'NONE' OR '&SYNC' EQ 'SYSTEM')          @L3A 01630000
+         AIF   ('&SYNC' EQ 'NONE' OR '&SYNC' EQ 'SYSTEM' OR            *01640000
+               '&SYNC' EQ '').CHKENC                               @03C 01650000
+         AIF   (N'&SYNC NE 2).BADSYNC                              @MAA 01660000
+         AIF   ('&SYNC(1)' NE 'NUMFILES').BADSYNC                  @MAA 01670000
+&SN      SETB  (T'&SYNC(2) NE 'O')       sync number specified     @MAA 01680000
+         AGO   .CHKENC                                             @03C 01690000
+.BADSYNC MNOTE 8,'SYNC MUST BE OMITTED OR BE NONE, SYSTEM OR (NUMFILES,*01700000
+               NUMBER)'                                                 01710000
+&ERROR   SETB  1              Suppress expansion                   @L3A 01720000
+.*                                                                      01720001
+.CHKENC  ANOP                                                           01720002
+&DSENC   SETB  ('&DSENCRYPT' EQ 'OK')  Set DCBEENCRYPTOK bit       @03A 01720003
+         AIF   ('&DSENCRYPT' EQ 'OK' OR                                *01720004
+               '&DSENCRYPT' EQ 'NOTOK').CHKHW                      @03A 01720005
+         MNOTE 8,'DSENCRYPT VALUE MUST BE OK OR NOTOK'             @03A 01720006
+&ERROR   SETB  1              Suppress expansion                   @03A 01720007
+.*                                                                      01720008
+.CHKHW     ANOP                                                    @02A 01722000
+&HW      SETB  ('&HYPERWRITE' EQ 'YES')   Set HYPERWRITE bit       @02A 01723000
+         AIF   ('&HYPERWRITE' EQ 'YES' OR '&HYPERWRITE'                *01724000
+               EQ 'NO').CHKBEC                                     @04C         
+         MNOTE 8,'HYPERWRITE VALUE MUST BE YES OR NO'              @02A 01726000
+&ERROR   SETB  1              Suppress expansion                   @02A 01727000
+.*                                                                      01730000
+.CHKBEC  ANOP                                                      @04A         
+&BEC     SETB  ('&BYPASS_EXTENT_CHECK' EQ 'YES') Set BEC bit       @04A         
+         AIF   ('&BYPASS_EXTENT_CHECK' EQ 'YES' OR                     *        
+                '&BYPASS_EXTENT_CHECK' EQ 'NO').CHKBYPA            @04A         
+         MNOTE 8,'BYPASS_EXTENT_CHECK VALUE MUST BE YES OR NO'     @04A         
+&ERROR   SETB  1              Suppress expansion                   @04A         
+.*                                                                 @04A         
+.CHKBYPA   ANOP                                                    @04C         
+&TEMP    SETC  (UPPER '&BYPASS_AUTH')  Convert to upper case       @L8A 01732004
+&BA      SETB  ('&TEMP' EQ 'YES')      Set BYPASSAUTH bit          @L8A 01733004
+&BANO    SETB  ('&TEMP' EQ 'NO')       Keep track that keyword used@L8A 01734004
+         AIF   ('&TEMP' EQ '' OR '&TEMP' EQ 'YES' OR                   *01735004
+               '&TEMP' EQ 'NO').CHKVER                             @L8A 01736004
+         IGGERMAC 205,'BYPASS_AUTH','YES or NO or not coded'       @L8A 01737004
+&ERROR   SETB  1              Suppress expansion                   @L8A 01738004
+.*                                                                 @L8A 01739004
+.CHKVER  AIF   ('&VERSION' EQ '1').SETVER1                         @L8A 01740004
+         AIF   ('&VERSION' NE '' AND '&VERSION' NE '0').VERER1     @L8A 01740104
+         AIF   ('&VERSION' EQ '0').CHKV0                           @L8A 01740204
+.* User omitted VERSION. Check whether we need to set version to 1 @L8A 01740304
+         AIF   (&BA OR &BANO).SETVER1                              @L8A 01740404
+         AGO   .BLKSI                                              @L8A 01740504
+.* User coded VERSION=0. Ensure version 1 keywords are not coded   @L8A 01740604
+.CHKV0   AIF   (&BA OR &BANO).VERER2                               @L8A 01740704
+         AGO   .BLKSI                                              @L8A 01740804
+.SETVER1 ANOP                                                      @L8A 01740904
+&VERSN   SETA  1                                                   @L8A 01741004
+&DCBELEN SETA  80             Version 1 DCBE length                @L8A 01741104
+         AGO   .BLKSI                                              @L8A 01741204
+.VERER1  IGGERMAC 205,'VERSION','0 or 1 or not coded'              @L8A 01741304
+&ERROR   SETB  1              Suppress expansion                   @L8A 01741404
+         AGO   .BLKSI                                              @L8A 01741504
+.VERER2  IGGERMAC 206,'VERSION=0','BYPASS_AUTH'                    @L8A 01741604
+&ERROR   SETB  1              Suppress expansion                   @L8A 01741704
+.*                                                                 @L8A 01741804
+.BLKSI   ANOP                                                      @L2A 01742000
+&BS      SETB  (T'&BLKSIZE NE 'O')   BLKSIZE specified             @L2A 01750000
+.*                                                                      01760000
+.* Start expansion if no error found.                                   01770000
+.EXPAND  AIF   (&ERROR).MEND  Branch if any error found                 01780000
+.*                                                                      01790000
+*   DATA CONTROL BLOCK EXTENSION.                                       01800000
+&NAME    DC    0F'0',C'DCBE'  0  Alignment and identifier               01810000
+.* The following contains a trick to expand var &VERSN in the comment   01811002
+&TEMP    SETC '&DCBELEN''          4  DCBE V&VERSN length, min is 56'   01812002
+         DC    H'&TEMP'                                            @L8A 01820002
+         DC    X'0000'        6  Reserved, should be zero               01830000
+         DC    A(0)           8  0 if not open, OPEN points to DCB      01840000
+         DC    XL4'0'         C  Disk address of current member         01850000
+         DC    B'0'          10  Flags set by system                    01860000
+&TEMP    SETC  '&RM&PAST&CRW&NOV&GS&BS&CM&A7'    copy for align    @01C 01870000
+         DC    B'&TEMP'      11  Flags set by user                      01880000
+         DC    H'0'          12  Number of stripes if extended format   01890000
+&TEMP    SETC  '&C0&C1&C2&C3&C4&C5&C6&C7'     Copy for alignment   @L3C 01900000
+         DC    B'&TEMP'      14  Flags set by user                 @L3A 01910000
+&TEMP    SETC  '&E0&E1&E2&BEC&E4&DSENC&HW&CRWLOCK' Copy for align  @04C         
+         DC    B'&TEMP'      15  Flags                             @L9A 01912001
+         DC    XL2'0'        16  Reserved                          @L9C 01921001
+         DC    XL4'0'        18  Reserved                          @L2A 01930000
+         AIF   (&BS).BLKSI2                                        @L2A 01940000
+         DC    F'0'          1C  Block size                        @L2A 01950000
+         AGO   .BLKSI3                                             @L2A 01960000
+.BLKSI2  ANOP                                                      @L2A 01970000
+         DC    A(1*&BLKSIZE) 1C  Block size                        @L2A 01980000
+.BLKSI3  ANOP                                                      @L2A 01990000
+         DC    XL8'0'        20  Reserved & number of blocks in ds @L2C 02000000
+         DC    A(&EODAD)     28  End of data routine address or 0       02010000
+         DC    A(&SYNAD)     2C  I/O error routine (synchronous) or 0   02020000
+         DC    XL4'0'        30  Reserved, should be zero          @MAC 02030000
+         AIF   (&SN).SYNCN2                                        @MAA 02040000
+         DC    H'0'          34  tape files written before sync    @MAA 02050000
+         AGO   .SYNCN3                                             @MAA 02060000
+.SYNCN2  ANOP                                                      @MAA 02070000
+         DC    AL2(1*&SYNC(2)) 34 tape files written before sync   @MAA 02080000
+.SYNCN3  ANOP                                                           02090000
+&TEMP    SETC  '&MULTACC,&MULTSDN'   To preserve comment alignment      02100000
+         DC    AL1(&TEMP)    36  MULTACC and MULTSDN                    02110000
+* SHORTEST POSSIBLE DCBE IN ANY RELEASE.                           @L3A 02120000
+* End of DCBE Version 0                                            @L8A 02122001
+         AIF   (&VERSN NE 1).MEND                                  @L8A 02124001
+&TEMP    SETC  '&BA&D1&D2&D3&D4&D5&D6&D7'     Copy for alignment   @L8A 02125001
+         DC    B'&TEMP'      38  Flags set by user                 @L8A 02126001
+         DC    XL23'0'       39  Reserved, should be zero          @L8A 02127001
+* End of DCBE Version 1                                            @L8A 02128001
+         MEXIT                                                          02130000
+.MEND    MEND                                                           02140000
+**/  DCBE:  MACRO KEYS(END_OF_DATA_NAME,GET_SIZE,              /*@L1A*/ 02150000
+*               BLOCK_TOKEN_SIZE,                              /*@L4A*/ 02160000
+*               BYPASS_AUTH,                                   /*@L8A*/ 02161001
+*               BYPASS_EXTENT_CHECK,                           /*@04A*/         
+*               DSENCRYPT,                                     /*@03A*/ 02161002
+*               EA_DSCB,                                       /*@L6A*/ 02170000
+*               HYPERWRITE,                                    /*@02A*/ 02175000
+*               CAPACITY_MODE,                                 /*@L3A*/ 02180000
+*               NCP_MULTIPLIER,ACCUM_MULTIPLIER,               /*@L1A*/ 02190000
+*               VERIFY_STRIPES,READ_PAST_EOD,                  /*@L1A*/ 02200000
+*               CONCURRENTRW,                                  /*@01A*/ 02210000
+*               BLOCK_SIZE,BUFFER_RMODE,SYNAD_NAME,            /*@L3C*/ 02220000
+*               LOC,                                           /*@L7A*/ 02230000
+*               SYNC,                                          /*@L8C*/ 02240001
+*               VERSION);                                      /*@L8A*/ 02241001
+*ANS('?' !! MACLABEL !! ' DCBEP ' !! MACKEYS !! ';') SKIP      /*@L1A*/ 02250000
+*     COL(5);                                                  /*@L1A*/ 02260000
+*  %END DCBE;                                                  /*@L1A*/ 02270000

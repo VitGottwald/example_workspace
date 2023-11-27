@@ -1,0 +1,433 @@
+* % FSIREQ: MACRO KEYS(REQUEST,TARGET,PARM,FSID,MODE);                  00100000
+*/********************************************************************/ 00200000
+*/*                                                                  */ 00300000
+*/* MODULE NAME = IAZFSREQ (FSIREQ MACRO)                            */ 00400000
+*/*                                                                  */ 00500000
+*/* DESCRIPTIVE NAME = JES FSI REQUEST MACRO                         */ 00600000
+*/*                                                                  */ 00700000
+*/* COPYRIGHT = LICENSED MATERIALS-PROPERTY OF IBM                   */ 00800000
+*/*             5650-ZOS Copyright IBM Corp. 1983, 2019              */ 01000000
+*/*                                                                  */ 01200000
+*/* STATUS = HBB77C0                                                 */ 01300000
+*/*                                                                  */ 01400000
+*/*01* EXTERNAL CLASSIFICATION:  PSPI                                */ 01410000
+*/*01* END OF EXTERNAL CLASSIFICATION:                               */ 01420000
+*/*                                                                  */ 01430000
+*/* FUNCTION = INVOKE THE JES FSI FACILITY                           */ 01500000
+*/*                                                                  */ 01600000
+*/*   OPERATION =                                                    */ 01700000
+*/*   - VERIFY THE TARGET AND MODE PARAMETERS AND IF VALID THEN      */ 01800000
+*/*     GENERATE THE INSTRUCTIONS TO ENTER THE FSI SERVICE ROUTINE.  */ 01900000
+*/*   - OTHERWISE ISSUE AN ERROR MNOTE SPECIFYING THE ERROR(S).      */ 02100000
+*/*   - IF THE REQUEST PARAMETER HAS NOT BEEN CODED THEN THE REQUEST */ 02200000
+*/*     FLAG IS ASSUMED TO HAVE BEEN STORED IN THE PARM LIST.        */ 02300000
+*/*     NOTE THAT THIS PARAMETER MUST BE CODED IF THE FSI REQUEST    */ 02400000
+*/*     BEING MADE IS FSICON OR FSIDCON.                             */ 02500000
+*/*   - IF THE MODE PARAMETER IS NOT 'PC' IT IS ASSUMED THE          */ 02600000
+*/*     CODE GENERATED WILL NOT BE EXECUTED IN A CROSS-MEMORY        */ 02700000
+*/*     'PC' ROUTINE.  IF MODE=PC IS USED THEN IT MIGHT BE.          */ 02800000
+*/*   - IF THE PARM PARAMETER HAS NOT BEEN CODED THEN THE PARM       */ 02900000
+*/*     ADDRESS IS ASSUMED TO BE IN REGISTER 1.                      */ 03000000
+*/*   - THE TARGET PARAMETER SPECIFIES WHOSE ROUTINES WILL RECEIVE   */ 03100000
+*/*     CONTROL - IT DEFAULTS TO JES.                                */ 03200000
+*/*   - THE FSID PARAMETER SPECIFIES THE FSS/FSA TO GET CONTROL.     */ 03300000
+*/*     IF IT IS NOT SPECIFIED IT IS ASSUMED TO BE IN THE PARM LIST. */ 03400000
+*/*                                                                  */ 03500000
+*/*   DEPENDENCIES =                                                 */ 03600000
+*/*   - THE CALLER MUST INCLUDE THE CVT, FSVT, FSCT, AND FSIP        */ 03700000
+*/*     MAPPING MACROS.                                              */ 03800000
+*/*   - IF REQUEST=FSICON OR FSIDCON THEN CONTIGUOUS SPACE FOR THE   */ 04300000
+*/*     SSOB AND SSIB PAIR (SSIB ON WORD BOUNDARY) MUST HAVE BEEN    */ 04400000
+*/*     ACQUIRED AND ITS ADDRESS STORED IN THE PARM LIST.            */ 04500000
+*/*   - IN PLS, THE CALLER MUST CODE THE ?EPILOG MACRO.              */ 04700000
+*/*   - IN PLS, IF THE SSOB MAPPING MACRO IS USED THEN SET           */ 04800000
+*/*     %SSOBSSOB = 'BASED' BEFORE %INCLUDING THE MACRO.             */ 04900000
+*/*                                                                  */ 05000000
+*/* MODULE TYPE = MACRO                                              */ 05100000
+*/*                                                                  */ 05200000
+*/* ENTRY POINT = N/A                                                */ 05300000
+*/*                                                                  */ 05400000
+*/*   INPUT =                                                        */ 05500000
+*/*   THE FOLLOWING MAY BE SPECIFIED AS PARAMETERS TO FSIREQ:        */ 05600000
+*/*                                                                  */ 05700000
+*/*     BAL INVOCATION -                                             */ 05800000
+*/*                                                                  */ 05900000
+*/*   REQUEST=VALUE  WHERE VALUE IS ONE OF EQUS SPECIFIED FOR THE    */ 06000000
+*/*                  FSIFUNC FIELD IN THE FSIP MAPPING MACRO.        */ 06100000
+*/*                  (VALUE MAY BE EQU OR (REGISTER)).               */ 06200000
+*/*                                                                  */ 06300000
+*/*   PARM=ADDRESS OF THE PARAMETER LIST (FIELD NAME OR (REGISTER))  */ 06400000
+*/*                                                                  */ 06500000
+*/*   TARGET=ROUTINES TO RECEIVE CONTROL (JES ! FSS)                 */ 06600000
+*/*                                                                  */ 06700000
+*/*   FSID=VALUE OF THE FSID (FIELD NAME OR (REGISTER))              */ 06800000
+*/*                                                                  */ 06900000
+*/*   MODE=PC IF EXPANDED CODE MAY RUN AS CROSS MEMORY PC ROUTINE    */ 07000000
+*/*                                                                  */ 07100000
+*/*                                                                  */ 07200000
+*/*     PLS INVOCATION - NOTE REGISTER SPECIFICATIONS FOR PLS        */ 07300000
+*/*                      INVOKATIONS MUST USE DOUBLE PARENS, E.G.    */ 07400000
+*/*                           ?FSIREQ PARM((REG2))                   */ 07500000
+*/*                                                                  */ 07600000
+*/*   REQUEST(VALUE) WHERE VALUE IS ONE OF CONSTANTS SPECIFIED FOR   */ 07700000
+*/*                  FSIFUNC FIELD IN THE FSIP MAPPING MACRO.        */ 07800000
+*/*                  (VALUE MAY BE EQU OR (REGISTER))                */ 07900000
+*/*                                                                  */ 08000000
+*/*   PARM(NAME OF THE PARAMETER LIST OR (REGISTER))                 */ 08100000
+*/*                                                                  */ 08200000
+*/*   TARGET(VALUE) WHERE VALUE IS JES OR FSS                        */ 08300000
+*/*                                                                  */ 08400000
+*/*   FSID(NAME OF VARIABLE CONTAINING FSID OR (REGISTER))           */ 08500000
+*/*                                                                  */ 08600000
+*/*   MODE(PC) IF EXPANDED CODE MAY RUN AS CROSS MEMORY PC ROUTINE   */ 08700000
+*/*                                                                  */ 08800000
+*/*   OUTPUT =                                                       */ 08900000
+*/*   THE OUTPUT FROM THE FSIREQ MACRO CONSISTS OF INSTRUCTIONS TO   */ 09000000
+*/*   ISSUE AN SSI REQUEST (FSICON OR FSIDCON REQUEST) OR TO         */ 09100000
+*/*   PUT THE FSCT ADDRESS INTO REGISTER 0, PUT THE ADDRESS OF THE   */ 09200000
+*/*   PARAMETER LIST INTO REGISTER 1, AND INVOKE THE JES FSI         */ 09300000
+*/*   FACILITY.                                                      */ 09400000
+*/*                                                                  */ 09500000
+*/*   EXIT - NORMAL                                                  */ 09600000
+*/*                                                                  */ 09700000
+*/*      CONDITIONS = NO ERRORS DETECTED                             */ 09800000
+*/*      OUTPUT = FSI OR SSI REQUEST                                 */ 09900000
+*/*                                                                  */ 10000000
+*/*   EXIT - ERROR                                                   */ 10100000
+*/*                                                                  */ 10200000
+*/*      CONDITIONS = MACRO PARAMETER NOT SPECIFIED OR INCORRECT.    */ 10300000
+*/*      OUTPUT = ERROR MNOTE ISSUED                                 */ 10400000
+*/*                                                                  */ 10500000
+*/* EXTERNAL REFERENCES =                                            */ 10600000
+*/*                                                                  */ 10700000
+*/* TABLES = N/A                                                     */ 10800000
+*/*                                                                  */ 10900000
+*/* MESSAGES =                                                       */ 11000000
+*/*   IAZ1001 (4)  THE MACLIST --- IS NOT ALLOWED. IT IS IGNORED.    */ 11100000
+*/*   IAZ200X (4)  --- IS TOO LONG. ARGUMENTS AFTER --- ARE IGNORED. */ 11200000
+*/*   IAZ3001 (12) TARGET MUST BE SPECIFIED AS JES OR FSS OR         */ 11300000
+*/*                DEFAULTED TO JES, NO TEXT GENERATED               */ 11400000
+*/*   IAZ3002 (12) MODE MAY ONLY BE SPECIFIED AS PC, NO TEXT         */ 11500000
+*/*                GENERATED                                         */ 11600000
+*/*                                                                  */ 11700000
+*/* ABEND CODES = N/A                                                */ 11800000
+*/*                                                                  */ 11900000
+*/* SERIALIZATION = N/A                                              */ 12000000
+*/*                                                          @OY21384*/ 12010000
+*/*                                                          @OY21384*/ 12100000
+*/*CHANGE ACTIVITY                                                   */ 12110000
+*/*                                                                  */ 12120000
+*/*               MVS/SP RELEASE 3 LEVEL 3 (SP1.3.3, JBB1329)        */ 12130000
+*/*      @OY21384 JBB2220 FSI TRACE SPE                      @OY21384*/ 12135000
+*/*$VC1PB36=PTM      HBB6603 951109 VLC:  BCP Ext.Classific  @OY21384*/ 12136000
+*/*$VC1P036=PTM      HBB6603 951208 VLC:  BCP PR20036 Ext.C  @OY21384*/ 12137000
+*/*CHANGE                                                            */ 12138000
+*/*CHANGE $ATDLPSF=BASEQ    HBB7720 050329 A_D:  PSF/MVS version PLX */ 12139000
+*/*CHANGE                                                            */ 12139200
+*/*CHANGE $Z24D104=BASEQ    HBB77C0 180428 TJW:  31 bit ASVT support */ 12139400
+*/*CHANGE                                        S249684             */ 12139600
+*/*                                                                  */ 12140000
+*/* A000000-999999          Created for MVS  1.3.3               @133*/ 12150000
+*/********************************************************************/ 12200000
+*                                                                       12300000
+*/* EXTERNAL DECLARATIONS */                                            12400000
+*                                                                       12500000
+*  DCL EHAREGS CHAR EXT;          /* REGS TO BE DECLARED BY EPILOG  */  12600000
+*  DCL EHARC FIXED EXT;           /* RETURN CODE                    */  12700000
+*                                                                       12800000
+*/* INITIALIZE EXTERNAL VARIABLES */                                    12900000
+*                                                                       13000000
+*  EHARC=0;                       /* INITIALIZE THE RETURN CODE     */  13100000
+*                                                                       13200000
+*/* INTERNAL DECLARATIONS */                                            13300000
+*                                                                       13400000
+*  DCL IREQSTMT CHAR;             /* INPUT MACRO STATEMENT          */  13500000
+*  DCL IERRMSG CHAR;              /* ERROR MESSAGE                  */  13600000
+*  DCL FMSG    CHAR;              /* FSI TRACE GENERATED TEXT   @L1A*/  13610000
+*  DCL ICOMCOL FIXED;             /* COMMENT COLUMN                 */  13700000
+*                                                                       13800000
+*/* INITIALIZE INTERNAL VARIABLES */                                    13900000
+*                                                                       14000000
+*  ICOMCOL=MACRMAR-35;            /* SET COMMENT COLUMN             */  14100000
+*                                                                       14200000
+*/*******************************************************************/  14300000
+*/*                                                                 */  14400000
+*/* CHECK IF ANY POSITIONAL PARAMETERS WERE SPECIFIED.  IF SO,      */  14500000
+*/* ISSUE AN ERROR MNOTE SPECIFYING THAT THE POSITIONAL PARAMETERS  */  14600000
+*/* ARE IGNORED.                                                    */  14700000
+*/*                                                                 */  14800000
+*/*******************************************************************/  14900000
+*  IF NUMBER(MACLIST) ^= 0 THEN DO;                                     15000000
+*    EHARC = 4;                   /* SET WARNING RETURN CODE        */  15100000
+*    IERRMSG = 'IAZ1001 THE MACLIST ' !! MACLIST !!                     15200000
+*               ' IS NOT ALLOWED. IT IS IGNORED.';                      15300000
+*    ANS MSG(IERRMSG) NORESCAN;                                         15400000
+*    ANS(COMMENT(IERRMSG)) COLUMN(10) NORESCAN;                         15500000
+*    END;                                                               15600000
+*/*******************************************************************/  15700000
+*/*                                                                 */  15800000
+*/* CHECK IF MORE THAN ONE ARGUMENT WAS SPECIFIED FOR ANY OPTION    */  15900000
+*/* PARAMETER.  IF SO, ISSUE AN ERROR MNOTE SPECIFYING THAT THE     */  16000000
+*/* OTHER ARGUMENTS ARE IGNORED.                                    */  16100000
+*/*                                                                 */  16200000
+*/*******************************************************************/  16300000
+*  IF NUMBER(REQUEST) > 1 THEN DO;                                      16400000
+*    EHARC = 4;                                                         16500000
+*    IERRMSG = 'IAZ2001 ' !! REQUEST !!                                 16600000
+*      ' IS TOO LONG. ARGUMENTS ARE IGNORED AFTER ' !! REQUEST(1);      16700000
+*    ANS MSG(IERRMSG) NORESCAN;                                         16800000
+*    ANS(COMMENT(IERRMSG)) COLUMN(10) NORESCAN;                         16900000
+*    END;                                                               17000000
+*  IF NUMBER(PARM) > 1 THEN DO;                                         17100000
+*    EHARC = 4;                                                         17200000
+*    IERRMSG = 'IAZ2002 ' !! PARM !!                                    17300000
+*      ' IS TOO LONG. ARGUMENTS ARE IGNORED AFTER ' !! PARM(1);         17400000
+*    ANS MSG(IERRMSG) NORESCAN;                                         17500000
+*    ANS(COMMENT(IERRMSG)) COLUMN(10) NORESCAN;                         17600000
+*    END;                                                               17700000
+*  IF NUMBER(TARGET) > 1 THEN DO;                                       17800000
+*    EHARC = 4;                                                         17900000
+*    IERRMSG = 'IAZ2003 ' !! TARGET !!                                  18000000
+*      ' IS TOO LONG. ARGUMENTS ARE IGNORED AFTER ' !! TARGET(1);       18100000
+*    ANS MSG(IERRMSG) NORESCAN;                                         18200000
+*    ANS(COMMENT(IERRMSG)) COLUMN(10) NORESCAN;                         18300000
+*    END;                                                               18400000
+*  IF NUMBER(FSID) > 1 THEN DO;                                         18500000
+*    EHARC = 4;                                                         18600000
+*    IERRMSG = 'IAZ2004 ' !! FSID !!                                    18700000
+*      ' IS TOO LONG. ARGUMENTS ARE IGNORED AFTER ' !! FSID(1);         18800000
+*    ANS MSG(IERRMSG) NORESCAN;                                         18900000
+*    ANS(COMMENT(IERRMSG)) COLUMN(10) NORESCAN;                         19000000
+*    END;                                                               19100000
+*  IF NUMBER(MODE) > 1 THEN DO;                                         19200000
+*    EHARC = 4;                                                         19300000
+*    IERRMSG = 'IAZ2005 ' !! MODE !!                                    19400000
+*      ' IS TOO LONG. ARGUMENTS ARE IGNORED AFTER ' !! MODE(1);         19500000
+*    ANS MSG(IERRMSG) NORESCAN;                                         19600000
+*    ANS(COMMENT(IERRMSG)) COLUMN(10) NORESCAN;                         19700000
+*    END;                                                               19800000
+*/*******************************************************************/  19900000
+*/*                                                                 */  20000000
+*/* VERIFY THE TARGET AND MODE OPTIONS.  IF OK SETUP REGS, OUTPUT   */  20100000
+*/* MACLABEL IF ANY, RESERVED REGS, ETC.                            */  20200000
+*/*                                                                 */  20300000
+*/*******************************************************************/  20400000
+*  IF (TARGET(1) = 'JES' ! TARGET(1) = 'FSS' ! NUMBER(TARGET) = 0) &    20500000
+*     (MODE(1) = 'PC' ! NUMBER(MODE) = 0)                               20600000
+*     THEN DO;                                                          20700000
+*         IF INDEX(EHAREGS,'00F')=0 THEN                                20800000
+*             EHAREGS=EHAREGS !! '00F';   /* HAVE EPILOG DCL REG 0   */ 20900000
+*         IF INDEX(EHAREGS,'01P')=0 THEN                                21000000
+*             EHAREGS=EHAREGS !! '01P';   /* HAVE EPILOG DCL REG 1   */ 21100000
+*         IF INDEX(EHAREGS,'14F')=0 THEN                                21200000
+*             EHAREGS=EHAREGS !! '14F';   /* HAVE EPILOG DCL REG 1   */ 21300000
+*         IF INDEX(EHAREGS,'15F')=0 THEN                       /*@L1A*/ 21310000
+*             EHAREGS=EHAREGS !! '15F';                        /*@L1A*/ 21320000
+*         IF INDEX(EHAREGS,'15P')=0 THEN                       /*@L1A*/ 21330000
+*             EHAREGS=EHAREGS !! '15P';                        /*@L1A*/ 21340000
+*                                                                       21400000
+*  IF MACLABEL ^= '' THEN                                               21500000
+*    ANS(MACLABEL) COLUMN(MACLMAR) NORESCAN;                            21600000
+*                                                                       21700000
+*  IREQSTMT = 'FSIREQ ' !! MACLIST !! ' ' !! MACKEYS;                   21800000
+*  ANS('DO;') COLUMN(MACCOL) NORESCAN;                                  21900000
+*  ANS(COMMENT(IREQSTMT)) COLUMN(ICOMCOL) NORESCAN;                     22000000
+*  ANS('RFY (GPR00F,GPR01P) RSTD;') COLUMN(MACCOL+2) NORESCAN;          22100000
+*/*******************************************************************/  22200000
+*/*                                                                 */  22300000
+*/* VERIFY THE PARM PARAMETER, LOAD ITS POINTER REG                 */  22400000
+*/* (IF PARM NOT SPECIFIED REG 1 ASSUMED)                           */  22500000
+*/*                                                                 */  22600000
+*/*******************************************************************/  22700000
+*  IF NUMBER(PARM) > 0 THEN DO;                                         22800000
+*      IF PARM(1,1:1) = '(' THEN                                        22900000
+*          ANS('GPR01P='!!PARM(1,1)!!';') COLUMN(MACCOL+2) NORESCAN;    23000000
+*      ELSE ANS('GPR01P=ADDR('!!PARM(1)!!');')                          23100000
+*          COLUMN(MACCOL+2) NORESCAN;                                   23200000
+*      ANS(COMMENT('GET FSIP ADDRESS')) COLUMN(ICOMCOL) NORESCAN;       23300000
+*      END;                                                             23400000
+*  ELSE ANS(COMMENT('FSIPARM LIST ADDRESS ASSUMED IN REG 1'))           23500000
+*              COLUMN(MACCOL+2) NORESCAN;                               23600000
+*  ANS('FSIPPTR=GPR01P;') COLUMN(MACCOL+2) NORESCAN;                    23700000
+*/*******************************************************************/  23800000
+*/*                                                                 */  23900000
+*/* VERIFY THE FSID PARAMETER, PLACE VALUE IN FSIPARM IF NEED TO    */  24000000
+*/* (IF NOT SPECIFIED ASSUME IT IS ALREADY STORED IN THE FSIPARM)   */  24100000
+*/*                                                                 */  24200000
+*/*******************************************************************/  24300000
+*  IF NUMBER(FSID) > 0 THEN DO;                                         24400000
+*      IF FSID(1,1:1) = '(' THEN                                        24500000
+*          ANS('FSIFSID='!!FSID(1,1)!!';') COLUMN(MACCOL+2) NORESCAN;   24600000
+*      ELSE ANS('FSIFSID='!!FSID(1)!!';') COLUMN(MACCOL+2) NORESCAN;    24700000
+*      ANS(COMMENT('GET FSID OF REQUESTOR')) COLUMN(ICOMCOL) NORESCAN;  24800000
+*      END;                                                             24900000
+*  ELSE ANS(COMMENT('FSID ASSUMED TO HAVE BEEN STORED IN FSIPARM'))     25000000
+*              COLUMN(MACCOL+2) NORESCAN;                               25100000
+*/*******************************************************************/  25200000
+*/*                                                                 */  25300000
+*/* VERIFY THE REQUEST PARAMETER, PLACE VALUE IN FSIPARM IF NEED TO */  25400000
+*/* (IF NOT SPECIFIED ASSUME IT IS ALREADY STORED IN THE FSIPARM)   */  25500000
+*/*                                                                 */  25600000
+*/*******************************************************************/  25700000
+*  IF NUMBER(REQUEST) > 0 THEN                        /*@CZZZ*/         25710000
+*    DO;                                              /*@AZZZ*/         25800000
+*      IF REQUEST(1,1:1) = '(' THEN                                     25900000
+*        ANS('FSIFUNC='!!REQUEST(1,1)!!';') COLUMN(MACCOL+2) NORESCAN;  26000000
+*      ELSE                                                             26100000
+*        ANS('FSIFUNC='!!REQUEST(1)!!';') COLUMN(MACCOL+2) NORESCAN;    26200000
+*      ANS(COMMENT('SPECIFY FSI REQUEST')) COLUMN(ICOMCOL) NORESCAN;    26300000
+*    END;                                                               26400000
+*  ELSE                                                                 26500000
+*    ANS(COMMENT('REQUEST ASSUMED TO HAVE BEEN STORED IN FSIPARM'))     26600000
+*        COLUMN(MACCOL+2) NORESCAN;                                     26601000
+*                                                                       26602000
+*/************************************************************* @L1A*/  26603000
+*/*                                                             @L1A*/  26604000
+*/* DETERMINE IF THE FSI TRACE SUPPORT IS INSTALLED.  BIT       @L1A*/  26605000
+*/* JESFSIT IN JESFLG BYTE OF THE JESCT IS ON IF THE TRACE      @L1A*/  26606000
+*/* SUPPORT IS INSTALLED.                                       @L1A*/  26607000
+*/*                                                             @L1A*/  26608000
+*/************************************************************* @L1A*/  26609000
+*  FMSG = 'RESPECIFY (GPR14F,GPR15P) RESTRICTED;';            /*@L1A*/  26610000
+*  ANS(FMSG) COLUMN(MACCOL+2) NORESCAN;                       /*@L1A*/  26611000
+*                                                             /*@L1A*/  26612000
+*  FMSG = 'GPR15P = 16;   ' !!                                /*@L1A*/  26613000
+*         COMMENT('CVT ADDRESS FROM PSA LOCATION 16');        /*@L1A*/  26614000
+*  ANS(FMSG) COLUMN(MACCOL+2) NORESCAN;                       /*@L1A*/  26615000
+*                                                             /*@L1A*/  26616000
+*  FMSG = 'GPR15P = GPR15P->I031P;   ' !!                     /*@L1A*/  26617000
+*         COMMENT('PICK UP POINTER TO THE CVT');              /*@L1A*/  26618000
+*  ANS(FMSG) COLUMN(MACCOL+2) NORESCAN;                       /*@L1A*/  26619000
+*                                                             /*@L1A*/  26620000
+*  FMSG = 'GPR15P = (GPR15P+296)->I031P;   ' !!               /*@L1A*/  26621000
+*         COMMENT('PICK UP POINTER TO THE JESCT');            /*@L1A*/  26622000
+*  ANS(FMSG) COLUMN(MACCOL+2) NORESCAN;                       /*@L1A*/  26623000
+*                                                             /*@L1A*/  26624000
+*  FMSG = 'GPR15P = (GPR15P+100)->I031P;   ' !!               /*@L1A*/  26633000
+*         COMMENT('PICK UP POINTER TO THE JESCT EXT.');       /*@L1A*/  26634000
+*  ANS(FMSG) COLUMN(MACCOL+2) NORESCAN;                       /*@L1A*/  26635000
+*                                                             /*@L1A*/  26636000
+*  FMSG = 'GPR15P = (GPR15P+100)->I031P;   ' !!               /*@L1A*/  26637000
+*         COMMENT('PICK UP POINTER TO FSIBASE.');             /*@L1A*/  26638000
+*  ANS(FMSG) COLUMN(MACCOL+6) NORESCAN;                       /*@L1A*/  26639000
+*                                                             /*@L1A*/  26640000
+*  FMSG = 'GPR15P = (GPR15P+8)->I031P;   ' !!                 /*@L1A*/  26641000
+*         COMMENT('PICK UP ADDRESS OF IAZFSIT');              /*@L1A*/  26642000
+*  ANS(FMSG) COLUMN(MACCOL+6) NORESCAN;                       /*@L1A*/  26643000
+*                                                             /*@L1A*/  26644000
+*/***********************************************************   @L1A*/  26645000
+*/* THE FSITRACE ROUTINE NEEDS TO KNOW THE DESTINATION      *   @L1A*/  26646000
+*/* OF THIS CALL TO CALCULATE THE ADDRESS OF THE ROUTINE    *   @L1A*/  26647000
+*/* IT WILL CALL AFTER POSSIBLE TRACING. IF THE DESTINATION *   @L1A*/  26648000
+*/* IS JES REGISTER 0 MUST BE 1, OTHERWISE REGISTER 0       *   @L1A*/  26649000
+*/* MUST BE 0.                                              *   @L1A*/  26650000
+*/***********************************************************   @L1A*/  26651000
+*  IF TARGET(1) = 'JES' THEN                                  /*@L1A*/  26652000
+*      FMSG = 'GPR00F = 1;';                                  /*@L1A*/  26653000
+*  ELSE                                                       /*@L1A*/  26654000
+*      FMSG = 'GPR00F = 0;';                                  /*@L1A*/  26655000
+*  ANS(FMSG) COLUMN(MACCOL+6) NORESCAN;                       /*@L1A*/  26656000
+*                                                             /*@L1A*/  26657000
+*  FMSG = COMMENT('BRANCH TO IAZFSIT');                       /*@L1A*/  26658000
+*  ANS(FMSG) COLUMN(2) NORESCAN;                              /*@L1A*/  26659000
+*                                                             /*@L1A*/  26660000
+*  FMSG = 'GEN SETS(GPR14F) REFS(GPR15P) (BASSM 14,15);';     /*@L1A*/  26661000
+*                                                             /*@L1A*/  26662000
+*  ANS(FMSG) COLUMN(MACCOL+6) NORESCAN;                       /*@L1A*/  26663000
+*                                                             /*@L1A*/  26664000
+*  FMSG = 'RESPECIFY (GPR00F,GPR01P,GPR14F,GPR15P) UNRESTRICTED;';      26665000
+*  ANS(FMSG) COLUMN(MACCOL+2);                                /*@L1A*/  26666000
+*                                                             /*@L1A*/  26667000
+*  ANS('END;') COLUMN(MACCOL) NORESCAN;                                 32300000
+*  ANS(COMMENT(IREQSTMT)) COLUMN(ICOMCOL) NORESCAN;                     32500000
+*                                                                       32600000
+*  END;    /* END OF THE TEXT GENERATING CODE FOR VALID REQUESTS */     33100000
+*                                                                       33110000
+*/*******************************************************************/  33120000
+*/*                                                                 */  33130000
+*/* IF THE REQUEST PARAMETER DOES NOT SPECIFY A VALID FUNCTION      */  33140000
+*/* THEN ISSUE AN ERROR MNOTE SPECIFYING THAT THE REQUEST           */  33200000
+*/* PARAMETER WAS SPECIFIED INCORRECTLY.                            */  33300000
+*/*                                                                 */  33400000
+*/*******************************************************************/  33500000
+*  ELSE DO;                                                             33600000
+*    EHARC=12;                                                          33700000
+*    IF MODE(1) = 'PC' ! MODE(1) = '' THEN                              33800000
+*        IERRMSG = 'IAZ3001 TARGET MUST BE SPECIFIED AS JES OR FSS OR ' 33900000
+*        !! 'DEFAULTED TO JES, NO TEXT GENERATED';                      34000000
+*    ELSE IERRMSG = 'IAZ3002 MODE MAY ONLY BE SPECIFIED AS PC, NO TEXT' 34100000
+*        !! ' GENERATED';                                               34200000
+*    ANS MSG(IREQSTMT) NORESCAN;                                        34300000
+*    ANS MSG(IERRMSG) NORESCAN;                                         34400000
+*    ANS(COMMENT(IERRMSG)) COLUMN(10) NORESCAN;                         34500000
+*    END;                                                               34600000
+*                                                                       34700000
+*  RETURN CODE(EHARC);                                                  34800000
+* % END FSIREQ;                                                         34900000
+* % GOTO ENDMAC;                               /*                       35000000
+         MACRO                                                          35100000
+&NAME    FSIREQ &REQUEST=,&TARGET=JES,&PARM=,&FSID=,&MODE=              35200000
+         LCLC  &IAZLB                                                   35300000
+&IAZLB   SETC  'IAZ&SYSNDX'                                    @OY21384 35400000
+.*********************************************************************  35500000
+.*                                                                   *  35600000
+.* IF A LABEL WAS SPECIFIED ON THE MACRO INVOCATION THEN             *  35700000
+.* GENERATE AN EQU FOR THE LABEL.                                    *  35710000
+.*                                                                   *  35800000
+.*********************************************************************  35900000
+         AIF   ('&NAME' EQ '').SKIPLBL                                  36000000
+&NAME    DS    0H                                                       36100000
+.SKIPLBL ANOP                                                           36200000
+.*********************************************************************  36300000
+.*                                                                   *  36400000
+.*       VERIFY MACRO PARAMETERS, GENERATE CODE                      *  36500000
+.*                                                                   *  36600000
+.*********************************************************************  36700000
+.*                                                                      36800000
+         AIF   ('&TARGET' NE 'JES' AND '&TARGET' NE 'FSS').ERR2         36900000
+         AIF   ('&MODE' NE '' AND '&MODE' NE 'PC').ERR3                 37000000
+.*                                                                      37100000
+         AIF   ('&PARM' EQ '' OR '&PARM' EQ '(1)').PARMD                37200000
+         AIF   ('&PARM'(1,1) EQ '(').PARM1                              37300000
+         LA    1,&PARM                   GET PARAMETER ADDRESS          37400000
+         AGO   .PARMD                                                   37500000
+.PARM1   LR    1,&PARM(1)                GET PARAMETER ADDRESS          37600000
+.*                                                                      37700000
+.PARMD   ANOP                                                           37800000
+         AIF   ('&FSID' EQ '').FSIDD                                    37900000
+         AIF   ('&FSID'(1,1) EQ '(').FSID1                              38000000
+         L     15,&FSID                  GET FSID VALUE                 38100000
+         ST    15,FSIFSID-FSIPARM(0,1)   SAVE FSID IN PARM LIST         38200000
+         AGO   .FSIDD                                                   38300000
+.FSID1   ST    &FSID(1),FSIFSID-FSIPARM(0,1) SAVE FSID IN PARM LIST     38400000
+.*                                                                      38500000
+.FSIDD   ANOP                                                           38600000
+         AIF   ('&REQUEST' EQ '').REQD                                  38700000
+         AIF   ('&REQUEST'(1,1) EQ '(').REQ1                            38800000
+         LHI   15,&REQUEST         Get request value                    38900000
+         ST    15,FSIFUNC-FSIPARM(0,1)   SAVE REQUEST IN PARM LIST      39000000
+         AGO   .REQD                                                    39100000
+.REQ1    ST    &REQUEST(1),FSIFUNC-FSIPARM(0,1) SAVE REQUEST IN FSIP    39200000
+.*                                                                      39300000
+.REQD    ANOP                                                           39400000
+         L     15,16(0,0)          Get CVT address             @Z24D104 39810000
+         L     15,296(15,0)        Get JESCT address           @Z24D104 39813000
+         L     15,100(15,0)        Get JESCT extension address @Z24D104 39837000
+         L     15,100(15,0)        Get IAZBASE CB address      @Z24D104 39840000
+         L     15,8(15,0)          Get IAZFSIT routine address @Z24D104 39843000
+         AIF   ('&TARGET' NE 'JES').NOTJES                     @OY21384 39846000
+         LHI   0,1                 Indicate JES call           @Z24D104 39849000
+         AGO   .CCALL     BYPASS NON-JES CALL INITIALIZATION   @OY21384 39852000
+.NOTJES  ANOP             TARGET NOT JES.                      @OY21384 39855000
+         LHI   0,0                 Indicate target not JES     @Z24D104 39858000
+.CCALL   ANOP             CONTINUE WILL FSI TRACE CALL         @OY21384 39861000
+         BASSM 14,15               Call FSI trace routine      @OY21384 39864000
+         MEXIT                                                          44500000
+.*                                                                      44600000
+.ERR2    MNOTE 12,'IAZ3001 TARGET MUST BE SPECIFIED AS JES OR FSS OR DEC44610000
+               FAULTED TO JES, NO TEXT GENERATED'                       44700000
+         MEXIT                                                          44800000
+.ERR3    MNOTE 12,'IAZ3002 MODE MAY ONLY BE SPECIFIED AS PC, NO TEXT GEC44900000
+               NERATED'                                                 45000000
+         MEND , - */                                                    45100000
+%ENDMAC: ;                                                              99999999

@@ -1,0 +1,1437 @@
+*/*                                                                     00010000
+         MACRO                                                          00020000
+&NAME    TIMEUSED &STORADR=,&LINKAGE=BRANCH,&CPU=,&VECTOR=,&RELATED=,  X00030000
+               &ECT=SYSTEM,&ENCLAVE=,&TIME_ON_CP=,                     X00040000
+               &OFFLOAD_ON_CP=,&OFFLOAD_TIME=                      @L4C 00041000
+.*********************************************************************  00042000
+.*                                                                      00043000
+.*01* MACRO-NAME = TIMEUSED                                             00044000
+.*                                                                      00045000
+.*01* COPYRIGHT =                                                       00046000
+.*                5694-A01                                              00047000
+.*                COPYRIGHT IBM CORP. 1986, 2019                        00048002
+.*                LICENSED MATERIALS - PROPERTY OF IBM                  00049000
+.*                                                                      00050000
+.*01* STATUS = HBB77C0                                                  00060002
+.*                                                                      00070000
+.*01* EXTERNAL CLASSIFICATION:                                          00080000
+.*01*   PI: BASE                                                        00090000
+.*01*   NOTPI: OFFLOAD_TIME                                             00100000
+.*01* END OF EXTERNAL CLASSIFICATION:                                   00110000
+.*                                                                      00120000
+.*01* FUNCTION = Return the total CPU time or Vector time used by the   00130000
+.*               current work unit (TCB or SRB) up to the present.      00140000
+.*               Note that the PC entered service can only be used      00150000
+.*               to obtain the total CPU time or Vector time for the    00160000
+.*               current TCB.                                           00170000
+.*                                                                      00180000
+.*                                                                      00190000
+.*01* MACRO PARAMETERS (BAL) =                                          00200000
+.*                                                                      00210000
+.*             STORADR=RX-ADDRESS!(2)-(12)                              00220000
+.*                     Required except when ENCLAVE is specified,       00230000
+.*                     or TIME_ON_CP without ECT=YES is specified.      00240000
+.*                   - the label of, or a register pointing to, a       00250000
+.*                     double-word where the time value is returned.    00260000
+.*                     Applies except when ENCLAVE is specified         00270000
+.*                     or TIME_ON_CP without ECT=YES is specified or    00280000
+.*                     when ECT=YES is specified without TIME_ON_CP,    00290000
+.*                     OFFLOAD_TIME, OFFLOAD_ON_CP.                     00300000
+.*                   - the label of, or a register pointing to, an      00310000
+.*                     8-word area in the primary                       00320000
+.*                     address space where the time                     00330000
+.*                     value(s) are returned. IBM recommends that the   00340000
+.*                     area be on a double-word boundary.               00341000
+.*                     Applies when ECT=YES                             00342000
+.*                     is specified along with one or more of           00343000
+.*                     TIME_ON_CP=YES                                   00344000
+.*                     OFFLOAD_TIME=YES                                 00345000
+.*                     OFFLOAD_ON_CP=YES.                               00346000
+.*                     On output when the return code is 0,             00347000
+.*                     words 0-1: total time                            00348000
+.*                     words 2-3: time on CP when TIME_ON_CP=YES        00349000
+.*                                When CVTzCBP is on, includes          00349105
+.*                                normalized time on zCBP.         @L6A 00349205
+.*                     words 4-5: offload time (unnormalized) when      00349400
+.*                                OFFLOAD_TIME=YES                      00349500
+.*                                When CVTzCBP is off, includes zIIP    00349605
+.*                                and zAAP time.                        00349704
+.*                                When CVTzCBP is on, includes zIIP     00349805
+.*                                time only.                       @L6A 00349904
+.*                     words 6-7: offload on CP when                    00350001
+.*                                OFFLOAD_ON_CP=YES                     00350101
+.*                                When CVTzCBP is off, includes zIIP on 00350205
+.*                                CP time and zAAP on CP time.          00350301
+.*                                When CVTzCBP is on, includes zIIP on  00350405
+.*                                CP time only.                    @L6A 00350502
+.*                     (any subfield not requested to be returned       00350601
+.*                     is unpredictable)                                00350701
+.*                                                                      00350801
+.*                ,LINKAGE=BRANCH  - Branch entered service to be used. 00350901
+.*                        =SYSTEM  - PC entered service to be used.     00351001
+.*                                                                      00352000
+.*                ,CPU=TOD  - CPU time requested in TOD format.         00360000
+.*                    =MIC  - CPU time requested in micro-secs.         00370000
+.*                                                                      00380000
+.*                ,VECTOR=TOD  - Vector time requested in TOD format.   00390000
+.*                       =MIC  - Vector time requested in micro-secs.   00400000
+.*                                                                      00410000
+.*                ,ECT=SYSTEM  - The system determines what to use.     00420000
+.*                               In particular, for LINKAGE=BRANCH,     00430000
+.*                               it will use the Extract CPU Time       00440000
+.*                               instruction service when that service  00450000
+.*                               is available, but for LINKAGE=SYSTEM,  00460000
+.*                               it will not use the Extract CPU Time   00470000
+.*                               instruction service.                   00480000
+.*                    =COND    - Conditionally use the Extract CPU Time 00490000
+.*                               instruction service. If the            00500000
+.*                               service and instruction are available  00510000
+.*                               the system will use that service.      00520000
+.*                               Otherwise it will use the regular      00530000
+.*                               timeused service.                      00540000
+.*                               Output is in TOD format.               00550000
+.*                               Use only with LINKAGE=SYSTEM.          00560000
+.*                               Do not specify CPU or VECTOR.          00570000
+.*                               You must include the CVT, IHAECVT,     00580000
+.*                               and IHAPSA mapping macros.             00590000
+.*                    =YES     - Use the Extract CPU Time               00600000
+.*                               instruction service unconditionally.   00610000
+.*                               You must have verified that the        00620000
+.*                               service and instruction are available  00630000
+.*                               (running on HBB7730 or later,          00640000
+.*                               bit FLCFECT in byte FLCFACL3 in        00650000
+.*                               macro IHAPSA is on).                   00660000
+.*                               Output is in TOD format.               00670000
+.*                               Do not specify CPU, VECTOR or LINKAGE. 00680000
+.*                               You must include the CVT, IHAECVT,     00690000
+.*                               and IHAPSA mapping macros.             00700000
+.*                ,ENCLAVE=SUP - The system is to return ENCLAVE time   00710000
+.*                               pertaining to SUP usage, adjusted      00720000
+.*                               for the time spent within the current  00730000
+.*                               dispatch. Requires LINKAGE=BRANCH      00740000
+.*                ,TIME_ON_CP=YES - The system is to return information 00750000
+.*                               about TIME_ON_CP for the task,         00760000
+.*                               adjusted for the time spent within     00770000
+.*                               the current dispatch.                  00780000
+.*                               Requires LINKAGE=BRANCH when           00790000
+.*                               specified without ECT=YES.             00800000
+.*                               When specified with ECT=YES, requires  00810000
+.*                               STORADR and may be specified along     00820000
+.*                               with OFFLOAD_TIME=YES and              00821000
+.*                               OFFLOAD_ON_CP=YES                      00822000
+.*                               When CVTzCBP is on, includes           00822105
+.*                               normalized time on zCBP.          @L6A 00822205
+.*                ,OFFLOAD_TIME=YES - The system is to return           00823000
+.*                               information about time on offload      00824000
+.*                               engines for the task, adjusted for     00825000
+.*                               the time spent within the current      00826000
+.*                               dispatch. This time is unnormalized    00827000
+.*                               (it is in the units that apply to the  00828000
+.*                               offload processors).                   00829000
+.*                               Requires ECT=YES and STORADR.          00829100
+.*                               May be specified along with            00829200
+.*                               TIME_ON_CP=YES and                     00829300
+.*                               OFFLOAD_ON_CP=YES                      00829400
+.*                               When CVTzCBP is off, includes zIIP and 00829505
+.*                               zAAP time.                             00829601
+.*                               When CVTzCBP is on, includes zIIP time 00829705
+.*                               only.                             @L6A 00829802
+.*                ,OFFLOAD_ON_CP=YES - The system is to return          00829900
+.*                               information about time on standard CP  00830000
+.*                               that was eligible for offload,         00830100
+.*                               adjusted for the time spent within     00830200
+.*                               the current dispatch.                  00830300
+.*                               Requires LINKAGE=BRANCH when           00830400
+.*                               specified without ECT=YES.             00830500
+.*                               Requires ECT=YES or TIME_ON_CP=YES.    00830600
+.*                               When specified with ECT=YES, requires  00830700
+.*                               STORADR and may be specified along     00830800
+.*                               with TIME_ON_CP=YES and                00830900
+.*                               OFFLOAD_TIME=YES                       00831000
+.*                               When CVTzCBP is off, includes zIIP on  00831105
+.*                               CP time and zAAP on CP time.           00831201
+.*                               When CVTzCBP is on, includes zIIP on   00831305
+.*                               CP time only.                     @L6A 00831402
+.*                                                                      00831500
+.*                ,RELATED=ANY-COMMENT                                  00831600
+.*                          - Information used to self document the     00831700
+.*                            macro invocation.  May be any valid       00831800
+.*                            macro keyword expression.                 00832000
+.*                                                                      00833000
+.*01* MACRO PARAMETERS (PL/X) =                                         00834000
+.*                                                                      00835000
+.*             STORADR(dword ! 8word)                                   00836000
+.*                     Required except when ENCLAVE is specified,       00837000
+.*                     or TIME_ON_CP without ECT(YES) is specified.     00838000
+.*                     - "dword" is a double-word area                  00839000
+.*                       in which the time value is returned.           00840000
+.*                       Applies except when ENCLAVE is specified       00850000
+.*                       or TIME_ON_CP without ECT=YES is specified or  00860000
+.*                       when ECT=YES is specified without TIME_ON_CP,  00870000
+.*                       OFFLOAD_TIME, OFFLOAD_ON_CP.                   00880000
+.*                     - "8word" is an 8-word area in the               00890000
+.*                       primary address space                          00900000
+.*                       in which the requested time value(s) are       00910000
+.*                       returned. IBM recoments that the area be on    00920000
+.*                       a double-word boundary.                        00930000
+.*                       Applies when ECT(YES) is specified             00940000
+.*                       along with one or more of                      00950000
+.*                       TIME_ON_CP(YES)                                00951000
+.*                       OFFLOAD_TIME(YES)                              00952000
+.*                       OFFLOAD_ON_CP(YES)                             00953000
+.*                       On output when the return code is 0,           00954000
+.*                       words 0-1: total time                          00955000
+.*                       words 2-3: time on CP when TIME_ON_CP(YES)     00956000
+.*                                  When CVTzCBP is on, includes        00956105
+.*                                  normalized time on zCBP.       @L6A 00956205
+.*                       words 4-5: offload time (unnormalized) when    00957000
+.*                                  OFFLOAD_TIME=YES                    00957100
+.*                                  When CVTzCBP is off, includes zIIP  00957205
+.*                                  and zAAP time.                      00957301
+.*                                  When CVTzCBP is on, includes zIIP   00957405
+.*                                  time only.                     @L6A 00957502
+.*                       words 6-7: offload on CP when                  00957600
+.*                                  OFFLOAD_ON_CP(YES)                  00957700
+.*                                  When CVTzCBP is off, includes zIIP  00957805
+.*                                  on CP time and zAAP on CP time.     00957904
+.*                                  When CVTzCBP is on, includes zIIP   00958005
+.*                                  on CP time only.               @L6A 00958104
+.*                       (any subfield not requested to be returned     00959000
+.*                       is unpredictable)                              00959100
+.*                                                                      00959200
+.*                 LINKAGE(BRANCH)- Branch entered service to be used.  00959300
+.*                        (SYSTEM)- PC entered service to be used.      00959400
+.*                                                                      00959500
+.*                 CPU(TOD) - CPU time requested in TOD format.         00959600
+.*                    (MIC) - CPU time requested in micro-secs.         00959700
+.*                                                                      00960000
+.*                 VECTOR(TOD) - Vector time requested in TOD format.   00970000
+.*                       (MIC) - Vector time requested in micro-secs.   00980000
+.*                                                                      00990000
+.*                ,ECT(SYSTEM) - Let the system determine what to use.  01000000
+.*                               In particular, for LINKAGE=BRANCH,     01010000
+.*                               it will use the Extract CPU Time       01020000
+.*                               instruction service when that service  01030000
+.*                               is available, but for LINKAGE=SYSTEM,  01040000
+.*                               it will not use the Extract CPU Time   01050000
+.*                               instruction service.                   01060000
+.*                    (COND)   - Conditionally use the Extract CPU Time 01070000
+.*                               instruction service. If the            01080000
+.*                               service and instruction are available  01090000
+.*                               the system will use that service.      01100000
+.*                               Otherwise it will use the regular      01110000
+.*                               timeused service.                      01120000
+.*                               Output is in TOD format.               01130000
+.*                               Use only with LINKAGE(SYSTEM).         01140000
+.*                               Do not specify CPU or VECTOR.          01150000
+.*                               You must include the CVT, IHAECVT,     01160000
+.*                               and IHAPSA mapping macros.             01170000
+.*                    (YES)    - Use the Extract CPU Time               01180000
+.*                               instruction service unconditionally.   01190000
+.*                               You must have verified that the        01200000
+.*                               service and instruction are available  01210000
+.*                               (running on HBB7730 or later,          01220000
+.*                               bit FLCFECT in byte FLCFACL3 in        01230000
+.*                               macro IHAPSA is on).                   01240000
+.*                               Output is in TOD format.               01250000
+.*                               Do not specify CPU, VECTOR or LINKAGE. 01260000
+.*                               You must include the CVT, IHAECVT,     01270000
+.*                               and IHAPSA mapping macros.             01280000
+.*                 ENCLAVE(SUP) - The system is to return ENCLAVE time  01290000
+.*                               pertaining to SUP usage, adjusted      01300000
+.*                               for the time spent within the current  01310000
+.*                               dispatch. Requires LINKAGE(BRANCH)     01320000
+.*                 TIME_ON_CP(YES) - The system is to return            01330000
+.*                               information about TIME_ON_CP for the   01340000
+.*                               task, adjusted for the time spent      01350000
+.*                               within the current dispatch.           01360000
+.*                               Requires LINKAGE(BRANCH) when          01370000
+.*                               specified without ECT(YES).            01380000
+.*                               When specified with ECT(YES), requires 01390000
+.*                               STORADR and may be specified along     01400000
+.*                               with OFFLOAD_TIME(YES) and             01410000
+.*                               OFFLOAD_ON_CP(YES)                     01420000
+.*                               When CVTzCBP is on, includes           01421005
+.*                               normalized time on zCBP.          @L6A 01422005
+.*                 OFFLOAD_TIME(YES) - The system is to return          01430000
+.*                               information about time on offload      01440000
+.*                               engines for the task, adjusted for     01450000
+.*                               the time spent within the current      01460000
+.*                               dispatch. This time is unnormalized    01470000
+.*                               (it is in the units that apply to the  01480000
+.*                               offload processors).                   01480100
+.*                               Also returns information               01480200
+.*                               about TIME_ON_CP.                      01480300
+.*                               Requires LINKAGE(BRANCH) when          01480400
+.*                               specified without ECT(YES).            01480500
+.*                               IBM use only when specified without    01480600
+.*                               ECT(YES)                               01480700
+.*                               When specified with ECT(YES), requires 01480800
+.*                               STORADR and may be specified along     01480900
+.*                               with TIME_ON_CP(YES) and               01481000
+.*                               OFFLOAD_ON_CP(YES)                     01482000
+.*                               When CVTzCBP is off, includes zIIP and 01482105
+.*                               zAAP time.                             01482201
+.*                               When CVTzCBP is on, includes zIIP time 01482305
+.*                               only.                             @L6A 01482402
+.*                 OFFLOAD_ON_CP(YES) - The system is to return         01483000
+.*                               information about time on standard CP  01484000
+.*                               that was eligible for offload,         01485000
+.*                               adjusted for                           01486000
+.*                               the time spent within the current      01487000
+.*                               dispatch.                              01488000
+.*                               Requires LINKAGE(BRANCH) when          01489000
+.*                               specified without ECT(YES).            01490000
+.*                               Requires ECT(YES) or TIME_ON_CP(YES)   01500000
+.*                               Requires STORADR.                      01510000
+.*                               May be specified along                 01511000
+.*                               with TIME_ON_CP(YES) and               01512000
+.*                               OFFLOAD_TIME(YES)                      01513000
+.*                               When CVTzCBP is off, includes zIIP on  01513105
+.*                               CP time and zAAP on CP time.           01513201
+.*                               When CVTzCBP is on, includes zIIP on   01513305
+.*                               CP time only.                     @L6A 01513402
+.*                 RELATED(Any-comment)                                 01514000
+.*                         - Information used to self document the      01515000
+.*                           macro invocation.  May be any valid        01516000
+.*                           macro keyword expression.                  01517000
+.*                                                                      01518000
+.*                                                                      01519000
+.*01* NOTES = When the PC is made to the non-privileged TIMEUSED        01520000
+.*            service routine, register 0 contains a timing             01530000
+.*            function indicator.                                       01540000
+.*                                                                      01550000
+.*            GPR 0          Value returned                             01560000
+.*            -----------    -------------------------------            01570000
+.*            '00000000'X    CPU time in TOD format.                    01580000
+.*            '00000001'X    CPU time in micro-seconds.                 01590000
+.*            '00000002'X    Vector time in TOD format.                 01600000
+.*            '00000003'X    Vector time in micro-seconds.              01601000
+.*                                                                      01602000
+.*                                                                      01603000
+.*02*    RESTRICTIONS = If LINKAGE=BRANCH is specified by the           01604000
+.*                      invoker:                                        01605000
+.*                      - the invoker must be Supervisor State, Key 0   01606000
+.*                      - the invoker must not be in AR ASC mode        01607000
+.*                        (except for ENCLAVE=SUP and                   01608000
+.*                        TIME_ON_CP=YES)                               01609000
+.*                                                                      01610000
+.*                      If LINKAGE=SYSTEM is specified by the           01620000
+.*                      invoker, the invoker must be enabled,           01630000
+.*                      unlocked, and in task mode, with no             01640000
+.*                      FRRs in effect.                                 01650000
+.*                                                                      01660000
+.*                      CPU=MIC is only valid when                      01670000
+.*                      LINKAGE=SYSTEM.                                 01680000
+.*                                                                      01690000
+.*                      VECTOR= parameter is only valid when            01700000
+.*                      LINKAGE=SYSTEM.                                 01710000
+.*                                                                      01720000
+.*                      VECTOR= and CPU= are mutually exclusive         01730000
+.*                      parameters.                                     01740000
+.*                                                                      01750000
+.*01* MODULE-TYPE = Macro                                               01760000
+.*                                                                      01770000
+.*02*    PROCESSOR = Assembler-H or PL/AS                               01780000
+.*                                                                      01790000
+.*01* MACROS = None                                                     01791000
+.*                                                                      01792000
+.*01* EXTERNAL REFERENCES =                                             01793000
+.*                                                                      01794000
+.*02*    ROUTINES = IEAVRT05 via BASSM                                  01795000
+.*                  IEATTUSD via PC                                     01796000
+.*                                                                      01797000
+.*01* COMPONENT = SC1CV (Timer Supervision)                             01798000
+.*                                                                      01799000
+.*01* CHANGE-ACTIVITY =                                                 01800000
+.*                                                                      01810000
+.*  $00=OY08577  JBB2220  861231  PD16H5:  TCB and SRB Timing Support   01820000
+.*  $L1=TUSED    JBB3313  880501  PD16CU:  LINKAGE=SYSTEM Support       01830000
+.*  $D1=DCR0007  JBB3313  880906  PD16CU:  VECTOR= and CPU= Support     01840000
+.*  $L2=AM64     HBB7706  030303  PD00XB:  AMODE 64                     01850000
+.*  $L3=ECT      HBB7730  050407  PD00XB:  Extract CPU Time             01860000
+.*  $H1=SUP      HBB7730  060201  PD00XB:  ENCLAVE=SUP                  01870000
+.*  $P1=ME05893  HBB7730  060222  PD00XB:  &ENCLAVE                     01880000
+.*  $01=OA20758  HBB7720  070316  PD00XB:  TIME_ON_CP                   01890000
+.*  $02=ME18084  HBB7750  100115  PD00XB:  OFFLOAD_TIME                 01900000
+.*  $L4=TIMECICS HBB7790  111201  PD00XB:  OFFLOAD_ON_CP                01910000
+.*  $L5=TIMEDB2  HBB7790  111201  PD00XB:  OFFLOAD_ON_CP w/ TIME_ON_CP  01920000
+.*  $L6=zCBP     HBB77C0  171102  PD00NJ:  zCBP                         01921005
+.*                                                                      01930000
+.********************************************************************** 01940000
+*        MACDATE 04/06/2005                                        @L3C 01950000
+         LCLC  &L                                                  @L2A 01960000
+         LCLA  &REQCODE                                            @L4A 01970000
+         GBLC  &SYSASCE                                            @L2A 01980000
+         GBLC  &SYSAM64                                            @L2A 01990000
+         GBLA  &SYSALVL                                            @L3A 02000000
+         GBLC  &SYSOSREL                                           @L3A 02010000
+         GBLC  &SYSOSREL_ZOSV1R7                                   @L3A 02020000
+         GBLC  &SYSOSREL_ZOSV1R10                                  @L4A 02030000
+         GBLC  &SYSOSREL_ZOSV1R13                                  @L4A 02040000
+         SYSSTATE TEST                                             @L2A 02050000
+         AIF   ('&SYSAM64' EQ 'YES').AM640                         @L2A 02060000
+&L       SETC  'L'                                                 @L2A 02070000
+         AGO   .AM31640                                            @L2A 02080000
+.AM640   ANOP                                                      @L2A 02090000
+&L       SETC  'LLGT'                                              @L2A 02100000
+.AM31640 ANOP                                                      @L2A 02110000
+         LCLA  &I          LOOP VARIABLE                           @D1A 02120000
+         LCLB  &ERR(24)    ERROR INDICATION ARRAY                  @L4C 02130000
+         LCLB  &STOPGEN    FLAG = STOP MACRO CODE GENERATION       @D1A 02140000
+         LCLC  &ERRM(24)   ERROR MESSAGES ARRAY                    @L4C 02150000
+&ERRM(1) SETC  'EXCESSIVE POSITIONAL PARAMETERS SPECIFIED'         @D1C 02160000
+&ERRM(2) SETC  'STORADR MUST BE SPECIFIED'                         @D1C 02170000
+&ERRM(3) SETC  'EXCESSIVE PARAMETERS SPECIFIED FOR STORADR'        @D1C 02180000
+&ERRM(4) SETC  'VALUE FOR LINKAGE= PARAMETER MUST BE SYSTEM OR BRANCH' X02190000
+                                                                   @D1C 02200000
+&ERRM(5) SETC  'VALUE FOR CPU= PARAMETER MUST BE TOD OR MIC'       @D1A 02210000
+&ERRM(6) SETC  'VALUE FOR VECTOR= PARAMETER MUST BE TOD OR MIC'    @D1A 02220000
+&ERRM(7) SETC  'VECTOR= PARAMETER IS ONLY VALID WITH LINKAGE=SYSTEM'   X02230000
+                                                                   @D1A 02240000
+&ERRM(8) SETC  'CPU=MIC IS ONLY VALID WITH LINKAGE=SYSTEM'         @D1A 02250000
+&ERRM(9) SETC  'CPU= AND VECTOR= ARE MUTUALLY EXCLUSIVE PARAMETERS'    X02260000
+                                                                   @D1A 02270000
+&ERRM(11) SETC 'VALUE FOR ECT= PARAMETER MUST BE SYSTEM, COND, OR YES' X02280000
+                                                                   @L3A 02290000
+&ERRM(12) SETC 'ECT= IS MUTUALLY EXCLUSIVE WITH CPU= AND VECTOR='      X02300000
+                                                                   @L3A 02310000
+&ERRM(13) SETC 'ECT=YES IS MUTUALLY EXCLUSIVE WITH LINKAGE=SYSTEM'     X02320000
+                                                                   @L3A 02330000
+&ERRM(14) SETC 'ECT=COND REQUIRES LINKAGE=SYSTEM'                      X02340000
+                                                                   @L3A 02350000
+&ERRM(15) SETC 'VALUE FOR ENCLAVE= PARAMETER MUST BE SUP'          @H1A 02360000
+&ERRM(16) SETC 'ENCLAVE IS MUTUALLY EXCLUSIVE WITH STORADR, ECT, TIME_OX02370000
+               N_CP, OFFLOAD_TIME, OFFLOAD_ON_CP'                  @L4C 02380000
+&ERRM(17) SETC 'ENCLAVE REQUIRES LINKAGE=BRANCH'                   @H1A 02390000
+&ERRM(18) SETC 'VALUE FOR TIME_ON_CP= PARAMETER MUST BE YES'       @01A 02400000
+&ERRM(19) SETC 'TIME_ON_CP WITH ECT=YES REQUIRES STORADR'          @L4C 02410000
+&ERRM(20) SETC 'TIME_ON_CP WITHOUT ECT=YES REQUIRES LINKAGE=BRANCH AND *02420000
+               IS MUTUALLY EXCLUSIVE WITH STORADR'                 @L4C 02430000
+&ERRM(21) SETC 'VALUE FOR OFFLOAD_TIME= PARAMETER MUST BE YES'     @L4A 02440000
+&ERRM(22) SETC 'OFFLOAD_TIME REQUIRES ECT=YES,LINKAGE=BRANCH,STORADR'  *02450000
+                                                                   @L4C 02460000
+&ERRM(23) SETC 'VALUE FOR OFFLOAD_ON_CP= PARAMETER MUST BE YES'    @L4A 02470000
+&ERRM(24) SETC 'OFFLOAD_ON_CP WITHOUT TIME_ON_CP REQUIRES ECT=YES,LINKA*02480000
+               GE=BRANCH,STORADR'                                  @L4A 02490000
+.* THIS LOOP RESETS ALL THE ERROR INDICATORS                            02500000
+.*                                                                      02510000
+&I       SETA  1           INITIALIZE LOOP VARIABLE                @D1A 02520000
+.LOOP1   ANOP  ,                                                   @D1A 02530000
+&ERR(&I) SETB  0           INITIALIZE TO NO ERRORS                 @D1A 02540000
+&STOPGEN SETB  0           INITIALIZE TO CODE GENERATION           @D1A 02550000
+&I       SETA  &I+1        INCREMENT LOOP VARIABLE                 @D1A 02560000
+         AIF   (&I LE 24).LOOP1 IF I<=24 THEN CONTINUE LOOP        @L4C 02570000
+.*                                                                      02580000
+         AIF   (N'&SYSLIST EQ 0).NOPOS  ANY POSITIONALS?           @D1A 02590000
+&ERR(1)  SETB  1           POSITIONALS SPECIFIED- ERROR            @D1A 02600000
+.NOPOS   ANOP  ,                                                   @D1A 02610000
+.*                                                                      02620000
+         AIF   ('&LINKAGE' EQ 'BRANCH').CHKSTOR IS THIS BR ENTRY   @L1A 02630000
+         AIF   ('&LINKAGE' EQ 'SYSTEM').CHKSTOR IS THIS PC ENTRY   @L1A 02640000
+&ERR(4)  SETB   1          LINKAGE= NOT BRANCH OR SYSTEM- ERROR    @D1A 02650000
+.*                                                                      02660000
+.CHKSTOR ANOP  ,                                                   @D1C 02670000
+         AIF   ('&ENCLAVE' NE '').CHKTIMV  Ignore STORADR for ENCLAVE  *02680000
+                                                                   @H1A 02690000
+         AIF   ('&TIME_ON_CP' NE '' AND '&ECT' NE 'YES').CHKTIMV       *02700000
+                           Ignore STORADR for TIME_ON_CP w/o ECT   @L4C 02710000
+         AIF   ('&STORADR' NE '').CHKSUBL  STORADR SPECIFIED?      @D1C 02720000
+&ERR(2)  SETB  1           STORADR= NOT SPECIFIED- ERROR           @D1C 02730000
+         AGO   .CHKTIMV                                                 02740000
+.*                                                                      02750000
+.CHKSUBL ANOP  ,                                                   @D1A 02760000
+         AIF   (N'&STORADR EQ 1).CHKTIMV  ONLY ONE VALUE GIVEN?    @D1C 02770000
+&ERR(3)  SETB  1           SUBLIST SPECIFIED FOR STORADR=- ERROR   @D1C 02780000
+.*                                                                      02790000
+.CHKTIMV ANOP  ,                                                   @D1A 02800000
+         AIF   ('&CPU' EQ '').CHKVECT     CPU TIMING-DEFAULTED?    @D1A 02810000
+         AIF   ('&CPU' EQ 'TOD').CHKBOTH  CPU TIMING-TOD FORMAT?   @D1A 02820000
+         AIF   ('&CPU' EQ 'MIC').CHKLEQB  CPU TIMING-MIC FORMAT?   @D1A 02830000
+&ERR(5)  SETB  1           CPU= VALUE NOT TOD OR MIC- ERROR        @D1C 02840000
+         AGO   .CHKBOTH                                            @D1A 02850000
+.*                                                                      02860000
+.CHKLEQB ANOP  ,                                                   @D1A 02870000
+         AIF   ('&LINKAGE' EQ 'SYSTEM').CHKBOTH LINKAGE=SYSTEM?    @D1A 02880000
+&ERR(8)  SETB  1           CPU=MIC AND LINKAGE=BRANCH- ERROR       @D1C 02890000
+.*                                                                      02900000
+.CHKBOTH ANOP  ,                                                   @D1A 02910000
+         AIF   ('&VECTOR' EQ '').ENDCHKVECT VECTOR= UNSPECIFIED?   @L3C 02920000
+&ERR(9)  SETB  1           CPU= AND VECTOR= BOTH SPECIFIED- ERROR  @D1C 02930000
+.*                                                                      02940000
+.CHKVECT ANOP  ,                                                   @D1A 02950000
+         AIF   ('&VECTOR' EQ '').ENDCHKVECT VECTOR= UNSPECIFIED?   @L3C 02960000
+         AIF   ('&VECTOR' EQ 'TOD').CHKLINK VECTOR=TOD?            @D1A 02970000
+         AIF   ('&VECTOR' EQ 'MIC').CHKLINK VECTOR=MIC?            @D1A 02980000
+&ERR(6)  SETB  1           VECTOR= VALUE NOT TOD OR MIC- ERROR     @D1C 02990000
+         AGO   .ENDCHKVECT                                         @L3C 03000000
+.*                                                                      03010000
+.CHKLINK ANOP  ,                                                   @D1A 03020000
+         AIF   ('&LINKAGE' EQ 'SYSTEM').ENDCHKVECT LINKAGE=SYSTEM? @L3C 03030000
+&ERR(7)  SETB  1           VECTOR= AND LINKAGE=BRANCH- ERROR       @D1C 03040000
+.*                                                                      03050000
+.ENDCHKVECT ANOP ,                                                 @L3A 03060000
+         AIF   ('&ECT' EQ '').ENDCHKECT ECT= UNSPECIFIED?          @L3A 03070000
+         AIF   ('&ECT(1)' EQ 'SYSTEM').ENDECTVAL1                  @L3A 03080000
+         AIF   ('&ECT(1)' EQ 'COND').ENDECTVAL1                    @L3A 03090000
+         AIF   ('&ECT(1)' EQ 'YES').ENDECTVAL1                     @L3A 03100000
+&ERR(11) SETB  1           ECT= VALUE NOT SYSTEM, COND, OR YES     @L3A 03110000
+         AGO   .ENDCHKECT  No more ECT checking                    @L3A 03120000
+.ENDECTVAL1 ANOP ,                                                 @L3A 03130000
+         AIF   ('&ECT(1)' EQ 'YES').ECTVAL2A                       @L3A 03140000
+         AIF   ('&ECT(1)' NE 'COND').ENDECTVAL2                    @L3A 03150000
+.ECTVAL2A ANOP ,                                                   @L3A 03160000
+         AIF   ('&CPU' EQ '' AND '&VECTOR' EQ '').ENDECTVAL2       @L3A 03170000
+&ERR(12) SETB  1           ECT=COND/YES with CPU or VECTOR         @L3A 03180000
+.ENDECTVAL2 ANOP ,                                                 @L3A 03190000
+         AIF   ('&ECT(1)' NE 'YES').ENDECTVAL3                     @L3A 03200000
+         AIF   ('&LINKAGE' EQ '').ENDECTVAL3                       @L3A 03210000
+         AIF   ('&LINKAGE(1)' NE 'SYSTEM').ENDECTVAL3              @L3A 03220000
+&ERR(13) SETB  1           ECT=YES with LINKAGE=SYSTEM             @L3A 03221000
+.ENDECTVAL3 ANOP ,                                                 @L3A 03221100
+         AIF   ('&ECT(1)' NE 'COND').ENDECTVAL4                    @L3A 03221200
+         AIF   ('&LINKAGE(1)' EQ 'SYSTEM').ENDECTVAL4              @L3A 03221300
+&ERR(14) SETB  1           ECT=COND without LINKAGE=SYSTEM         @L3A 03221400
+.ENDECTVAL4 ANOP ,                                                 @L3A 03221500
+.ENDCHKECT ANOP ,                                                  @L3A 03221600
+         AIF   ('&ENCLAVE' EQ '').ENDCHKENCLAVE                    @H1A 03221700
+         AIF   ('&ENCLAVE(1)' EQ 'SUP').ENDENCLAVEVAL1             @H1A 03221800
+&ERR(15) SETB  1           ENCLAVE= VALUE NOT SUP                  @H1A 03221900
+.ENDENCLAVEVAL1 ANOP ,                                             @H1A 03222000
+         AIF   ('&STORADR' NE '').ENCLAVESTORADR                   @01C 03222100
+         AIF   ('&TIME_ON_CP' NE '').ENCLAVETIME_ON_CP             @01A 03222200
+         AIF   ('&OFFLOAD_TIME' NE '').ENCLAVEOFFLOAD_TIME         @01A 03222300
+         AIF   ('&OFFLOAD_ON_CP' NE '').ENCLAVEOFFLOAD_ON_CP       @01A 03222400
+         AIF   ('&ECT' EQ 'SYSTEM').ENDENCLAVEECT                  @H1A 03222500
+.ENCLAVESTORADR ANOP ,                                             @H1A 03222600
+.ENCLAVETIME_ON_CP ANOP ,                                          @01A 03222700
+.ENCLAVEOFFLOAD_TIME ANOP ,                                        @01A 03222800
+.ENCLAVEOFFLOAD_ON_CP ANOP ,                                       @01A 03222900
+&ERR(16) SETB  1           ENCLAVE not valid with STORADR          @H1A 03223000
+.ENDENCLAVEECT ANOP ,                                              @H1A 03223100
+         AIF   ('&LINKAGE' EQ 'BRANCH').ENDENCLAVELINKAGE          @H1A 03223200
+&ERR(17) SETB  1           ENCLAVE requires LINKAGE=BRANCH         @H1A 03223300
+.ENDENCLAVELINKAGE ANOP ,                                          @H1A 03223400
+.ENDCHKENCLAVE ANOP ,                                              @H1A 03223500
+         AIF   ('&TIME_ON_CP' EQ '').ENDCHKTIME_ON_CP              @01A 03223600
+         AIF   ('&TIME_ON_CP(1)' EQ 'YES').ENDTIME_ON_CPVAL1       @01A 03223700
+&ERR(18) SETB  1           TIME_ON_CP= VALUE NOT SUP               @01A 03223800
+.ENDTIME_ON_CPVAL1 ANOP ,                                          @01A 03223900
+   AIF   ('&STORADR' NE '' OR '&ECT' NE 'YES').ENDTIME_ON_CPECT    @L4C 03224000
+&ERR(19) SETB  1           TIME_ON_CP requires STORADR             @01A 03225000
+.ENDTIME_ON_CPECT ANOP ,                                           @01A 03225100
+.* Error if: TIME_ON_CP without ECT=YES with STORADR                    03225200
+.* Error if: TIME_ON_CP without ECT=YES with LINKAGE<>BRANCH            03225300
+         AIF   ('&ECT' EQ 'YES').ENDTIME_ON_CPLINKAGE              @01A 03225400
+         AIF   ('&STORADR' NE '').TIME_ON_CP_BAD                   @L4A 03225500
+         AIF   ('&LINKAGE' EQ 'BRANCH').ENDTIME_ON_CPLINKAGE       @01A 03225600
+.TIME_ON_CP_BAD ANOP                                               @L4A 03225700
+&ERR(20) SETB  1           TIME_ON_CP: LINKAGE=BRANCH, no STORADR  @L4C 03225800
+.ENDTIME_ON_CPLINKAGE ANOP ,                                       @01A 03225900
+.ENDCHKTIME_ON_CP ANOP ,                                           @01A 03226000
+.* Error if: OFFLOAD_TIME specified but not YES                         03226100
+         AIF   ('&OFFLOAD_TIME' EQ '').ENDCHKOFFLOAD_TIME          @L4A 03226200
+         AIF   ('&OFFLOAD_TIME(1)' EQ 'YES').ENDOFFLOAD_TIMEVAL1   @L4A 03226300
+&ERR(21) SETB  1           OFFLOAD_TIME= VALUE NOT SUP             @L4A 03226400
+.ENDOFFLOAD_TIMEVAL1 ANOP ,                                        @L4A 03226500
+.* Error if: OFFLOAD_TIME with STORADR                                  03226600
+.* Error if: OFFLOAD_TIME without ECT=YES                               03226700
+.* Error if: OFFLOAD_TIME with LINKAGE<>BRANCH                          03226800
+         AIF   ('&STORADR' EQ '').OFFLOAD_TIME_BAD                 @L4A 03226900
+         AIF   ('&ECT' NE 'YES').OFFLOAD_TIME_BAD                  @L4A 03227000
+         AIF   ('&LINKAGE' EQ 'BRANCH').ENDCHKOFFLOAD_TIME         @L4A 03227100
+.OFFLOAD_TIME_BAD ANOP ,                                           @L4A 03227200
+&ERR(22) SETB  1           OFFLOAD_TIME not valid with STORADR     @L4A 03227300
+.ENDCHKOFFLOAD_TIME ANOP ,                                         @L4A 03227400
+.* Error if: OFFLOAD_ON_CP specified but not YES                        03227500
+         AIF   ('&OFFLOAD_ON_CP' EQ '').ENDCHKOFFLOAD_ON_CP        @L4A 03227600
+         AIF   ('&OFFLOAD_ON_CP(1)' EQ 'YES').ENDOFFLOAD_ON_CPVAL1 @L4A 03227700
+&ERR(23) SETB  1           OFFLOAD_ON_CP= VALUE NOT SUP            @L4A 03227800
+.ENDOFFLOAD_ON_CPVAL1 ANOP ,                                       @L4A 03227900
+.* when not with TIME_ON_CP=YES                                         03228000
+.* Error if: OFFLOAD_ON_CP with STORADR                                 03229000
+.* Error if: OFFLOAD_ON_CP without ECT=YES                              03229100
+.* Error if: OFFLOAD_ON_CP with LINKAGE<>BRANCH                         03229200
+         AIF   ('&TIME_ON_CP' EQ 'YES').ENDCHKOFFLOAD_ON_CP        @L5A 03229300
+         AIF   ('&STORADR' EQ '').OFFLOAD_ON_CP_BAD                @L4A 03229400
+         AIF   ('&ECT' NE 'YES').OFFLOAD_ON_CP_BAD                 @L5A 03229500
+         AIF   ('&LINKAGE' EQ 'BRANCH').ENDCHKOFFLOAD_ON_CP        @L4A 03229600
+.OFFLOAD_ON_CP_BAD ANOP ,                                          @L4A 03229700
+&ERR(24) SETB  1           OFFLOAD_ON_CP not valid with STORADR    @L4A 03229800
+.ENDCHKOFFLOAD_ON_CP ANOP ,                                        @L4A 03229900
+.* THIS LOOP WRITES OUT ALL ERRORS INDICATED BY THE ERROR FLAGS         03230000
+.*                                                                      03230100
+.CHKERR  ANOP  ,                                                   @D1A 03230200
+&I       SETA  1           INITIALIZE LOOP VARIABLE                @D1A 03230300
+.LOOP2   ANOP  ,                                                   @D1A 03230400
+         AIF   (&ERR(&I) EQ 0).IPLUS1  NO ERROR INDICATED?         @D1A 03230500
+&STOPGEN SETB  1           INDICATE AN ERROR WAS ENCOUNTERED       @D1A 03230600
+         MNOTE 8,'&ERRM(&I)'  PRINT OUT ERROR MESSAGE              @D1A 03230700
+.*                                                                      03230800
+.IPLUS1  ANOP  ,                                                        03230900
+&I       SETA  &I+1        INCREMENT LOOP VARIABLE                 @D1A 03231000
+         AIF   (&I LE 24).LOOP2 IF I<=24 THEN CONTINUE LOOP        @L4C 03231100
+.*                                                                      03231200
+         AIF   (&STOPGEN EQ 0).GENCODE  NO ERRORS-SO GENERATE CODE @D1A 03231300
+         MEXIT             ERRORS ENCOUNTERED- EXIT                @D1A 03231400
+.*                                                                      03231500
+.GENCODE ANOP  ,                                                   @D1A 03231600
+         AIF   ('&NAME' EQ '').NONAME                              @L3A 03231700
+&NAME    DS    0H                                                  @L3A 03231800
+.NONAME  ANOP                                                      @L3A 03231900
+         AIF   ('&ENCLAVE' NE '').CALLENCLAVE                      @H1A 03232000
+         AIF   ('&ECT' EQ 'YES' AND '&TIME_ON_CP' NE '').CALLECT1  @L4A 03233000
+         AIF  ('&ECT' EQ 'YES' AND '&OFFLOAD_TIME' NE '').CALLECT1 @L4A 03234000
+         AIF ('&ECT' EQ 'YES' AND '&OFFLOAD_ON_CP' NE '').CALLECT1 @L4A 03235000
+         AIF   ('&TIME_ON_CP' NE '').CALLTIME_ON_CP                @01A 03236000
+         AIF   ('&ECT(1)' EQ '' OR '&ECT(1)' EQ 'SYSTEM').NOECT1   @L3A 03237000
+         &L    14,16(0,0)         CVT address                      @L3A 03238000
+         AIF   ('&ECT(1)' NE 'COND').NOECTCOND1                    @L3A 03239000
+         AIF   ('&SYSOSREL' GT '&SYSOSREL_ZOSV1R7').ZOSV1R8A       @L3A 03240000
+         AIF   ('&SYSASCE' EQ 'P').ENDECTSETAR14                   @01A 03250000
+         LAE   14,0(14,0)         Clear AR for reference           @01A 03260000
+.ENDECTSETAR14 ANOP ,                                              @01A 03270000
+         TM    CVTOSLV5-CVTMAP(14),CVTZOS_V1R8 V1R8 or later?      @L3A 03280000
+         JZ    TIMEUSED_NOTV1R8_&SYSNDX                            @L3A 03290000
+.ZOSV1R8A ANOP                                                     @L3A 03300000
+         TM    FLCFACL3-FLC(0),FLCFECT   ECT facility available?   @L3A 03310000
+         JZ    TIMEUSED_NO_ECT_&SYSNDX                             @L3A 03320000
+.NOECTCOND1 ANOP                                                   @L3A 03330000
+         &L    15,CVTECVT-CVTMAP(14,0)                             @L3A 03340000
+         L     15,ECVTECT-ECVT(15,0)                               @L3A 03350000
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLECT1                     @L3A 03351000
+         SAC   0           .                                       @L3A 03352000
+.ENDCALLECT1 ANOP ,                                                @L3A 03353000
+         BASR  14,15                                               @L3A 03354000
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLECT2                     @L3A 03355000
+         SAC   512         .                                       @L3A 03356000
+.ENDCALLECT2 ANOP ,                                                @L3A 03357000
+         AIF   ('&STORADR'(1,1) EQ '(').STORADR_ECT_REG            @L3A 03357100
+         STG   0,&STORADR         AREA FOR RETURN OF TIME VALUE    @L3A 03357200
+         AGO   .END_STORADR_ECT                                    @L3A 03357300
+.STORADR_ECT_REG ANOP ,                                            @L3A 03357400
+         STG   0,0(,&STORADR(1)) AREA FOR RETURN OF TIME VALUE     @L3A 03357500
+.END_STORADR_ECT ANOP                                              @L3A 03357600
+         SLR   15,15                                               @L3A 03357700
+         AIF   ('&ECT(1)' NE 'COND').NOECTCOND2                    @L3A 03357800
+         J     TIMEUSED_END_&SYSNDX                                @L3A 03357900
+TIMEUSED_NO_ECT_&SYSNDX DS 0H                                      @L3A 03358000
+.NOECTCOND2 ANOP                                                   @L3A 03358100
+         AIF   ('&SYSOSREL' GT '&SYSOSREL_ZOSV1R7').ZOSV1R8B       @L3A 03358200
+TIMEUSED_NOTV1R8_&SYSNDX DS 0H                                     @L3A 03358300
+.ZOSV1R8B ANOP                                                     @L3A 03358400
+.NOECT1  ANOP                                                      @L3A 03358500
+         AIF   ('&ECT(1)' EQ 'YES').CHECKCOND3                     @L3A 03358600
+         AIF   ('&LINKAGE' EQ 'SYSTEM').PCSERV IS THIS PC ENTRY    @L1A 03358700
+.*                                                                      03358800
+.BRSERV  ANOP  ,                                                   @D1C 03358900
+         AIF   ('&STORADR'(1,1) EQ '(').ISAREG1                         03359000
+         LA    1,&STORADR         AREA FOR RETURN OF TIME VALUE         03360000
+         AGO   .NEXT                                                    03370000
+.ISAREG1 ANOP  ,                                                   @D1C 03380000
+         LR    1,&STORADR(1)      AREA FOR RETURN OF TIME VALUE         03390000
+.NEXT    ANOP  ,                                                   @D1C 03391000
+         &L    15,X'B4C'(0,0)     SVT ADDRESS                           03392000
+         L     15,X'88'(0,15)     ADDRESS OF SERVICE ROUTINE            03393000
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLTIMEUSED1                @L3A 03394000
+         SAC   0           .                                       @L3A 03395000
+.ENDCALLTIMEUSED1 ANOP ,                                           @L3A 03396000
+         BASSM 14,15                                                    03397000
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLTIMEUSED2                @L3A 03398000
+         SAC   512         .                                       @L3A 03399000
+.ENDCALLTIMEUSED2 ANOP ,                                           @L3A 03400000
+         AGO   .CHECKCOND3                                         @L3C 03410000
+.*                                                                      03420000
+.PCSERV  ANOP  ,                                                   @D1C 03430000
+         AIF   ('&ECT(1)' EQ 'COND').ECTCOND1                      @L3A 03440000
+         &L    14,16(0,0)         CVT ADDRESS                      @L1A 03450000
+.ECTCOND1 ANOP                                                     @L3A 03460000
+         L     14,772(14,0)       SFT ADDRESS                      @L1A 03470000
+         L     14,244(14,0)       LX/EX FOR SERVICE ROUTINE        @L1A 03480000
+         AIF   ('&VECTOR' EQ 'TOD').VECTTOD                        @D1A 03490000
+         AIF   ('&VECTOR' EQ 'MIC').VECTMIC                        @D1A 03500000
+         AIF   ('&CPU' EQ '').CPUTOD                               @D1A 03510000
+         AIF   ('&CPU' EQ 'TOD').CPUTOD                            @D1A 03520000
+         AIF   ('&CPU' EQ 'MIC').CPUMIC                            @D1A 03530000
+.CPUTOD  ANOP  ,                                                   @D1A 03540000
+         LA    0,0                SET TIMING FLAG TO CPU/TOD       @D1A 03550000
+         AGO   .PCTOIT                                             @D1A 03560000
+.CPUMIC  ANOP  ,                                                   @D1A 03570000
+         LA    0,1                SET TIMING FLAG TO CPU/MIC       @D1A 03580000
+         AGO   .PCTOIT                                             @D1A 03581000
+.VECTTOD ANOP  ,                                                   @D1A 03581100
+         LA    0,2                SET TIMING FLAG TO VECTOR/TOD    @D1A 03581200
+         AGO   .PCTOIT                                             @D1A 03581300
+.VECTMIC ANOP  ,                                                   @D1A 03581400
+         LA    0,3                SET TIMING FLAG TO VECTOR/MIC    @D1A 03581500
+.PCTOIT  ANOP  ,                                                   @D1A 03581600
+         PC    0(14)              PC TO TIMEUSED SERVICE ROUTINE   @L1A 03581700
+         LTR   15,15              CHECK THE RETURN CODE            @L1A 03581800
+         AIF   (&SYSALVL GT 0).ARCHLVL1A                           @L3A 03581900
+         BNZ   *+8                BAD RETURN CODE SO SKIP STORE    @L1A 03582000
+         AGO   .ARCHLVL1B                                          @L3A 03583000
+.ARCHLVL1A ANOP                                                    @L3A 03584000
+         JNZ   *+8                BAD RETURN CODE SO SKIP STORE    @L1A 03585000
+.ARCHLVL1B ANOP                                                    @L3A 03586000
+         AIF   ('&STORADR'(1,1) EQ '(').ISAREG2                         03587000
+         STM   0,1,&STORADR       AREA FOR RETURN OF TIME VALUE    @L1C 03588000
+         AGO   .CHECKCOND3                                         @L3A 03588100
+.*                                                                      03588200
+.ISAREG2 ANOP  ,                                                   @D1C 03588300
+         STM   0,1,0(&STORADR(1)) AREA FOR RETURN OF TIME VALUE    @L1A 03588400
+.CHECKCOND3 ANOP                                                   @L3A 03588500
+         AIF   ('&ECT(1)' NE 'COND').NOECTCOND3                    @L3A 03588600
+TIMEUSED_END_&SYSNDX DS 0H                                         @L3A 03588700
+.NOECTCOND3 ANOP                                                   @L3A 03588800
+         MEXIT                                                          03588900
+.*                                                                      03589000
+.CALLENCLAVE ANOP ,                                                @H1A 03590000
+         &L    14,16(0,0)         CVT address                      @H1A 03591000
+         LA    15,12                                               @01M 03592000
+         AIF   ('&SYSOSREL' GT '&SYSOSREL_ZOSV1R7').ZOSV1R8C       @H1A 03593000
+         AIF   ('&SYSASCE' EQ 'P').ENDENCLAVESETAR14               @01A 03594000
+         LAE   14,0(14,0)         Clear AR for reference           @01A 03595000
+.ENDENCLAVESETAR14 ANOP ,                                          @01A 03596000
+         TM    CVTOSLV4-CVTMAP(14),CVTSUP SUP support present?     @H1A 03597000
+         JZ    TIMEUSED_NOTSUP_&SYSNDX                             @H1A 03598000
+.ZOSV1R8C ANOP                                                     @H1A 03598100
+         L     15,CVTECVT-CVTMAP(14,0)                             @H1A 03598200
+         SLR   1,1                Flags indicating ENCLAVE=SUP     @H1A 03598300
+         L     15,ECVTTENC-ECVT(15,0)                              @H1A 03598400
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLENCLAVE1                 @H1A 03598500
+         SAC   0           .                                       @H1A 03598600
+.ENDCALLENCLAVE1 ANOP ,                                            @H1A 03598700
+         BASSM 14,15                                               @H1A 03598800
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLENCLAVE2                 @H1A 03598900
+         SAC   512         .                                       @H1A 03599000
+.ENDCALLENCLAVE2 ANOP ,                                            @H1A 03600000
+         AIF   ('&SYSOSREL' GT '&SYSOSREL_ZOSV1R7').ZOSV1R8D       @H1A 03610000
+TIMEUSED_NOTSUP_&SYSNDX DS 0H                                      @H1A 03620000
+.ZOSV1R8D ANOP                                                     @H1A 03630000
+         MEXIT                                                     @01A 03640000
+.CALLTIME_ON_CP ANOP ,                                             @01A 03650000
+         &L    14,16(0,0)         CVT address                      @01A 03660000
+         AIF   ('&OFFLOAD_ON_CP' NE '').CALLTIME_OOCP              @L5A 03670000
+         AIF   ('&SYSOSREL' GE '&SYSOSREL_ZOSV1R10').ZOSV1R10A     @L4A 03680000
+         LA    15,12                                               @01A 03690000
+         AIF   ('&SYSASCE' EQ 'P').ENDTIME_ON_CPSETAR14            @01A 03700000
+         LAE   14,0(14,0)         Clear AR for reference           @01A 03710000
+.ENDTIME_ON_CPSETAR14 ANOP ,                                       @01A 03720000
+         TM    CVTOSLV4-CVTMAP(14),CVTTOCP TIME_ON_CP present?     @01A 03730000
+         JZ    TIMEUSED_NOTTOCP_&SYSNDX                            @01A 03740000
+.ZOSV1R10A ANOP                                                    @L4A 03741000
+         L     15,CVTECVT-CVTMAP(14,0)                             @01A 03742000
+         LHI   1,1                Flags indicating TIME_ON_CP=YES  @01A 03743000
+         L     15,ECVTTENC-ECVT(15,0)                              @01A 03744000
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLTIME_ON_CP1              @01A 03745000
+         SAC   0           .                                       @01A 03746000
+.ENDCALLTIME_ON_CP1 ANOP ,                                         @01A 03747000
+         BASSM 14,15                                               @01A 03748000
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLTIME_ON_CP2              @01A 03749000
+         SAC   512         .                                       @01A 03750000
+.ENDCALLTIME_ON_CP2 ANOP ,                                         @01A 03760000
+         AIF   ('&SYSOSREL' GE '&SYSOSREL_ZOSV1R10').ZOSV1R10B     @L4A 03761000
+TIMEUSED_NOTTOCP_&SYSNDX DS 0H                                     @01A 03762000
+.ZOSV1R10B ANOP                                                    @L4A 03763000
+         MEXIT                                                     @L4A 03764000
+.CALLTIME_OOCP ANOP                                                @L5A 03765000
+         AIF   ('&SYSOSREL' GT '&SYSOSREL_ZOSV1R13').ZOSV1R14C     @L5A 03766000
+         LA    15,12                                               @L5A 03767000
+         AIF   ('&SYSASCE' EQ 'P').ENDTIME_ON_CP_OOCPSETAR14       @L5A 03768000
+         LAE   14,0(14,0)         Clear AR for reference           @L5A 03769000
+.ENDTIME_ON_CP_OOCPSETAR14 ANOP ,                                  @L5A 03770000
+         TM    CVTOSLV8-CVTMAP(14),CVTOOCP OFFLODA_ON_CP present?  @L5A 03771000
+         JZ    TIMEUSED_NOTOOCP_&SYSNDX                            @L5A 03771100
+.ZOSV1R14C ANOP                                                    @L5A 03771200
+         L     15,CVTECVT-CVTMAP(14,0)                             @L5A 03771300
+         LHI   1,4*256+1          TIME_ON_CP w/ OFFLOAD_ON_CP      @L5A 03771400
+         L     15,ECVTTENC-ECVT(15,0)                              @L5A 03771500
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLTIME_ON_CP_OOCP1         @L5A 03771600
+         SAC   0           .                                       @L5A 03771700
+.ENDCALLTIME_ON_CP_OOCP1 ANOP ,                                    @L5A 03771800
+         BASSM 14,15                                               @L5A 03771900
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLTIME_ON_CP_OOCP2         @L5A 03772000
+         SAC   512         .                                       @L5A 03773000
+.ENDCALLTIME_ON_CP_OOCP2 ANOP ,                                    @L5A 03773100
+         AIF   ('&SYSOSREL' GT '&SYSOSREL_ZOSV1R13').ZOSV1R14D     @L5A 03773200
+TIMEUSED_NOTOOCP_&SYSNDX DS 0H                                     @L5A 03773300
+.ZOSV1R14D ANOP                                                    @L5A 03773400
+         MEXIT                                                     @L5A 03773500
+.CALLECT1 ANOP ,                                                   @L4A 03773600
+         &L    14,16(0,0)         CVT address                      @L4A 03773700
+         AIF   ('&SYSOSREL' GT '&SYSOSREL_ZOSV1R13').ZOSV1R14A     @L4A 03773800
+         LA    15,12                                               @L4A 03773900
+         AIF   ('&SYSASCE' EQ 'P').ENDECT1_SETAR14                 @L4A 03774000
+         LAE   14,0(14,0)         Clear AR for reference           @L4A 03774100
+.ENDECT1_SETAR14 ANOP ,                                            @L4A 03774200
+         TM    CVTOSLV8-CVTMAP(14),CVTECT1                         @L4A 03774300
+         JZ    TIMEUSED_NOTECT1_&SYSNDX                            @L4A 03774400
+.ZOSV1R14A ANOP                                                    @L4A 03774500
+         L     15,CVTECVT-CVTMAP(14,0)                             @L4A 03774600
+&REQCODE SETA  0                                                   @L4A 03774700
+         AIF   ('&TIME_ON_CP' NE 'YES').CALLECT1_NO_TOCP           @L4A 03774800
+&REQCODE SETA  &REQCODE+1                                          @L4A 03774900
+.CALLECT1_NO_TOCP ANOP                                             @L4A 03775000
+         AIF   ('&OFFLOAD_TIME' NE 'YES').CALLECT1_NO_OFF          @L4A 03776000
+&REQCODE SETA  &REQCODE+2                                          @L4A 03777000
+.CALLECT1_NO_OFF ANOP                                              @L4A 03778000
+         AIF   ('&OFFLOAD_ON_CP' NE 'YES').CALLECT1_NO_OFOCP       @L4A 03779000
+&REQCODE SETA  &REQCODE+4                                          @L4A 03780000
+.CALLECT1_NO_OFOCP ANOP                                            @L4A 03780100
+         AIF   ('&STORADR'(1,1) EQ '(').CALLECT1_ISAREG            @L4A 03780200
+         LA    0,&STORADR         AREA FOR RETURN OF TIME VALUE    @L4A 03780300
+         AGO   .CALLECT1_NEXT                                      @L4A 03780400
+.CALLECT1_ISAREG ANOP ,                                            @L4A 03780500
+         LR    0,&STORADR(1)      AREA FOR RETURN OF TIME VALUE    @L4A 03780600
+.CALLECT1_NEXT ANOP ,                                              @L4A 03780700
+         LHI   1,&REQCODE*256+3   Flags                            @L4A 03780800
+         L     15,ECVTTENC-ECVT(15,0)                              @L4A 03780900
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLECT1_1                   @L4A 03781000
+         SAC   0           .                                       @L4A 03781100
+.ENDCALLECT1_1 ANOP ,                                              @L4A 03781200
+         BASSM 14,15                                               @L4A 03781300
+         AIF   ('&SYSASCE' EQ 'P').ENDCALLECT1_2                   @L4A 03781400
+         SAC   512         .                                       @L4A 03781500
+.ENDCALLECT1_2 ANOP ,                                              @L4A 03781600
+         AIF   ('&SYSOSREL' GT '&SYSOSREL_ZOSV1R13').ZOSV1R14B     @L4A 03781700
+TIMEUSED_NOTECT1_&SYSNDX DS 0H                                     @L4A 03781800
+.ZOSV1R14B ANOP                                                    @L4A 03781900
+         MEND                                                           03782000
+**/                                                                     03783000
+*% TIMEUSED :                                                           03784000
+*   MACRO KEYS(                                                         03785000
+*              STORADR,               /* User's return area address  */ 03786000
+*              LINKAGE,               /* Linkage requested       @L1A*/ 03787000
+*              CPU,                   /* CPU time value          @D1A*/ 03788000
+*              VECTOR,                /* Vector time value       @D1A*/ 03789000
+*              ECT,                   /* ECTG instruction        @L3A*/ 03790000
+*              ENCLAVE,               /* ENCLAVE                 @H1A*/ 03800000
+*              TIME_ON_CP,            /* TIME_ON_CP              @01A*/ 03810000
+*              OFFLOAD_TIME,          /* OFFLOAD_TIME            @02A*/ 03820000
+*              OFFLOAD_ON_CP,         /* OFFLOAD_ON_CP           @L4A*/ 03830000
+*              RELATED                                                  03840000
+*                     );                                                03850000
+*/*                                                                  */ 03860000
+*/* Define external macro variables                                  */ 03870000
+*/*                                                                  */ 03880000
+*   DECLARE                                                             03890000
+*      EHAREGS CHARACTER EXTERNAL,    /*                             */ 03900000
+*      EHAREGS64 CHARACTER EXTERNAL,  /*                         @L3A*/ 03910000
+*      EHAMAPS CHARACTER EXTERNAL,    /*                         @L1A*/ 03920000
+*      EHARC   FIXED     EXTERNAL;    /*                             */ 03930000
+*/*                                                                  */ 03940000
+*/* Define internal macro variables                                  */ 03950000
+*/*                                                                  */ 03960000
+*   DECLARE                                                             03970000
+*      IVDOCMT CHAR,                  /*                             */ 03980000
+*      MPREFIX CHAR,                  /*                         @L1A*/ 03990000
+*      ERRMSG  CHAR,                  /*                         @L1A*/ 04000000
+*      EM(24)   CHAR,                 /*                         @L4C*/ 04010000
+*      IVDATE  CHAR;                  /*                             */ 04020000
+* DCL SYSASCE CHAR EXT;               /*                         @L3A*/ 04030000
+* DCL SYSOSREL CHAR EXT;              /*                         @L3A*/ 04040000
+* DCL SYSOSREL_ZOSV1R7 CHAR EXT;      /*                         @L3A*/ 04050000
+* DCL SYSOSREL_ZOSV1R10 CHAR EXT;     /*                         @L4A*/ 04060000
+* DCL SYSOSREL_ZOSV1R13 CHAR EXT;     /*                         @L4A*/ 04070000
+* DCL SYSAM64 CHAR EXT;               /*                         @L2A*/ 04080000
+* ANS ('?SYSSTATE (TEST);') RESCAN;   /*                         @L2A*/ 04090000
+*/*                                                                  */ 04100000
+*/* Initialize macro variables                                       */ 04110000
+*/*                                                                  */ 04120000
+*   EHARC = 0;                                                          04130000
+*   IVDATE = 'MACDATE(09/06/1988)';                                     04140000
+*   MPREFIX = '?TIMEUSED --> ';       /*                         @L1A*/ 04150000
+*   EM(1) = 'TOO MANY ERRORS ENCOUNTERED; NO CODE GENERATED.'; /*@L1A*/ 04160000
+*   EM(2) = 'EXCESSIVE POSITIONAL PARAMETERS SPECIFIED.';      /*@L1A*/ 04170000
+*   EM(3) = 'STORADR MUST BE SPECIFIED.';                      /*@L1A*/ 04180000
+*   EM(4) = 'EXCESSIVE PARAMETERS SPECIFIED FOR ''STORADR''.'; /*@L1A*/ 04190000
+*   EM(5) = 'VALUE FOR ''LINKAGE'' PARAMETER MUST BE'!!        /*@L1A*/ 04200000
+*           ' SYSTEM OR BRANCH';                               /*@L1A*/ 04210000
+*   EM(6) = 'VALUE FOR ''CPU'' PARAMETER MUST BE TOD OR MIC'; /* @D1A*/ 04220000
+*   EM(7) = 'VALUE FOR ''VECTOR'' PARAMETER MUST BE TOD OR MIC'; /*     04230000
+*                                                                @D1A*/ 04240000
+*   EM(8) = '''VECTOR'' PARAMETER IS ONLY VALID WITH LINKAGE(SYSTEM)';  04250000
+*                                                             /* @D1A*/ 04260000
+*   EM(9) = 'CPU(MIC) IS ONLY VALID WITH LINKAGE(SYSTEM)';    /* @D1A*/ 04270000
+*   EM(10) = '''CPU'' AND ''VECTOR'' ARE MUTUALLY EXCLUSIVE PARAMETERS' 04280000
+*                                           ;                 /* @D1A*/ 04290000
+*   EM(11) = 'VALUE FOR ''ECT'' PARAMETER MUST BE SYSTEM, COND, OR YES' 04300000
+*                               ;     /*                         @L3A*/ 04310000
+*   EM(12) = '''ECT'' IS MUTUALLY EXCLUSIVE WITH ''CPU'' AND ' !!       04320000
+*            '''VECTOR''';                                  /*   @L3A*/ 04330000
+*   EM(13) = '''ECT(YES)'' IS MUTUALLY EXCLUSIVE WITH ''LINKAGE'''      04340000
+*                        ;                                  /*   @L3A*/ 04350000
+*   EM(14) = '''ECT(COND)'' REQUIRES ''LINKAGE(SYSTEM)'''               04360000
+*                        ;                                  /*   @L3A*/ 04370000
+*   EM(15) = 'VALUE FOR ''ENCLAVE'' PARAMETER MUST BE SUP'              04380000
+*                               ;     /*                         @H1A*/ 04390000
+*   EM(16) = '''ENCLAVE'' IS MUTUALLY EXCLUSIVE WITH ''STORADR'','      04400000
+*            !! ' ''ECT'', ''TIME_ON_CP'',  ''OFFLOAD_TIME'' AND'       04410000
+*            !! ' ''OFFLOAD_ON_CP'''                                    04420000
+*                        ;                                  /*   @L4C*/ 04430000
+*   EM(17) = '''ENCLAVE'' REQUIRES ''LINKAGE(BRANCH)'''                 04440000
+*                        ;                                  /*   @H1A*/ 04450000
+*   EM(18) = 'VALUE FOR ''TIME_ON_CP'' PARAMETER MUST BE YES'           04460000
+*                               ;     /*                         @01A*/ 04470000
+*   EM(19) = '''TIME_ON_CP'' WITHOUT ''ECT(YES)'''                      04480000
+*            !! ' IS MUTUALLY EXCLUSIVE WITH ''ENCLAVE'', ''ECT'', '    04490000
+*            !! ' ''STORADR'', ''OFFLOAD_TIME'''                        04500000
+*                        ;                                  /*   @L5C*/ 04510000
+*   EM(20) = '''TIME_ON_CP'' WITHOUT ''ECT(YES)'' REQUIRES'             04520000
+*            !! ' ''LINKAGE(BRANCH)'''                                  04530000
+*                        ;                                  /*   @L4C*/ 04540000
+*   EM(21) = 'VALUE FOR ''OFFLOAD_TIME'' PARAMETER MUST BE YES'         04550000
+*                               ;     /*                         @02A*/ 04560000
+*   EM(22) = '''OFFLOAD_TIME'' WITHOUT ''ECT(YES)'' REQUIRES'           04570000
+*       !! ' ''LINKAGE(BRANCH)'', NOT ''STORADR'', NOT ''ECT'''         04580000
+*                        ;                                  /*   @L4C*/ 04590000
+*   EM(23) = 'VALUE FOR ''OFFLOAD_ON_CP'' PARAMETER MUST BE YES'        04600000
+*                               ;     /*                         @L4A*/ 04610000
+*   EM(24) = '''OFFLOAD_ON_CP'' REQUIRES ''ECT(YES)'' AND ''STORADR'''  04620000
+*                !! ', OR NOT ''TIME_ON_CP'''                           04621000
+*                        ;                                  /*   @L5C*/ 04622000
+*   IVDOCMT = '?TIMEUSED ';                                 /*   @H1A*/ 04623000
+*   IF STORADR ^= '' THEN                                               04624000
+*      IVDOCMT = IVDOCMT!!'STORADR'!!STORADR!!' ';          /*   @H1C*/ 04625000
+*   IF LINKAGE ^= '' THEN                                   /*   @L1A*/ 04626000
+*      IVDOCMT = IVDOCMT!!'LINKAGE'!!LINKAGE!!' ';          /*   @L1A*/ 04627000
+*   IF CPU ^= '' THEN                                       /*   @D1A*/ 04628000
+*      IVDOCMT = IVDOCMT!!'CPU'!!CPU!!' ';                  /*   @D1A*/ 04629000
+*   IF VECTOR ^= '' THEN                                    /*   @D1A*/ 04630000
+*      IVDOCMT = IVDOCMT!!'VECTOR'!!VECTOR!!' ';            /*   @D1A*/ 04640000
+*   IF ECT ^= '' THEN                                       /*   @L3A*/ 04650000
+*      IVDOCMT = IVDOCMT!!'ECT'!!ECT!!' ';                  /*   @L3A*/ 04660000
+*   IF ENCLAVE ^= '' THEN                                   /*   @H1A*/ 04670000
+*      IVDOCMT = IVDOCMT!!'ENCLAVE'!!ENCLAVE!!' ';          /*   @H1A*/ 04680000
+*   IF TIME_ON_CP ^= '' THEN                                /*   @01A*/ 04690000
+*      IVDOCMT = IVDOCMT!!'TIME_ON_CP'!!TIME_ON_CP!!' ';    /*   @01A*/ 04700000
+*   IF OFFLOAD_TIME ^= '' THEN                              /*   @02A*/ 04710000
+*      IVDOCMT = IVDOCMT!!'OFFLOAD_TIME'!!OFFLOAD_TIME!!' '; /*  @02A*/ 04720000
+*   IF OFFLOAD_ON_CP ^= '' THEN                             /*   @L4A*/ 04730000
+*      IVDOCMT = IVDOCMT!!'OFFLOAD_ON_CP'!!OFFLOAD_ON_CP!!' ';/* @L4A*/ 04740000
+*   IF RELATED ^= '' THEN                                               04750000
+*      IVDOCMT = IVDOCMT!!'RELATED'!!RELATED!!' ';                      04760000
+*   IVDOCMT = IVDOCMT!!IVDATE;                                          04770000
+*/*                                                                  */ 04780000
+*/* Validity check the input                                         */ 04790000
+*/*                                                                  */ 04800000
+*   IF NUMBER(MACLIST) > 0 THEN       /* Excessive positionals       */ 04810000
+*      DO;                            /* Put out message             */ 04820000
+*         ERRMSG = MPREFIX!!EM(2);    /* Build message           @L1A*/ 04830000
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @L1A*/ 04840000
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @L1A*/ 04850000
+*         EHARC = 8;                  /* Set return code to 8        */ 04860000
+*      END;                           /* End no STORADR              */ 04870000
+*   IF LINKAGE ^= '' THEN             /* If LINKAGE specified    @D1C*/ 04880000
+*   IF LINKAGE(1) ^= 'SYSTEM' & LINKAGE(1) ^= 'BRANCH' THEN  /*  @L1A*/ 04890000
+*      DO;                            /* Put out message         @L1A*/ 04900000
+*         ERRMSG = MPREFIX!!EM(5);    /* Build message           @L1A*/ 04910000
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @L1A*/ 04920000
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @L1A*/ 04930000
+*         EHARC = 8;                  /* Set return code to 8    @L1A*/ 04940000
+*      END;                           /* End invalid LINKAGE     @L1A*/ 04950000
+*   IF CPU ^= '' THEN                 /* If CPU specified        @D1A*/ 04960000
+*   DO;                               /* CPU specified           @D1A*/ 04970000
+*   IF CPU(1) ^= 'TOD' & CPU(1) ^= 'MIC' THEN                /*  @D1A*/ 04980000
+*      DO;                            /* Put out message         @D1A*/ 04990000
+*         ERRMSG = MPREFIX!!EM(6);    /* Build message           @D1A*/ 05000000
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @D1A*/ 05010000
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @D1A*/ 05020000
+*         EHARC = 8;                  /* Set return code to 8    @D1A*/ 05030000
+*      END;                           /* End invalid TIMEVAL     @D1A*/ 05040000
+*   ELSE                              /* TIMEVAL=CPU or VECTOR   @D1A*/ 05050000
+*      IF CPU(1) = 'MIC' & (LINKAGE = '' ! LINKAGE(1) = 'BRANCH')       05060000
+*      THEN                                                   /* @D1A*/ 05070000
+*      DO;                            /* Put out message         @D1A*/ 05080000
+*         ERRMSG = MPREFIX!!EM(9);    /* Build message           @D1A*/ 05090000
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @D1A*/ 05100000
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @D1A*/ 05110000
+*         EHARC = 8;                  /* Set return code to 8    @D1A*/ 05120000
+*      END;                           /* End invalid TIMEVAL     @D1A*/ 05130000
+*   IF VECTOR ^= '' THEN              /* If VECTOR specified     @D1A*/ 05140000
+*   DO;                               /* Put out message         @D1A*/ 05150000
+*      ERRMSG = MPREFIX!!EM(10);      /* Build message           @D1A*/ 05160000
+*      ANS MSG(ERRMSG) NORESCAN;      /* Issue message           @D1A*/ 05170000
+*      ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment          @D1A*/ 05180000
+*      EHARC = 8;                     /* Set return code to 8    @D1A*/ 05190000
+*   END;                              /* End invalid TIMEVAL     @D1A*/ 05200000
+*   END;                              /* End CPU specified       @D1A*/ 05210000
+*   IF VECTOR ^= '' THEN              /* If VECTOR specified     @D1A*/ 05220000
+*   DO;                               /* VECTOR specified        @D1A*/ 05230000
+*   IF VECTOR(1) ^= 'TOD' & VECTOR(1) ^= 'MIC' THEN          /*  @D1A*/ 05240000
+*      DO;                            /* Put out message         @D1A*/ 05250000
+*         ERRMSG = MPREFIX!!EM(7);    /* Build message           @D1A*/ 05260000
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @D1A*/ 05270000
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @D1A*/ 05280000
+*         EHARC = 8;                  /* Set return code to 8    @D1A*/ 05290000
+*      END;                           /* End invalid LINKAGE     @D1A*/ 05300000
+*   IF LINKAGE = '' ! LINKAGE(1) = 'BRANCH' THEN              /* @D1A*/ 05310000
+*      DO;                            /* Put out message         @D1A*/ 05320000
+*         ERRMSG = MPREFIX!!EM(8);    /* Build message           @D1A*/ 05330000
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @D1A*/ 05340000
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @D1A*/ 05350000
+*         EHARC = 8;                  /* Set return code to 8    @D1A*/ 05360000
+*      END;                           /* End invalid TIMEVAL     @D1A*/ 05370000
+*   END;                              /* End VECTOR specified    @D1A*/ 05380000
+*   IF ECT ^= '' THEN                 /* If ECT specified        @L3A*/ 05390000
+*   DO;                               /* ECT specified           @L3A*/ 05400000
+*   IF ECT(1) ^= 'SYSTEM' & ECT(1) ^= 'COND' & ECT(1) ^= 'YES' THEN /*  05410000
+*                                                                @L3A*/ 05420000
+*      DO;                            /* Put out message         @L3A*/ 05430000
+*         ERRMSG = MPREFIX!!EM(11);   /* Build message           @L3A*/ 05440000
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @L3A*/ 05450000
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @L3A*/ 05460000
+*         EHARC = 8;                  /* Set return code to 8    @L3A*/ 05470000
+*      END;                           /* End invalid ECT         @L3A*/ 05480000
+*   ELSE                              /* ECT SYSTEM/YES/COND     @L3A*/ 05490000
+*     IF ECT(1) = 'YES' ! ECT(1) = 'COND' THEN               /*  @L3A*/ 05500000
+*     DO;                             /*                         @L3A*/ 05510000
+*      IF CPU ^= '' ! VECTOR ^= '' THEN  /* With CPU or VECTOR   @L3A*/ 05520000
+*      DO;                            /* Put out message         @L3A*/ 05530000
+*         ERRMSG = MPREFIX!!EM(12);   /* Build message           @L3A*/ 05540000
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @L3A*/ 05550000
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @L3A*/ 05560000
+*         EHARC = 8;                  /* Set return code to 8    @L3A*/ 05570000
+*      END;                           /* End invalid TIMEVAL     @L3A*/ 05580000
+*     END;                            /*                         @L3A*/ 05590000
+*     IF ECT(1) = 'YES' THEN          /* ECT=YES?                @L3A*/ 05600000
+*     DO;                             /* ECT=YES                 @L3A*/ 05610000
+*      IF LINKAGE ^= '' THEN          /* With LINKAGE            @L3A*/ 05620000
+*      DO;                            /* Put out message         @L3A*/ 05630000
+*         ERRMSG = MPREFIX!!EM(13);   /* Build message           @L3A*/ 05640000
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @L3A*/ 05650000
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @L3A*/ 05660000
+*         EHARC = 8;                  /* Set return code to 8    @L3A*/ 05670000
+*      END;                           /* End invalid LINKAGE     @L3A*/ 05680000
+*     END;                            /* ECT=YES                 @L3A*/ 05690000
+*     IF ECT(1) = 'COND' THEN         /* ECT=COND?               @L3A*/ 05700000
+*     DO;                             /* ECT=COND                @L3A*/ 05701000
+*      IF LINKAGE(1) ^= 'SYSTEM' THEN /* Without LINKAGE(SYSTEM) @L3A*/ 05702000
+*      DO;                            /* Put out message         @L3A*/ 05703000
+*         ERRMSG = MPREFIX!!EM(14);   /* Build message           @L3A*/ 05704000
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @L3A*/ 05705000
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @L3A*/ 05706000
+*         EHARC = 8;                  /* Set return code to 8    @L3A*/ 05707000
+*      END;                           /* End invalid LINKAGE     @L3A*/ 05708000
+*     END;                            /* ECT=COND                @L3A*/ 05709000
+*   END;                              /* End ECT specified       @L3A*/ 05709100
+*   IF ENCLAVE ^= '' THEN             /* If ENCLAVE specified    @H1A*/ 05709200
+*   DO;                               /* ENCLAVE specified       @H1A*/ 05709300
+*     IF ENCLAVE(1) ^= 'SUP' THEN     /* Not SUP                 @H1A*/ 05709400
+*     DO;                             /* Put out message         @H1A*/ 05709500
+*       ERRMSG = MPREFIX!!EM(15);     /* Build message           @H1A*/ 05709600
+*       ANS MSG(ERRMSG) NORESCAN;     /* Issue message           @H1A*/ 05709700
+*       ANS (COMMENT(ERRMSG)) COL(MACLMAR);     /* Comment       @H1A*/ 05709800
+*       EHARC = 8;                    /* Set return code to 8    @H1A*/ 05709900
+*     END;                            /* End invalid ENCLAVE     @H1A*/ 05710000
+*     IF STORADR ^= '' ! ECT ^= ''    /* STORADR or ECT          @H1A*/ 05711000
+*        ! TIME_ON_CP ^= ''           /* TIME_ON_CP              @02C*/ 05712000
+*        ! OFFLOAD_TIME ^= ''         /* OFFLOAD_TIME            @L4C*/ 05713000
+*        ! OFFLOAD_ON_CP ^= '' THEN   /* OFFLOAD_ON_CP           @L4A*/ 05714000
+*     DO;                             /* Put out message         @H1A*/ 05715000
+*       ERRMSG = MPREFIX!!EM(16);     /* Build message           @H1A*/ 05716000
+*       ANS MSG(ERRMSG) NORESCAN;     /* Issue message           @H1A*/ 05717000
+*       ANS (COMMENT(ERRMSG)) COL(MACLMAR);     /* Comment       @H1A*/ 05718000
+*       EHARC = 8;                    /* Set return code to 8    @H1A*/ 05719000
+*     END;                            /* End invalid TIMEVAL     @H1A*/ 05720000
+*     IF LINKAGE ^= '' & LINKAGE(1) ^= 'BRANCH' THEN /*          @H1A*/ 05721000
+*     DO;                             /* Put out message         @H1A*/ 05722000
+*       ERRMSG = MPREFIX!!EM(17);     /* Build message           @H1A*/ 05723000
+*       ANS MSG(ERRMSG) NORESCAN;     /* Issue message           @H1A*/ 05724000
+*       ANS (COMMENT(ERRMSG)) COL(MACLMAR);     /* Comment       @H1A*/ 05725000
+*       EHARC = 8;                    /* Set return code to 8    @H1A*/ 05726000
+*     END;                            /* End invalid LINKAGE     @H1A*/ 05727000
+*   END;                              /* End ENCLAVE specified   @H1A*/ 05728000
+*   IF TIME_ON_CP ^= '' THEN          /* If TIME_ON_CP specified @01A*/ 05729000
+*   DO;                               /* TIME_ON_CP specified    @01A*/ 05730000
+*     IF TIME_ON_CP(1) ^= 'YES' THEN  /* Not YES                 @01A*/ 05731000
+*     DO;                             /* Put out message         @01A*/ 05732000
+*       ERRMSG = MPREFIX!!EM(18);     /* Build message           @01A*/ 05733000
+*       ANS MSG(ERRMSG) NORESCAN;     /* Issue message           @01A*/ 05734000
+*       ANS (COMMENT(ERRMSG)) COL(MACLMAR);     /* Comment       @01A*/ 05734100
+*       EHARC = 8;                    /* Set return code to 8    @01A*/ 05734200
+*     END;                            /* End invalid TIME_ON_CP  @01A*/ 05734300
+*    IF ECT(1) ^= 'YES' THEN          /*                         @L4A*/ 05734400
+*    DO;                              /*                         @L4A*/ 05734500
+*     IF STORADR ^= '' ! ECT ^= ''    /* STORADR or ECT          @01A*/ 05734600
+*        ! OFFLOAD_TIME ^= ''         /* or OFFLOAD_TIME         @02A*/ 05734700
+*        THEN                         /*                         @01A*/ 05734800
+*     DO;                             /* Put out message         @01A*/ 05734900
+*       ERRMSG = MPREFIX!!EM(19);     /* Build message           @01A*/ 05735000
+*       ANS MSG(ERRMSG) NORESCAN;     /* Issue message           @01A*/ 05736000
+*       ANS (COMMENT(ERRMSG)) COL(MACLMAR);     /* Comment       @01A*/ 05736100
+*       EHARC = 8;                    /* Set return code to 8    @01A*/ 05736200
+*     END;                            /* End invalid TIMEVAL     @01A*/ 05736300
+*     IF LINKAGE ^= '' & LINKAGE(1) ^= 'BRANCH' THEN /*          @01A*/ 05736400
+*     DO;                             /* Put out message         @01A*/ 05736500
+*       ERRMSG = MPREFIX!!EM(20);     /* Build message           @01A*/ 05736600
+*       ANS MSG(ERRMSG) NORESCAN;     /* Issue message           @01A*/ 05736700
+*       ANS (COMMENT(ERRMSG)) COL(MACLMAR);     /* Comment       @01A*/ 05736800
+*       EHARC = 8;                    /* Set return code to 8    @01A*/ 05736900
+*     END;                            /* End invalid LINKAGE     @01A*/ 05737000
+*    END;                             /*                         @L4A*/ 05738000
+*   END;                             /* End TIME_ON_CP specified @01A*/ 05739000
+*   IF OFFLOAD_TIME ^= '' THEN      /* If OFFLOAD_TIME specified @02A*/ 05740000
+*   DO;                               /* OFFLOAD_TIME specified  @02A*/ 05740100
+*     IF OFFLOAD_TIME(1) ^= 'YES' THEN /* Not YES                @02A*/ 05740200
+*     DO;                             /* Put out message         @02A*/ 05740300
+*       ERRMSG = MPREFIX!!EM(21);     /* Build message           @02A*/ 05740400
+*       ANS MSG(ERRMSG) NORESCAN;     /* Issue message           @02A*/ 05740500
+*       ANS (COMMENT(ERRMSG)) COL(MACLMAR);     /* Comment       @02A*/ 05740600
+*       EHARC = 8;                    /* Set return code to 8    @02A*/ 05740700
+*     END;                           /* End invalid OFFLOAD_TIME @02A*/ 05740800
+*    IF ECT(1) ^= 'YES' THEN          /*                         @L4A*/ 05740900
+*    DO;                              /*                         @L4A*/ 05741000
+*     IF STORADR ^= '' ! ECT ^= '' !  /* STORADR or ECT          @02A*/ 05741100
+*       (LINKAGE ^= '' & LINKAGE(1) ^= 'BRANCH')     /*          @02A*/ 05741200
+*        THEN                         /*                         @02A*/ 05741300
+*     DO;                             /* Put out message         @02A*/ 05741400
+*       ERRMSG = MPREFIX!!EM(22);     /* Build message           @L4C*/ 05741500
+*       ANS MSG(ERRMSG) NORESCAN;     /* Issue message           @02A*/ 05741600
+*       ANS (COMMENT(ERRMSG)) COL(MACLMAR);     /* Comment       @02A*/ 05741700
+*       EHARC = 8;                    /* Set return code to 8    @02A*/ 05741800
+*     END;                            /* End invalid TIMEVAL     @02A*/ 05741900
+*    END;                             /*                         @L4A*/ 05742000
+*   END;                           /* End OFFLOAD_TIME specified @02A*/ 05743000
+*   IF OFFLOAD_ON_CP ^= '' THEN    /* If OFFLOAD_ON_CP specified @L4A*/ 05743100
+*   DO;                               /* OFFLOAD_ON_CP specified @L4A*/ 05743200
+*     IF OFFLOAD_ON_CP(1) ^= 'YES' THEN /* Not YES               @L4A*/ 05743300
+*     DO;                             /* Put out message         @L4A*/ 05743400
+*       ERRMSG = MPREFIX!!EM(23);     /* Build message           @L4A*/ 05743500
+*       ANS MSG(ERRMSG) NORESCAN;     /* Issue message           @L4A*/ 05743600
+*       ANS (COMMENT(ERRMSG)) COL(MACLMAR);     /* Comment       @L4A*/ 05743700
+*       EHARC = 8;                    /* Set return code to 8    @L4A*/ 05743800
+*     END;                          /* End invalid OFFLOAD_ON_CP @L4A*/ 05743900
+*     IF (ECT(1) = 'YES' & STORADR = '') !  /*                   @L5C*/ 05744000
+*       (ECT(1) ^= 'YES' & TIME_ON_CP = '') /* Not ECT(YES) w/o         05744100
+*                                         TIMEUSED               @L5C*/ 05744200
+*        THEN                         /*                         @L4A*/ 05744300
+*     DO;                             /* Put out message         @L4A*/ 05744400
+*       ERRMSG = MPREFIX!!EM(24);     /* Build message           @L4A*/ 05744500
+*       ANS MSG(ERRMSG) NORESCAN;     /* Issue message           @L4A*/ 05744600
+*       ANS (COMMENT(ERRMSG)) COL(MACLMAR);     /* Comment       @L4A*/ 05744700
+*       EHARC = 8;                    /* Set return code to 8    @L4A*/ 05744800
+*     END;                            /* End invalid TIMEVAL     @L4A*/ 05744900
+*   END;                          /* End OFFLOAD_ON_CP specified @02A*/ 05745000
+*   IF NUMBER(STORADR) > 1 THEN       /*                             */ 05745100
+*      DO;                            /* Put out message             */ 05745200
+*         ERRMSG = MPREFIX!!EM(4);    /* Build message           @L1A*/ 05745300
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @L1A*/ 05745400
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @L1A*/ 05745500
+*         EHARC = 8;                  /* Set return code to 8        */ 05745600
+*      END;                           /* End no STORADR              */ 05745700
+*   IF ENCLAVE = ''                   /*                         @H1A*/ 05745800
+*    & (TIME_ON_CP = '' ! ECT(1) = 'YES')                     /* @L4C*/ 05745900
+*    & (OFFLOAD_TIME = '' ! ECT(1) = 'YES') THEN              /* @L4C*/ 05746000
+*   IF STORADR = ''! (STORADR(1) = '') THEN                             05747000
+*      DO;                            /* Put out message             */ 05748000
+*         ERRMSG = MPREFIX!!EM(3);    /* Build message           @L1A*/ 05749000
+*         ANS MSG(ERRMSG) NORESCAN;   /* Issue message           @L1A*/ 05750000
+*         ANS (COMMENT(ERRMSG)) COL(MACLMAR);   /* Comment       @L1A*/ 05760000
+*         EHARC = 8;                  /* Set return code to 8        */ 05770000
+*      END;                           /* End no STORADR              */ 05780000
+*   IF EHARC ^= 0 THEN                /* If errors ...           @L1C*/ 05790000
+*      DO;                            /*                         @L1A*/ 05800000
+*         ANS ('@SPACE(1);') NORESCAN COL(MACLMAR); /* Space     @L1A*/ 05810000
+*         ANS (COMMENT(EM(1))) COL(MACLMAR);  /* Issue comment with     05820000
+*                                                semicolon       @L1A*/ 05830000
+*      END;                           /*                         @L1A*/ 05840000
+*   ELSE                              /*                         @L1A*/ 05850000
+*      DO;                            /* Generate expansion          */ 05860000
+*         IF MACLABEL ^= '' THEN      /* Put out the label if coded  */ 05870000
+*            ANS(MACLABEL) COL(MACLMAR);                                05880000
+*/*                                                                  */ 05890000
+*         ANS('DO; ') COL(MACLMAR);   /* Write out DO statement with */ 05900000
+*         ANS(COMMENT(IVDOCMT));      /* invocation as a comment     */ 05910000
+*         ANS('RFY (GPR00F,GPR01F,GPR15P) RSTD;') COL(MACLMAR);         05920000
+*         ANS(COMMENT(' RESTRICT TIMEUSED REGISTERS'));       /* @L3C*/ 05930000
+* IF ENCLAVE = ''                     /* Enclave?                @H1A*/ 05940000
+*  & TIME_ON_CP = ''                  /* TIME_ON_CP              @01A*/ 05950000
+*  & OFFLOAD_TIME = ''                /* OFFLOAD_TIME            @01A*/ 05960000
+*  & OFFLOAD_ON_CP = '' THEN          /* OFFLOAD_ON_CP           @L4A*/ 05970000
+* DO;                                 /* No Enclave/Time_On_CP/         05980000
+*                                        Offload_Time/Offload_On_CP     05990000
+*                                                                @02C*/ 06000000
+* IF ECT(1) ^= '' & ECT(1) ^= 'SYSTEM' THEN /*                   @L3A*/ 06010000
+* DO;                                 /* ECT=YES ! ECT=COND      @L3A*/ 06020000
+*   IF ECT(1) = 'COND' THEN           /* ECT=COND?               @L3A*/ 06030000
+*   DO;                               /* ECT=COND                @L3A*/ 06040000
+*     ANS('IF '                                                         06050000
+*        ) SKIP NORESCAN;             /* Begin "IF"              @L3A*/ 06060000
+*     IF SYSOSREL <= SYSOSREL_ZOSV1R7 THEN  /* V1R8 or later?    @L3A*/ 06070000
+*     DO;                             /* Not V1R8 or later       @L3A*/ 06080000
+*       ANS('CVTH7730 &    '                                            06090000
+*          ) SKIP NORESCAN;           /* Check for V1R8          @L3A*/ 06100000
+*     END;                            /* Not V1R8 or later       @L3A*/ 06110000
+*     ANS('FLCFECT THEN DO;'                                            06120000
+*        ) SKIP NORESCAN;             /* Check for ECT facility  @L3A*/ 06130000
+*   END;                              /* ECT=COND                @L3A*/ 06140000
+*    IF SYSAM64 ^= 'YES' THEN         /*                         @L3A*/ 06150000
+*    ANS('CALL XM@CVT -> CVTECVT -> ECVTECT -> I31ANY;'                 06160000
+*       ) SKIP NORESCAN;                                      /* @L3A*/ 06170000
+*    ELSE                             /*                         @L3A*/ 06180000
+*    ANS('CALL XM@CVT -> CVTECVT -> ECVTECT -> I64ANY;'                 06190000
+*       ) SKIP NORESCAN;                                      /* @L3A*/ 06200000
+*    ANS(STORADR(1) !! ' = G64R00F;'                          /* @L3A*/ 06210000
+*       ) SKIP NORESCAN;                                      /* @L3A*/ 06220000
+*    ANS('  GPR15F = 0;'                                      /* @L3A*/ 06230000
+*       ) SKIP NORESCAN;                                      /* @L3A*/ 06240000
+*   IF ECT(1) = 'COND' THEN           /* ECT=COND?               @L3A*/ 06250000
+*   DO;                               /* ECT=COND                @L3A*/ 06260000
+*     ANS('END;'                                                        06270000
+*        ) SKIP NORESCAN;             /* END ECT exists          @L3A*/ 06280000
+*     ANS('ELSE DO;'                                                    06290000
+*        ) SKIP NORESCAN;             /* ECT does not exist      @L3A*/ 06300000
+*   END;                              /* ECT=COND                @L3A*/ 06310000
+* END;                                /* ECT=YES ! ECT=COND      @L3A*/ 06320000
+* IF ECT(1) ^= 'YES' THEN             /*                         @L3A*/ 06330000
+* DO;                                 /* ECT=SYSTEM ! ECT=COND   @L3A*/ 06340000
+*         IF LINKAGE = '' ! LINKAGE(1) = 'BRANCH' THEN  /*              06350000
+*                                           If Branch entry...   @L1A*/ 06360000
+*            DO;                      /* Set up BASSM linkage    @L1A*/ 06370000
+*         ANS('GPR01P=ADDR('!!STORADR(1)!!');') COL(MACLMAR)            06380000
+*              NORESCAN;                                                06390000
+*         ANS(COMMENT(' AREA FOR RETURN OF TIME VALUE'));               06400000
+*         IF SYSAM64 = 'YES' THEN                                       06410000
+*         DO;                                                           06420000
+*         ANS('GEN'!!' (LLGT  GPR15P,2892(0,0));') COL(MACLMAR);        06430000
+*         ANS(COMMENT(' SVT ADDRESS'));                                 06440000
+*         END;                                                          06450000
+*         ELSE DO;                                                      06460000
+*         ANS('GEN'!!' (L     GPR15P,2892(0,0));') COL(MACLMAR);        06470000
+*         ANS(COMMENT(' SVT ADDRESS'));                                 06480000
+*         END;                                                          06490000
+*         ANS('GEN'!!' (L     GPR15P,136(0,GPR15P));') COL(MACLMAR);    06500000
+*         ANS(COMMENT(' ADDRESS OF SERVICE ROUTINE'));                  06510000
+*         IF SYSASCE ^= 'P' THEN                                        06520000
+*           ANS('GEN (SAC   0);') COL(MACLMAR);              /*  @L3A*/ 06530000
+*         ANS('GEN'!!' (BASSM GPR14P,GPR15P);') COL(MACLMAR);           06540000
+*         ANS(COMMENT(' BRANCH TO THE SERVICE ROUTINE'));               06550000
+*         IF SYSASCE ^= 'P' THEN                                        06560000
+*           ANS('GEN (SAC   512);') COL(MACLMAR);            /*  @L3A*/ 06570000
+*            END;                                            /*  @L1A*/ 06580000
+*         ELSE                        /* Otherwise...            @L1A*/ 06590000
+*            DO;                      /* Set up PC linkage       @L1A*/ 06600000
+*         ANS('RFY GPR14F RSTD;') COL(MACLMAR);               /* @L3A*/ 06610000
+*         ANS('GPR14F=XM@(62);') COL(MACLMAR);                /* @L1A*/ 06620000
+*         ANS(COMMENT(' LX/EX FOR SERVICE ROUTINE'));         /* @L1A*/ 06630000
+*         IF VECTOR ^= '' THEN        /* If VECTOR specified...  @D1A*/ 06640000
+*         IF VECTOR(1) = 'TOD' THEN   /* VECTOR/TOD selected     @D1A*/ 06650000
+*            DO;                      /* Set up function flag    @D1A*/ 06660000
+*            ANS('GPR00F = 2;') COL(MACLMAR);                 /* @D1A*/ 06670000
+*            ANS(COMMENT(' INDICATE VECTOR/TOD TIMING'));     /* @D1A*/ 06680000
+*            END;                                             /* @D1A*/ 06690000
+*         ELSE                        /* VECTOR/MIC selected     @D1A*/ 06700000
+*            DO;                      /* Set up function flag    @D1A*/ 06710000
+*            ANS('GPR00F = 3;') COL(MACLMAR);                 /* @D1A*/ 06720000
+*            ANS(COMMENT(' INDICATE VECTOR/MIC TIMING'));     /* @D1A*/ 06730000
+*            END;                                             /* @D1A*/ 06740000
+*         ELSE                        /* VECTOR not specified    @D1A*/ 06750000
+*         IF CPU = '' ! CPU(1) = 'TOD' THEN /* CPU/TOD selected  @D1A*/ 06760000
+*            DO;                      /* Set up function flag    @D1A*/ 06770000
+*            ANS('GPR00F = 0;') COL(MACLMAR);                 /* @D1A*/ 06780000
+*            ANS(COMMENT(' INDICATE CPU/TOD TIMING'));        /* @D1A*/ 06790000
+*            END;                                             /* @D1A*/ 06800000
+*         ELSE                        /* CPU/MIC selected        @D1A*/ 06810000
+*            DO;                      /* Set up function flag    @D1A*/ 06820000
+*            ANS('GPR00F = 1;') COL(MACLMAR);                 /* @D1A*/ 06830000
+*            ANS(COMMENT(' INDICATE CPU/MIC TIMING'));        /* @D1A*/ 06840000
+*            END;                                             /* @D1A*/ 06850000
+*         ANS('GEN'!!' (PC    0(GPR14F));') COL(MACLMAR);     /* @L1A*/ 06860000
+*         ANS('RFY GPR14F UNRSTD;') COL(MACLMAR);             /* @L3A*/ 06870000
+*         ANS(COMMENT(' PC TO THE SERVICE ROUTINE'));         /* @L1A*/ 06880000
+*         ANS('IF GPR15F = 0 THEN') COL(MACLMAR);             /* @L1A*/ 06890000
+*         ANS('STM(GPR00F,GPR01F,'!!STORADR(1)!!');') COL(MACLMAR+2)    06900000
+*              NORESCAN;                                      /* @L1A*/ 06910000
+*         ANS(COMMENT(' STORE THE TIMEUSED VALUE'));          /* @L1A*/ 06920000
+*            END;                                            /*  @L1A*/ 06930000
+*   IF ECT(1) = 'COND' THEN           /* ECT=COND?               @L3A*/ 06940000
+*   DO;                               /* ECT=COND                @L3A*/ 06950000
+*     ANS('END;'                                                        06960000
+*        ) SKIP NORESCAN;             /* ECT does not exist      @L3A*/ 06970000
+*   END;                              /* ECT=COND                @L3A*/ 06980000
+* END;                                /* ECT=SYSTEM ! ECT=COND   @L3A*/ 06990000
+* END;                                /* No Enclave/Time_On_CP/         07000000
+*                                        Offload_Time/Offload_On_CP     07010000
+*                                                                @02C*/ 07011000
+* ELSE DO;                            /* Enclave/Time_On_CP/            07012000
+*                                        Offload_Time/Offload_On_CP     07013000
+*                                                                @02C*/ 07014000
+*   IF ENCLAVE ^= '' THEN             /*                         @01A*/ 07015000
+*   DO;                               /*                         @01A*/ 07016000
+*     IF SYSOSREL <= SYSOSREL_ZOSV1R7 THEN  /* V1R8 or later?    @H1A*/ 07017000
+*     DO;                             /* Not V1R8 or later       @H1A*/ 07018000
+*        ANS('GPR15P = 12;'                                             07019000
+*           ) SKIP NORESCAN;          /*                         @H1A*/ 07020000
+*        ANS('IF CVTSUP THEN DO;'                                       07030000
+*           ) SKIP NORESCAN;          /*                         @H1A*/ 07040000
+*     END;                            /* Not V1R8 or later       @H1A*/ 07050000
+*     ANS('GPR01F = 0;'                                                 07060000
+*        ) SKIP NORESCAN;             /* Flag word indicating           07070000
+*                                        ENCLAVE=SUP             @H1A*/ 07080000
+*     ANS('GPR15P = XM@CVT -> CVTECVT -> ECVTTENC;'                     07090000
+*        ) SKIP NORESCAN;                                     /* @H1A*/ 07100000
+*     ANS('RFY G64R02F RSTD;') COL(MACLMAR);                  /* @H1A*/ 07110000
+*     ANS('GEN ENV (PRIMARY) SETS(G64R02F,GPR00F,GPR01F)'               07120000
+*        ) SKIP NORESCAN;                                     /* @H1A*/ 07130000
+*     ANS('(BASSM 14,15);'                                              07140000
+*        ) SKIP NORESCAN;                                     /* @H1A*/ 07150000
+*         ANS('RFY G64R02F UNRSTD;') COL(MACLMAR);            /* @H1A*/ 07160000
+*     IF SYSOSREL <= SYSOSREL_ZOSV1R7 THEN  /* V1R8 or later?    @H1A*/ 07170000
+*     DO;                             /* Not V1R8 or later       @H1A*/ 07180000
+*     ANS('END;'                                                        07190000
+*        ) SKIP NORESCAN;             /*                         @H1A*/ 07200000
+*     END;                            /* Not V1R8 or later       @H1A*/ 07210000
+*   END;                              /*                         @01A*/ 07211000
+*  IF ECT(1) ^= 'YES' THEN            /* ECT(YES)?               @L4A*/ 07211100
+*  DO;                                /* Not ECT(YES)            @L4A*/ 07211200
+*   IF TIME_ON_CP ^= '' THEN          /*                         @01A*/ 07211300
+*   DO;                               /*                         @01A*/ 07211400
+*     IF OFFLOAD_ON_CP = '' THEN                              /* @L5A*/ 07211500
+*     DO;                             /* Not OFFLOAD_ON_CP       @L5A*/ 07211600
+*    IF SYSOSREL < SYSOSREL_ZOSV1R10 THEN   /* V1R10 or later?   @L4A*/ 07211700
+*    DO;                              /* Not V1R10 or later      @L4A*/ 07211800
+*     ANS('GPR15P = 12;'                                                07211900
+*        ) SKIP NORESCAN;             /*                         @01A*/ 07212000
+*     ANS('IF CVTTOCP THEN DO;'                                         07212100
+*           ) SKIP NORESCAN;          /*                         @01A*/ 07212200
+*    END;                             /* Not V1R10 or later      @L4A*/ 07212300
+*     ANS('GPR01F = 1;'                                                 07212400
+*        ) SKIP NORESCAN;             /* Flag word indicating           07212500
+*                                        TIME_ON_CP=YES          @01A*/ 07212600
+*     ANS('GPR15P = XM@CVT -> CVTECVT -> ECVTTENC;'                     07212700
+*        ) SKIP NORESCAN;                                     /* @01A*/ 07212800
+*     ANS('GEN ENV (PRIMARY) SETS(GPR00F,GPR01F)'                       07212900
+*        ) SKIP NORESCAN;                                     /* @01A*/ 07213000
+*     ANS('(BASSM 14,15);'                                              07214000
+*        ) SKIP NORESCAN;                                     /* @01A*/ 07214100
+*    IF SYSOSREL < SYSOSREL_ZOSV1R10 THEN   /* V1R10 or later?   @L4A*/ 07214200
+*    DO;                              /* Not V1R10 or later      @L4A*/ 07214300
+*     ANS('END;'                                                        07214400
+*        ) SKIP NORESCAN;             /*                         @01A*/ 07214500
+*    END;                             /* Not V1R10 or later      @L4A*/ 07214600
+*     END;                            /* Not OFFLOAD_ON_CP       @L5A*/ 07214700
+*     ELSE DO;                        /* OFFLOAD_ON_CP           @L5A*/ 07214800
+*    IF SYSOSREL <=SYSOSREL_ZOSV1R13 THEN   /* Later than V1R13? @L5A*/ 07214900
+*    DO;                              /* Not later than V1R13    @L5A*/ 07215000
+*     ANS('GPR15P = 12;'                                                07215100
+*        ) SKIP NORESCAN;             /*                         @L5A*/ 07215200
+*     ANS('IF CVTOOCP THEN DO;'                                         07215300
+*           ) SKIP NORESCAN;          /*                         @L5A*/ 07215400
+*    END;                             /* Not later than V1R13    @L5A*/ 07215500
+*     ANS('GPR01F = 4*256+1;'                                           07215600
+*        ) SKIP NORESCAN;             /* TIME_ON_CP=YES with            07215700
+*                                        OFFLOAD_ON_CP=YES       @L5A*/ 07215800
+*     ANS('GPR15P = XM@CVT -> CVTECVT -> ECVTTENC;'                     07215900
+*        ) SKIP NORESCAN;                                     /* @L5P*/ 07216000
+*     ANS('RFY G64R02F RSTD;') COL(MACLMAR);                  /* @L5A*/ 07216100
+*     ANS('GEN ENV (PRIMARY) SETS(GPR00F,GPR01F,G64R02F)'               07216200
+*        ) SKIP NORESCAN;                                     /* @L5P*/ 07216300
+*     ANS('(BASSM 14,15);'                                              07216400
+*        ) SKIP NORESCAN;                                     /* @L5P*/ 07216500
+*     ANS('RFY G64R02F UNRSTD;') COL(MACLMAR);                /* @L5A*/ 07216600
+*    IF SYSOSREL <=SYSOSREL_ZOSV1R13 THEN  /* Later than V1R13?  @L5A*/ 07216700
+*    DO;                              /* Not later than V1R13    @L4A*/ 07216800
+*     ANS('END;'                                                        07216900
+*        ) SKIP NORESCAN;             /*                         @L5A*/ 07217000
+*    END;                             /* Not later than V1R13    @L5A*/ 07218000
+*     END;                            /* OFFLOAD_ON_CP           @L5A*/ 07218100
+*   END;                              /*                         @01A*/ 07218200
+*   IF OFFLOAD_TIME ^= '' THEN        /*                         @02A*/ 07218300
+*   DO;                               /*                         @02A*/ 07218400
+*     ANS('GPR01F = 2;'                                                 07218500
+*        ) SKIP NORESCAN;             /* Flag word indicating           07218600
+*                                        OFFLOAD_TIME=YES        @02A*/ 07218700
+*     ANS('GPR15P = XM@CVT -> CVTECVT -> ECVTTENC;'                     07218800
+*        ) SKIP NORESCAN;                                     /* @02A*/ 07218900
+*     ANS('GEN ENV (PRIMARY) SETS(GPR00F,GPR01F)'                       07219000
+*        ) SKIP NORESCAN;                                     /* @02A*/ 07219100
+*     ANS('(BASSM 14,15);'                                              07219200
+*        ) SKIP NORESCAN;                                     /* @02A*/ 07219300
+*   END;                              /*                         @02A*/ 07219400
+*  END;                               /* Not ECT(YES)            @L4A*/ 07219500
+*  ELSE DO;                           /* ECT(YES)                @L4A*/ 07219600
+*    DCL REQCODE FIXED;               /*                         @L4A*/ 07219700
+*    REQCODE = 0;                     /*                         @L4A*/ 07219800
+*    IF TIME_ON_CP ^= '' THEN         /*                         @L4A*/ 07219900
+*      REQCODE = REQCODE + 1;         /*                         @L4A*/ 07220000
+*    IF OFFLOAD_TIME ^= '' THEN       /*                         @L4A*/ 07220100
+*      REQCODE = REQCODE + 2;         /*                         @L4A*/ 07220200
+*    IF OFFLOAD_ON_CP ^= '' THEN      /*                         @L4A*/ 07220300
+*      REQCODE = REQCODE + 4;         /*                         @L4A*/ 07220400
+*    IF SYSOSREL <= SYSOSREL_ZOSV1R13 THEN /* After V1R13?       @L4A*/ 07220500
+*    DO;                              /* V1R13 or before         @L4A*/ 07220600
+*      ANS('GPR15P = 12;'                                               07220700
+*         ) SKIP NORESCAN;            /*                         @L4A*/ 07220800
+*      ANS('IF CVTECT1 THEN DO;'                                        07220900
+*            ) SKIP NORESCAN;         /*                         @L4A*/ 07221000
+*    END;                             /* V1R13 or before         @L4A*/ 07221100
+*    ANS('GPR00P=ADDR('!!STORADR(1)!!');') COL(MACLMAR)                 07221200
+*         NORESCAN;                                           /* @L4A*/ 07221300
+*    ANS('GPR01F = ' !! CHAR(REQCODE) !! '*256+3;'                      07221400
+*       ) SKIP NORESCAN;              /* Flag word               @L4A*/ 07221500
+*    ANS('GPR15P = XM@CVT -> CVTECVT -> ECVTTENC;'                      07221600
+*       ) SKIP NORESCAN;                                      /* @L4A*/ 07221700
+*    ANS('GEN ENV (PRIMARY) SETS(GPR00F,GPR01F)'                        07221800
+*       ) SKIP NORESCAN;                                      /* @L4A*/ 07221900
+*    ANS('(BASSM 14,15);'                                               07222000
+*       ) SKIP NORESCAN;                                      /* @L4A*/ 07222100
+*    IF SYSOSREL <= SYSOSREL_ZOSV1R13 THEN /* After V1R13?       @L4A*/ 07222200
+*    DO;                              /* V1R13 or before         @L4A*/ 07222300
+*      ANS('END;'                                                       07222400
+*         ) SKIP NORESCAN;            /*                         @L4A*/ 07222500
+*    END;                             /* V1R13 or before         @L4A*/ 07222600
+*  END;                               /* ECT(YES)                @L4A*/ 07222700
+* END;                                /* Enclave/Time_On_CP/            07222800
+*                                        Offload_Time/Offload_On_CP     07222900
+*                                                                @L4C*/ 07223000
+*         ANS('RFY (GPR00F,GPR01F,GPR15P) UNRSTD;')                     07223100
+*             COL(MACLMAR);                                  /*  @L3C*/ 07223200
+*         ANS(COMMENT(' UNRESTRICT TIMEUSED REGISTERS'));               07223300
+*         ANS('END;') COL(MACLMAR);   /* Write out END statement     */ 07223400
+*         ANS(COMMENT(IVDOCMT));      /* with comment                */ 07223500
+*      END;                           /* End STORADR specified       */ 07223600
+*/*                                                                  */ 07223700
+*/*  Ensure cross memory variables are defined                       */ 07223800
+*/*                                                                  */ 07223900
+*   IF INDEX(EHAMAPS,'XM@')=0 THEN    /* If XM services were not     */ 07224000
+*      EHAMAPS=EHAMAPS!!'XM@,';       /* previously defined, then    */ 07225000
+*                                     /* do so                   @L1A*/ 07226000
+*/*  Declare registers if they have not been declared already        */ 07227000
+*/*                                                                  */ 07228000
+*   IF INDEX(EHAREGS,'00F')=0 THEN    /* If register 0 is not        */ 07229000
+*      EHAREGS=EHAREGS!!'00F';        /* defined, then do so     @L1C*/ 07230000
+*   IF INDEX(EHAREGS,'00P')=0 THEN    /* If register 0 is not    @L4A*/ 07240000
+*      EHAREGS=EHAREGS!!'00P';        /* defined, then do so     @L4A*/ 07250000
+*   IF INDEX(EHAREGS,'01F')=0 THEN    /* If register 1 is not        */ 07260000
+*      EHAREGS=EHAREGS!!'01F';        /* defined, then do so     @L1C*/ 07270000
+*   IF INDEX(EHAREGS,'01P')=0 THEN    /* IF REGISTER 1 IS NOT        */ 07280000
+*      EHAREGS=EHAREGS!!'01P';        /* DEFINED, THEN DO SO     @L1C*/ 07290000
+*   IF INDEX(EHAREGS,'14F')=0 THEN    /* If register 14 is not       */ 07300000
+*      EHAREGS=EHAREGS!!'14F';        /* defined, then do so     @L1A*/ 07310000
+*   IF INDEX(EHAREGS,'14P')=0 THEN    /* If register 14 is not       */ 07320000
+*      EHAREGS=EHAREGS!!'14P';        /* defined, then do so         */ 07330000
+*   IF INDEX(EHAREGS,'15P')=0 THEN    /* If register 15 is not       */ 07340000
+*      EHAREGS=EHAREGS!!'15P';        /* defined, then do so         */ 07350000
+*   IF INDEX(EHAREGS,'15F')=0 THEN    /* If register 15 is not       */ 07360000
+*      EHAREGS=EHAREGS!!'15F';        /* defined, then do so         */ 07370000
+*   IF ECT ^= '' & ECT(1) ^= 'SYSTEM' THEN /* Might use ECT?     @L3A*/ 07380000
+*   DO;                               /* Might use ECT           @L3A*/ 07390000
+*     IF INDEX(EHAREGS64,'00F') = 0 THEN                      /* @L3A*/ 07400000
+*       EHAREGS64 = EHAREGS64 !! '00F';                       /* @L3A*/ 07410000
+*   END;                              /* Might use ECT           @L3A*/ 07420000
+*   IF ENCLAVE ^= '' !                /* Enclave                 @H1A*/ 07430000
+*      TIME_ON_CP ^= '' !             /* TIME_ON_CP              @02C*/ 07440000
+*      OFFLOAD_TIME ^= '' !           /* OFFLOAD_TIME            @02A*/ 07450000
+*      OFFLOAD_ON_CP ^= '' THEN       /* OFFLOAD_ON_CP           @L5C*/ 07460000
+*   DO;                               /* Enclave/Time_On_SUP     @01C*/ 07470000
+*     IF INDEX(EHAREGS64,'00F') = 0 THEN                      /* @H1A*/ 07480000
+*       EHAREGS64 = EHAREGS64 !! '00F';                       /* @H1A*/ 07490000
+*     IF INDEX(EHAREGS64,'01F') = 0 THEN                      /* @H1A*/ 07500000
+*       EHAREGS64 = EHAREGS64 !! '01F';                       /* @H1A*/ 07510000
+*     IF INDEX(EHAREGS64,'02F') = 0 THEN                      /* @H1A*/ 07520000
+*       EHAREGS64 = EHAREGS64 !! '02F';                       /* @H1A*/ 07530000
+*   END;                              /* Enclave/Time_On_SUP     @01C*/ 07540000
+*   RETURN CODE(EHARC);               /* Return to caller            */ 07550000
+*                                     /*                             */ 07560000
+*%END TIMEUSED;                                                         07570000

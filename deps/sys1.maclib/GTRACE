@@ -1,0 +1,367 @@
+*/* Start of Specifications for GTRACE ******************************** 00200000
+*                                                                       00400000
+* $MAC(GTRACE) COMP(SC111) PROD(HBB7790):                               00600002
+*                                                                       00800000
+* PROPRIETARY STATEMENT=                                                01000000
+*                                                                       01200000
+*   LICENSED MATERIALS - PROPERTY OF IBM                                01400000
+*   5650-ZOS COPYRIGHT IBM CORP. 1981, 2013                             01600002
+*                                                                       01800000
+*   STATUS= HBB7790                                                     02000002
+*                                                                       02200000
+* EXTERNAL CLASSIFICATION: GUPI                                         02400000
+* END OF EXTERNAL CLASSIFICATION                                        02600000
+*                                                                       02800000
+* PURPOSE =                                                             03000000
+*    (1) GENERATE MC TO DO USER TRACE                                   03200000
+*    (2) TEST IF PARTICULAR USER EID WAS SPECIFIED WHEN                 03400000
+*        GTF WAS STARTED                                                03600000
+*          RETURN CODE: R15 = 0 -- GTF NOT ACTIVE FOR EID               03800000
+*                       R15 = 4 -- GTF ACTIVE FOR EID                   04000000
+*          REGISTERS DESTROYED  -- R1,R14,R15                           04200000
+*    (3) RETURN THE MAXIMUM LENGTH OF DATA ACCEPTED                     04400000
+*          RETURN CODE: R15 = 0 -- ALWAYS                               04600000
+*          REGISTERS DESTROYED  -- R15                                  04800000
+*                                                                       04801002
+* CHANGE ACTIVITY =                                                     05200000
+*    ZA50668 PAGIN=YES ALLOWS AN ATTEMPT TO TRACE BEFORE                05400000
+*            REFERENCING THE DATA AREA ALLOWING PAGE FAULTS             05600000
+*            IN DISABLED CODE.                                          05800000
+*                                                                       06000000
+*    ZA52286 USE OF THE LIST AND EXECUTE FORMS OF THE GTRACE            06200000
+*            MACRO DOES NOT ALLOW THE CREATION OF A REENTRANT           06400000
+*            LIST.                                                      06600000
+*                                                                       06880002
+* FLAG REASON   RELEASE  DATE  ORIGIN  DESCRIPTION                      07000000
+*                                                                       07200000
+* $L1= GTFHM    HBB4410 890206 PD881V: GTF HIGH-MIPS SUPPORT.           07400000
+* $P1= PEO1844  HBB4410 890626 PD881V: ACCEPT LNG > 4095.               07600000
+* $P2= PWK0193  HBB6608 980612 PDE1: Add DISABLED keyword support.      07800000
+*      DISABLED=YES indicates that GTRACE TEST=YES processing may       08000000
+*      assume disablement and may, consequently, do a better job of     08200000
+*      screening the production of unwanted user trace records than     08400000
+*      the default, DISABLED=NO, processing does.  R15 = 4 may be       08600000
+*      returned to DISABLED=NO callers in some circumstances when       08800000
+*      GTF is not active for the EID passed.                            09000000
+*    = 64BIT    HBB7703 990206 PD881V: Roll PWK0193 into HBB7703        09200000
+* $L2= V64BIT   HBB7705 001010 PD00VD: Support for 64bit invocation     09400000
+* $P3= PX00859  HBB7705 001109 PD00VB: Change for pagein invocation     09600000
+* $01= OW52877  HBB6606 020108 PDE1: Touch parameter list when PAGEIN   09800000
+*      processing is requested                                          10000000
+* $02= OW53308  HBB7705 020205 PDE1: Restore support for absense of     10200000
+*      DATA keyword on execute form                                     10400000
+* $L3= JUMPIFY  HBB7740 060731 PDXB: Jumpify                            10600000
+*    = ME25779  HBB7790 130219 PDH6: The function of the DISABLED       10800002
+*                 keyword on the TEST=YES option is retained            10801003
+*                 for downward compatibilty.  However, when executed    10802002
+*                 on a z/OS 2.1 (HBB7790) or a higher release,          10803002
+*                 GTRACE TEST always provides the correct return code,  10804002
+*                 regardless of the specification of the DISABLED       10805002
+*                 keyword or the disablement of the caller.             10806002
+*                                                                       10810001
+**** End of Specifications for GTRACE ********************************* 11000000
+         MACRO                                                          11200000
+&NAME    GTRACE &MF=,&ID=,&DATA=,&DATA64=,&LNG=,&FID=00,&PAGEIN=NO,    X11400000
+               &DISABLED=NO,           YES or NO for TEST=YES      @L2CX11600000
+               &TEST=NO,&QUERY,&MAXLNG=                                 11800000
+         GBLB  &IHLMGT                                                  12000000
+         LCLC  &R                                                       12200000
+         LCLC  &MAXLREG                                            @L1C 12400000
+         GBLC  &SYSAM64                                            @L2A 12600000
+         SYSSTATE TEST                                             @L2A 12800000
+.*A000000-999999                                                 Y01014 13000000
+.*C074333,A073600-074166                                         Y02014 13200000
+.*D060000                                                      @ZA06040 13400000
+.* TEST TO SEE IF THE MAPPING IS ALREADY EXPANDED                       13600000
+         AIF   (&IHLMGT).XPNDED                                         13800000
+         IHLMGTRC                                                       14000000
+.XPNDED  ANOP                                                           14200000
+         CNOP  0,4                                                      14400000
+         AIF     ('&NAME' EQ '').GO                                     14600000
+&NAME    EQU   *                                                        14800000
+.*                                                                      15000000
+.* IS THIS THE STANDARD FORM                                            15200000
+.*                                                                      15400000
+.GO      AIF   ('&DATA' NE '' AND '&DATA64' NE '').DATAERR         @P3A 15600000
+         AIF   ('&MF' EQ '').STAND                                      15800000
+.*                                                                      16000000
+.* IF NOT THEN IS IT THE LIST FORM                                      16200000
+.*                                                                      16400000
+         AIF   ('&MF' EQ 'L').LIST                                      16600000
+.*                                                                      16800000
+.* IF NOT THEN IS IT THE EXECUTE FORM                                   17000000
+.*                                                                      17200000
+         AIF   ('&MF(1)' EQ 'E').EXEC                                   17400000
+.*                                                                      17600000
+.* IF NOT THEN STOP EVERYTHING                                          17800000
+.*                                                                      18000000
+         MNOTE 8,'AHL040  NOT A LEGAL FORM OF THE MACRO. CHECK THE MF=' 18200000
+.******* NO CODE GENERATED SO THAT PGM MAY EXECUTE.                     18400000
+         MEXIT                                                          18600000
+.*                                                                      18800000
+.*                                                                      19000000
+.* THE STANDARD FORM                                                    19200000
+.*                                                                      19400000
+.STAND   ANOP                                                           19600000
+         AIF   ('&TEST' EQ 'YES').DOTEST                       @G860PXB 19800000
+         AIF   ('&QUERY' NE '').DOQUERY                            @L1A 20000000
+.*                                                                      20200000
+.* FIRST SET UP THE PARMLIST & HAVE REG 1 POINT TO IT                   20400000
+.*                                                                      20600000
+         BRAS  1,*+20      PUT ADD OF PARMLIST IN REG              @L3C 20800000
+         AIF   ('&LNG' NE '').SLNN                                      21000000
+         MNOTE 12,'AHL041  LNG= KEYWORD MISSING.'                       21200000
+         MEXIT                                                          21400000
+.SLNN    AIF   ('&LNG'(1,1) EQ '(').SREGL                               21600000
+         DC    AL2(&LNG)   LENGTH                                       21800000
+         AGO   .SNUML                                                   22000000
+.SREGL   ANOP                                                           22200000
+         DC    AL2(0)     LENGTH                                        22400000
+.SNUML   AIF   ('&FID'(1,1) EQ '(').SREGF                               22600000
+         DC    AL2(&FID)   FID CODE                                     22800000
+         AGO   .SNUMF                                                   23000000
+.SREGF   ANOP                                                           23200000
+         DC    AL2(0)  FID                                              23400000
+.SNUMF   AIF   ('&DATA' NE '').DATAOK                                   23600000
+.SNUMF64 AIF   ('&DATA64' NE '').DATAOK                            @L2A 23800000
+         MNOTE 12,'AHL044  DATA OR DATA64= KEYWORD MISSING.'       @L2A 24000000
+         MEXIT                                                          24200000
+.DATAOK  ANOP                                                           24400000
+         DC    AL4(0)   DATA AREA ADDRESS                               24600000
+         DC    X'0000000000000000'  DATA64 AREA ADDRESS    @P3C         24800000
+.*                                                                      25000000
+.* STORE INTO PARMLIST ANY PARAMETERS IN REGS                           25200000
+.*                                                                      25400000
+.LENG    ANOP                                                      @L2A 25600000
+         AIF   ('&LNG'(1,1) NE '(').SLNR                                25800000
+&R       SETC  '&LNG'(2,K'&LNG-2)                                       26000000
+         STH   &R,0(1)   PUT THE LENGTH IN PARMLIST                     26200000
+.SLNR    AIF   ('&FID'(1,1) NE '(').SFNR                                26400000
+&R       SETC  '&FID'(2,K'&FID-2)                                       26600000
+         STH   &R,2(1)   PUT THE FID IN PARMLIST                        26800000
+.*                                                                      27000000
+.* GO TO THE EXECUTE FORM FOR THE DATA & ID OPERANDS                    27200000
+.*                                                                      27400000
+.SFNR    AGO   .SKIP6                                                   27600000
+.*                                                             @G860PXB 27800000
+.* PROCESS THE TEST OPTION                                     @G860PXB 28000000
+.*                                                             @G860PXB 28200000
+.DOTEST  ANOP                                                  @G860PXB 28400000
+         AIF   ('&ID' EQ '').NOEID IF NO EID, EXIT             @G860PXB 28600000
+         SLR   15,15              INITIALIZE RETURN CODE       @G860PXB 28800000
+         L     1,16(0,0)          GET CVT ADDRESS              @G860PXB 29000000
+         TM    X'EC'(1),X'84'     TEST FOR GTF USER RECORD TRACING @P2C 29200000
+         JNO   *+18               NOT ACTIVE, LEAVE                @L3C 29400000
+         ICM   15,7,X'ED'(1)      GET MCHEAD ADDRESS               @L1C 29600000
+         AIF   ('&DISABLED' EQ 'YES').FASTER DISABLED CALLER       @P2A 29800000
+         L     15,X'38'(,15)      GET TEST ROUTINE ADDRESS         @L1C 30000000
+         AGO   .GETEID                                             @P2A 30200000
+.FASTER  ANOP  ,                  DISABLED CALLER                  @02A 30400000
+         L     15,X'40'(,15)      GET TEST ROUTINE ADDRESS         @P2A 30600000
+.GETEID  LA    1,&ID              GET EID                          @P2C 30800000
+         BASSM 14,15              DETERMINE IF EID WAS GIVEN   @G860PXB 31000000
+         MEXIT                                                 @G860PXB 31200000
+.*                                                                 @L1A 31400000
+.* PROCESS THE QUERY OPTION                                        @L1A 31600000
+.*                                                                 @L1A 31800000
+.DOQUERY ANOP                                                      @L1A 32000000
+         AIF   ('&MAXLNG' NE '').MAXL     TEST FOR MAXLNG= PRESENT @L1A 32200000
+         MNOTE 12,'QUERY WAS SPECIFIED BUT MAXLNG= IS MISSING'     @L1A 32400000
+         MEXIT                                                     @L1A 32600000
+.MAXL    ANOP                             MAXLNG= IS PRESENT       @L1A 32800000
+         L     15,16(0,0)                 GET CVT ADDRESS          @L1A 33000000
+.*                              DEPENDS ON CVT BEING BELOW 16M     @L1A 33200000
+         ICM   15,7,X'ED'(15)             GET MCHEAD ADDRESS       @L1A 33400000
+.*                              IF SP4.1.0 OR LATER, THIS MCHEAD   @L1A 33600000
+.*                              FIELD CONTAINS THE MAXIMUM LENGTH  @L1A 33800000
+.*                              FOR GTRACE. IF PRE-SP4.1.0, IT     @L1A 34000000
+.*                              POINTS TO AHLREADR.  TELL THE      @L1A 34200000
+.*                              DIFFERENCE BY COMPARING TO 1M,     @L1A 34400000
+.*                              WHICH IS LARGER THAN ANY POSSIBLE  @L1A 34600000
+.*                              MAXIMUM LENGTH BUT SMALLER THAN    @L1A 34800000
+.*                              ANY POSSIBLE ADDRESS OF AHLREADR.  @L1A 35000000
+         L     15,X'2C'(,15)              GET MAX LENGTH OR OTHER  @L1A 35200000
+         CLM   15,15,*+12                 TEST FOR VALID LENGTH    @L1A 35400000
+         JH    *+12                       CONVERT TO LENGTH        @L3C 35600000
+         J     *+12                       SKIP PAST DATA           @L3C 35800000
+         DC    XL4'00100000'              GREATEST POSSIBLE LENGTH @L1A 36000000
+         LA    15,256                     GET OLD MAX LENGTH       @L1A 36200000
+         AIF   ('&MAXLNG'(1,1) EQ '(').MAXLREG TEST FOR REGISTER   @L1A 36400000
+         ST    15,&MAXLNG                 STORE INTO FULLWORD      @L1A 36600000
+         AGO   .MAXLSTD                                            @L1A 36800000
+.MAXLREG ANOP                             MAXLNG= IS A REGISTER    @L1A 37000000
+&MAXLREG SETC  '&MAXLNG'(2,K'&MAXLNG-2)   GET THE REGISTER         @L1A 37200000
+         LR    &MAXLREG,15                STORE INTO REGISTER      @L1A 37400000
+.MAXLSTD ANOP                                                      @L1A 37600000
+         SR    15,15                      RETURN CODE IS 0         @L1A 37800000
+         MEXIT                                                     @L1A 38000000
+.*                                                                      38200000
+.*                                                                      38400000
+.* THE LIST FORM                                                        38600000
+.*                                                                      38800000
+.LIST    ANOP                                                           39000000
+.***** Data in list form requires absolute value, no variable allowed   39200000
+.FIDOKS  AIF   ('&LNG' EQ '').LLNGN                                     39400000
+         DC    AL2(&LNG)   LENGTH                                       39600000
+         AGO   .SKIP3                                                   39800000
+.LLNGN   ANOP                                                           40000000
+         DC    AL2(0)  LENGTH                                           40200000
+.SKIP3   ANOP                                                           40400000
+         DC    AL2(&FID)   FID CODE                                     40600000
+         AIF   ('&DATA' EQ '').LDATAN                                   40800000
+         DC    AL4(&DATA)   DATA ADDRESS                                41000000
+         DC    X'0000000000000000'  DATA64 AREA ADDRESS    @P3C         41200000
+         MEXIT                                                          41400000
+.LDATAN  ANOP                                                           41600000
+         AIF   ('&DATA64' EQ '').LDAT64                            @L2A 41800000
+         DC    AL4(0)         DATA ADDRESS                              42000000
+         DC    ADL8(&DATA64)  DATA64 ADDRESS                       @L2A 42200000
+         MEXIT                                                          42400000
+.LDAT64  DC    AL4(0)       DATA ADDRESS                           @L2A 42600000
+         DC    ADL8(0)      DATA64 AREA ADDRESS                    @P3C 42800000
+         MEXIT                                                          43000000
+.*                                                                      43200000
+.*                                                                      43400000
+.* THE EXECUTE FORM                                                     43600000
+.*                                                                      43800000
+.* DETERMINE HOW THE PARAMETER LIST IN THE MF= OPERAND IS INDICATED     44000000
+.*                                                                      44200000
+.EXEC    AIF   ('&MF(2)' EQ '(1)').EREGM                                44400000
+         AIF   ('&MF(2)' NE '').EMFOK                                   44600000
+         MNOTE 12,'AHL045  MF=(E, PARAMETER SPECIFICATION MISSING.'     44800000
+         MEXIT                                                          45000000
+.EMFOK   ANOP                                                           45200000
+         AIF   ('&MF(2)'(1,1) EQ '(').EMFR                              45400000
+         LA    1,&MF(2)   PUT PARMLIST ADDRESS IN REG(1)                45600000
+         AGO   .EREGM                                                   45800000
+.EMFR    ANOP                                                           46000000
+         LA    1,0&MF(2)                                                46200000
+.*                                                                      46400000
+.* IS THE LNG SPECIFIED                                                 46600000
+.*                                                                      46800000
+.EREGM   AIF   ('&LNG' EQ '').ENULL                                     47000000
+         AIF   ('&LNG'(1,1) EQ '(').EREGL                               47200000
+         J     *+6                                                 @L3C 47400000
+         DC    AL2(&LNG)                                           @P1C 47600000
+         MVC   0(2,1),*-2 STORE THE LENGTH INTO THE PARMLIST       @P1C 47800000
+         AGO   .ENULL                                                   48000000
+.EREGL   ANOP                                                           48200000
+&R       SETC  '&LNG'(2,K'&LNG-2)                                       48400000
+         STH   &R,0(1)   STORE LNG INTO PARMLIST                        48600000
+.*                                                                      48800000
+.* HOW IS THE FID SPECIFIED                                             49000000
+.*                                                                      49200000
+.ENULL   AIF   ('&MF(1)'(1,2) NE 'E').ENULL1                   @ZA52286 49400000
+         AIF   ('&FID'(1,2) NE '00').ENULL2                    @ZA52286 49600000
+*        FID IS DEFAULTED FROM REMOTE LIST                     @ZA52286 49800000
+         AGO   .SKIP6                                          @ZA52286 50000000
+.ENULL2  ANOP                                                  @ZA52286 50200000
+.ENULL1  AIF   ('&FID'(1,1) EQ '(').EREGF                      @ZA52286 50400000
+         LA    15,&FID                                                  50600000
+         STH   15,2(1)   STORE THE FID INTO THE PARMLIST                50800000
+         AGO   .SKIP6                                                   51000000
+.EREGF   ANOP                                                           51200000
+&R       SETC  '&FID'(2,K'&FID-2)                                       51400000
+         STH   &R,2(1)   STORE FID INTO PARMLIST                        51600000
+.*                                                                      51800000
+.* IS THE DATA ADDRESS SPECIFIED                                        52000000
+.*                                                                      52200000
+.SKIP6   AIF   ('&DATA' EQ '').DATA64S                             @L2C 52400000
+.DATASET AIF   ('&DATA'(1,1) EQ '(').EREGD                              52600000
+         LA    15,&DATA                                                 52800000
+         ST    15,4(1)   STORE DATA ADDRESS INTO PARMLIST               53000000
+         AGO   .ENULD                                                   53200000
+.EREGD   ANOP                                                           53400000
+&R       SETC  '&DATA'(2,K'&DATA-2)                                     53600000
+         ST    &R,4(1)   STORE DATA ADDRESS INTO PARMLIST               53800000
+         AGO   .ENULD                                                   54000000
+.DATA64S AIF   ('&DATA64' EQ '').ENULD                             @P3A 54200000
+         AIF   ('&SYSAM64' EQ 'YES').AMD64                         @L2A 54400000
+         MNOTE 12,'AHL043 DATA64 not allowed.'                     @L2A 54600000
+         MEXIT                                                     @L2A 54800000
+.AMD64   ANOP                                                           55000000
+         AIF   ('&DATA64'(1,1) EQ '(').EREG64                      @L2A 55200000
+         LA    15,&DATA64                                          @L2A 55400000
+         STG   15,8(0,1)   STORE DATA ADDRESS INTO PARMLIST        @L2A 55600000
+         AGO   .ENULD                                                   55800000
+.EREG64  ANOP  ,                                                   @L2A 56000000
+&R64     SETC  '&DATA64'(2,K'&DATA64-2)                            @P3A 56200000
+         STG   &R64,8(1)   STORE DATA ADDRESS INTO PARMLIST        @P3A 56400000
+.ENULD   ANOP                                                           56600000
+         AIF   ('&PAGEIN' EQ 'YES').CODE0                      @ZA50668 56800000
+         LA    15,4   PUT GTF NOT ACTIVE CODE IN REG(15)                57000000
+.CODE0   ANOP                                                  @ZA50668 57200000
+.*                                                                      57400000
+.*  IS THE ID SPECIFIED                                                 57600000
+.* `                                                                    57800000
+         AIF   ('&ID' EQ '').NOEID                                      58000000
+.*                                                                      58200000
+*                        SET UP HOOK                                    58400000
+.*                                                                      58600000
+         AIF   ('&PAGEIN' EQ 'YES').CODE                           @02C 58800000
+         MC    &ID,X'0E'             MC INSTRUCTION                     59000000
+.*                                                                      59200000
+.*              PAGE FAULT HANDLING CODE                                59400000
+.*                                                                      59600000
+         AIF   ('&PAGEIN' EQ 'YES').CODE                                59800000
+         AIF   ('&PAGEIN' EQ 'NO').EXIT                                 60000000
+         MNOTE 12,'AHL042  PAGEIN=KEYWORD MISSPECIFIED.'                60200000
+         MEXIT                                                          60400000
+.CODE    ANOP                                                           60600000
+*                              TOUCH EVERY PAGE IN THE DATA        @L1A 60800000
+GTRACEPAGEIN&SYSNDX DS 0H         Top of PAGEIN loop               @01A 61000000
+         TM   0(1),X'FF'          REFERENCE FIRST BYTE OF PARM     @01A 61200000
+         AIF  ('&DATA64' NE '').CODE64                             @02C 61400000
+         L    15,4(1)             POINT TO FIRST BYTE                   61600000
+         TM   0(15),X'FF'         REFERENCE FIRST BYTE                  61800000
+         AH   15,0(1)             POINT TO END OF DATA                  62000000
+         BCTR 15,0                POINT TO LAST BYTE                    62200000
+         TM   0(15),X'FF'         REFERENCE LAST BYTE                   62400000
+         AHI  15,-4096            SUBTRACT 4096 FROM ADDRESS       @L3C 62600000
+         C    15,4(,1)            COMPARE TO START ADDRESS         @P1C 62800000
+         JH   *-12                IF HIGH, REFERENCE INNER BYTE    @L3C 63000000
+*                              ISSUE THE MONITOR CALL              @L1A 63200000
+.*                                                                3@L3D 63400000
+         LA   15,4                PUT GTF NOT ACTIVE           @ZA50668 63600000
+         MC    &ID,X'0E'          MC INSTRUCTION               @ZA50668 63800000
+*                              TEST FOR SUCCESS AND RETRY          @L1A 64000000
+         CHI  15,32               PAGE FAULT OCCURRED              @L3C 64200000
+         BRC  8,GTRACEPAGEIN&SYSNDX RETRY PAGEIN loop              @L3C 64400000
+         MEXIT                                                          64600000
+.CODE64  ANOP                                                           64800000
+         AIF  ('&DATA64' EQ '').EXIT                               @L2A 65000000
+         AIF  ('&SYSAM64' NE 'YES').ERROR64                        @L2A 65200000
+         LG   15,8(1)             POINT TO FIRST BYTE                   65400000
+         TM   0(15),X'FF'         REFERENCE FIRST BYTE                  65600000
+         SGR  0,0                 RESET R0                         @L2A 65800000
+         LH   0,0(1)              GET DATA LENGTH                  @L2A 66000000
+         ALGR 15,0                POINT TO END OF DATA             @L2A 66200000
+         BCTR 15,0                POINT TO LAST BYTE                    66400000
+         LHI  0,4096              LOAD 4096 INTO R0                @L2A 66600000
+         TM   0(15),X'FF'         REFERENCE LAST BYTE                   66800000
+         SGR  15,0                SUBTRACT 4096 FROM ADDRESS       @L2A 67000000
+         CLG  15,8(,1)            COMPARE TO START ADDRESS         @L2A 67200000
+         JH   *-14                IF HIGH, REFERENCE INNER BYTE    @L3C 67400000
+*                              ISSUE THE MONITOR CALL              @L2A 67600000
+         LA   15,4                PUT GTF NOT ACTIVE               @L2A 67800000
+         MC    &ID,X'0E'          MC INSTRUCTION                   @L2A 68000000
+*                              TEST FOR SUCCESS AND RETRY          @L2A 68200000
+         CHI  15,32               PAGE FAULT OCCURRED              @L2A 68400000
+         BRC  8,GTRACEPAGEIN&SYSNDX RETRY PAGEIN loop              @L3C 68600000
+.EXIT    MEXIT                                                          68800000
+.ERROR64 ANOP                                                           69000000
+         MNOTE 12,'AHL047 NOT AMODE64'                             @L2A 69200000
+         MEXIT                                                          69400000
+.DATAERR ANOP                                                           69600000
+         MNOTE 12,'AHL046 DATA and DATA64 are mutually exclusive'  @P3A 69800000
+         MEXIT                                                          70000000
+.NOEID   MNOTE 12,'AHL048  ID= KEYWORD MISSING'                         70200000
+         MEND                                                           70400000
+****************************************************************     */ 70600000
+*                                                                       70800000
+*%GTRACE:                                                               71000000
+*   MACRO KEYS(DATA,DATA64,DISABLED,LNG,ID,FID,PAGEIN,TEST,QUERY,MAXLNG 71200000
+*       ,RETCODE,MF);               /*                           @L2C*/ 71400000
+*   ANSWER('?'!!MACLABEL!!' GTRACEP '!!MACLIST!!' '!!MACKEYS!!';')      71600000
+*       RESCAN COL(MACLMAR);        /*                           @L1A*/ 71800000
+*   %END GTRACE;                    /*                           @L1A*/ 72000000

@@ -1,0 +1,94 @@
+*/*PROPRIETARY V3 STATEMENT                                          */ 00004000
+*/*LICENSED MATERIALS - PROPERTY OF IBM                              */ 00006000
+*/*"RESTRICTED MATERIALS OF IBM"                                     */ 00008000
+*/*5695-DF1                                                          */ 00010000
+*/*COPYRIGHT 1992, 2011 IBM CORP.                                    */ 00012500
+*/*END PROPRIETARY V3 STATEMENT                                      */ 00015000
+*/*                                                                  */ 00018000
+*/* START OF PL/X COMMENT ENDING ON %MACRO STATEMENT               @L1A 00019000
+         MACRO                                                          00020000
+&NAME    GETPOOL &DCB,&NO,&LTH,&HIARCHY=                                00030000
+.********************************************************************   00032800
+.* FUNCTION: Build a buffer pool for BSAM, BPAM, QSAM or BDAM in   @L2A 00032900
+.*      subpool 0.                                                 @L2A 00033000
+.* NOTES: To get or return a buffer from the pool use the          @L2A 00033100
+.*      GETBUF or FREEBUF macro.                                   @L2A 00033200
+.*        The user should free the pool with FREEPOOL or abandon   @L2A 00033300
+.*      it.  CLOSE does not free it.                               @L2A 00033400
+.* STATUS: z/OS 1.13 DFSMS                                         @L2A 00033800
+.* CHANGE ACTIVITY                                                      00034200
+.* $01=OY09784,HDP2230,,JHM088: CLEAR HI ORDER BYTE OF DCB ADDR    @01A 00034900
+.* $L1=PLX    ,JDZ1110,930930,SJPLMET: PL/X SUPPORT                @L1A 00035600
+.* $L2=64BIT,JDZ1D10,20101116,SVLWER: 64 bit message               @L2A 00036300
+.********************************************************************   00037000
+.*                                                                      00038400
+         GBLC  &SYSAM64    AMODE64=YES set by SYSSTATE macro       @L2A 00038500
+         GBLC  &SYSASCE    ASCENV=AR or ANY set by SYSSTATE macro  @L2A 00038600
+         GBLA  &SYSALVL    ARCHLVL set by SYSSTATE macro           @L2A 00038700
+         SYSSTATE TEST     Test how macros are to expand           @L2A 00038800
+         AIF   ('&SYSAM64' EQ 'YES').E5    GO IF AMODE64=YES       @L2A 00039200
+         AIF   (('&SYSASCE' NE '') AND ('&SYSASCE' NE 'P')).E6     @L2A 00039400
+         AIF   ('&DCB' EQ '').E1                                        00060000
+         AIF   ('&NO' EQ '').E2                                         00080000
+.* HIARCHY is obsolete & supported on OS/360 to manage IBM 2361    @L2A 00084900
+.* Large Core Storage slower memory (analogous to flash memory).   @L2A 00089800
+         AIF   ('&HIARCHY' EQ '').TESTNO                           @L2C 00094700
+         MNOTE 0,'HIARCHY PARAMETER IS OBSOLETE AND HAS NO EFFECT' @L2C 00099600
+.TESTNO  ANOP                                                           00104600
+&NAME    IHBINNRA &DCB             LOAD DCB INTO REG 1                  00104800
+         LA    1,0(1)              CLEAR THE HI ORDER BYTE         @01A 00105000
+         AIF   ('&NO' NE '(0)').LOADR                                   00105200
+         STH   0,24(0,1)           STORE LENGTH IN DCB                  00106100
+         STCM  0,B'1100',22(1)     STORE NUMBER OF BUFFERS         @L2C 00107000
+.LOADR   ANOP                                                           00108000
+         AIF   ('&LTH' EQ '&LTH(1)' AND '&NO' EQ '&NO(1)').CONT         00120000
+         AIF   ('&NO' EQ '&NO(1)').NUMB                                 00140000
+         AIF   ('&NO' EQ '(0)').LINK                                    00160000
+         STH   &NO(1),22(0,1)      STORE NUMBER OF BUFFERS DESIRED      00180000
+         AGO   .CHKLTH                                                  00200000
+.NUMB    AIF   (T'&NO NE 'N').USEDC                                     00300000
+         AIF   (&NO GT 4095).USEDC                                      00320000
+         LA    14,&NO.(0,0)        GET BUFFER NUMBER                    00340000
+         STH   14,22(0,1)          STORE INTO DCB                       00360000
+         AGO   .CHKLTH                                                  00380000
+.USEDC   BAS   14,*+6              BRANCH AROUND VALUE             @L2C 00400000
+         DC    AL2(&NO)            NUMBER OF BUFFERS                    00420000
+         MVC   22(2,1),0(14)       STORE INTO DCB                  @L2C 00440000
+.CHKLTH  AIF   ('&NO' EQ '(0)').LINK                                    00460000
+         AIF   ('&LTH' EQ '').E3                                        00480000
+         AIF   ('&LTH' EQ '&LTH(1)').NUMBL                              00500000
+         STH   &LTH(1),24(0,1)     STORE BUFFER LENGTH                  00520000
+         AGO   .LINK                                                    00540000
+.NUMBL   AIF   (T'&LTH NE 'N').USEDCL                                   00560000
+         AIF   (&LTH GT 4095).USEDCL                                    00580000
+         LA    14,&LTH.(0,0)       GET BUFFER LENGTH                    00600000
+         STH   14,24(0,1)          STORE INTO DCB                       00620000
+         AGO   .LINK                                                    00640000
+.USEDCL  BAS   14,*+6              BRANCH AROUND VALUE             @L2C 00660000
+         DC    AL2(&LTH)           LENGTH OF BUFFERS                    00680000
+         MVC   24(2,1),0(14)       STORE INTO DCB                  @L2C 00700000
+         AGO   .LINK                                                    00720000
+.* Neither length nor number is in a register.                     @L2A 00730000
+.CONT    AIF   ('&LTH' EQ '').E3                                        00740000
+         BAS   14,*+8              BRANCH AROUND VALUES            @L2C 00758000
+         DC    AL2(&NO)            NUMBER OF BUFFERS                    00776000
+         DC    AL2(&LTH)           LENGTH OF BUFFERS                    00794000
+         MVC   22(4,1),0(14)       MOVE INTO DCB                   @L2C 00812000
+.LINK    ANOP                                                           00830000
+         LINK  EP=IECQBFG1                                              00850000
+         MEXIT                                                          00860000
+.E1      IHBERMAC 6                DCB MISSING                          00880000
+         MEXIT                                                          00900000
+.E2      IHBERMAC 3                NO MISSING                           00920000
+         MEXIT                                                          00940000
+.E3      IHBERMAC 4                LTH MISSING                          00952000
+         MEXIT                                                          00964000
+.E5      IGGERMAC 203,GETPOOL   THE GETPOOL MACRO DOES NOT SUPPORT @L2A 00977200
+         MEXIT                    SYSSTATE AMODE64=YES             @L2A 00977800
+.E6      IGGERMAC 204,GETPOOL   THE GETPOOL MACRO DOES NOT SUPPORT @L2A 00978400
+         MEXIT                    SYSSTATE ASCENV=AR OR ANY        @L2A 00979000
+         MEND                                                           00980000
+**/%GETPOOL: MACRO KEYS(1:1(DCB_NAME,DCB_ADDR),1:1(BUFFER_NUM),/*@L1A*/ 01030000
+*       1:1(BUFFER_LEN));                                      /*@L1A*/ 01080000
+*  ANS('? '!!MACLABEL!!' GETPOOLP '!!MACKEYS!!';') RESCAN SKIP;/*@L1A*/ 01130000
+* %END GETPOOL;                                                /*@L1A*/ 01180000

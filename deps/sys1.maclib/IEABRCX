@@ -1,0 +1,226 @@
+*********************************************************************** 00050000
+*                                                                     * 00100000
+*01* MACRO-NAME = IEABRCX                                             * 00150000
+*                                                                     * 00200000
+*01* DESCRIPTIVE-NAME = RELATIVE BRANCH MACROS                        * 00250000
+*                                                                     * 00300000
+*01*  COPYRIGHT =                                                     * 00350000
+*       LICENSED MATERIALS - PROPERTY OF IBM                          * 00400000
+*       5694-A01 (C) COPYRIGHT IBM CORP. 2008                         * 00500000
+*                                                                     * 00550000
+*01* STATUS = HBB7750                                                 * 00600000
+*                                                                     * 00650000
+*01* EXTERNAL CLASSIFICATION: PI                                      * 00700000
+*01* END OF EXTERNAL CLASSIFICATION:                                  * 00750000
+*                                                                     * 00800000
+*01* FUNCTION = Allow use of z/OS macros within an assembler          * 00806800
+*       routine that uses relative branching.                         * 00813600
+*       It defines macros to intercept and change various             * 00820400
+*       base-displacement branch instructions to their                * 00827200
+*       relative branch equivalents.                                  * 00834000
+*                                                                     * 00835100
+*       Specify SYSSTATE ARCHLVL=x where x is a supported value       * 00836200
+*       other than 0, when using IEABRCX. This lets macro expansions  * 00837300
+*       take advantage of the knowledge of the availability of        * 00838400
+*       relative branching.                                           * 00839500
+*                                                                     * 00840800
+*02* METHOD OF INVOCATION                                             * 00847600
+*      IEABRCX DEFINE                                                 * 00854400
+*       placed prior to any base/displacement branch that needs       * 00861200
+*       to be converted to a relative branch.                         * 00868000
+*       defines and enables the conversion                            * 00868100
+*       IEABRCX DEFINE must precede any uses of IEABRCX with          * 00868200
+*       other options.                                                * 00868300
+*                                                                     * 00869000
+*      IEABRCX PUSH                                                   * 00869100
+*       saves the current state (enabled or disabled).                * 00870000
+*       At any point in the assembly, the number of PUSH's must       * 00871000
+*       not exceed the number of POP's by 255 or an assembler         * 00872000
+*       error may result.                                             * 00873000
+*       You must have issued IEABRCX DEFINE prior to this.            * 00874000
+*                                                                     * 00874800
+*      IEABRCX DISABLE                                                * 00874900
+*       disables the conversions so that subsquent base-displacement  * 00875000
+*       branches revert to their normal form                          * 00875100
+*       You must have issued IEABRCX DEFINE prior to this.            * 00875200
+*                                                                     * 00875300
+*      IEABRCX ENABLE                                                 * 00875400
+*       enables the conversions so that subsquent base-displacement   * 00875500
+*       branches are converted                                        * 00876000
+*       You must have issued IEABRCX DEFINE prior to this.            * 00876100
+*                                                                     * 00877000
+*      IEABRCX POP                                                    * 00878000
+*       Restores to the previous state. A corresponding PUSH          * 00879000
+*       must exist or an assembler error may result.                  * 00879100
+*       You must have issued IEABRCX DEFINE prior to this.            * 00879200
+*                                                                     * 00880000
+*02* NOTES:                                                           * 00881600
+*       Branch condition instructions are converted to                * 00888400
+*       relative branch condition instructions except when:           * 00895200
+*       - The branch target ends with ")" and                         * 00902000
+*         a "(" in 2nd or subsequent characters of the branch         * 00908800
+*         target is not preceded by "+" or "-".                       * 00915600
+*       For example,                                                  * 00922400
+*         B   X(15)          -- remains base/displacement branch      * 00929200
+*         B   X+(15)         -- converted to relative branch          * 00936000
+*         B   X+Y            -- converted to relative branch          * 00942800
+*                                                                     * 00950000
+*01* MODULE-TYPE = MACRO                                              * 01000000
+*                                                                     * 01050000
+*02* PROCESSOR = HLASM                                                * 01100000
+*                                                                     * 01150000
+*01* MACROS = NONE                                                    * 01200000
+*                                                                     * 01250000
+*01* PARAMETERS:                                                      * 01300000
+*        Same as used within assembler instructions                   * 01350000
+*                                                                     * 01400000
+*01* CHANGE-ACTIVITY =                                                * 01450000
+*                                                                     * 01500000
+*   $L0=ME10226  HBB7750  070501  PD00XB: Enable/Disable              * 01560000
+*                                                                     * 01600000
+*01* MNOTES = NONE                                                    * 01650000
+*                                                                     * 01700000
+*01* COMPONENT = SC1C5 (SUPERVISOR CONTROL)                           * 01750000
+*                                                                     * 01800000
+*01*  DISTRIBUTION-LIBRARY = AMACLIB                                  * 01850000
+*                                                                     * 01900000
+*********************************************************************** 01950000
+         MACRO                                                          12380000
+         IEABRCX &OP                                                    12390000
+         GBLA  &IEABRCX_LEVEL                                           12400100
+         GBLC  &IEABRCX_STATE(255)                                      12401000
+         GBLC  &IEABRCX_DEFINED                                         12402000
+         AIF   ('&OP' EQ 'DEFINE').DEFINE_OK                            12403000
+         AIF   ('&IEABRCX_DEFINED' EQ 'YES').DEFINE_OK                  12403100
+         MNOTE 12,'IEABRCX -> you must issue IEABRCX DEFINE first'      12403200
+         MEXIT                                                          12403300
+.DEFINE_OK ANOP                                                         12404000
+         AIF   ('&OP' NE 'PUSH').IEABRCX_NOTPUSH                        12411000
+         AIF   (&IEABRCX_LEVEL LT 256).PUSH_LIMIT_OK                    12411200
+ MNOTE 12,'IEABRCX -> PUSH ignored. PUSH level would have exceeded 256' 12411300
+         MEXIT                                                          12411400
+.PUSH_LIMIT_OK ANOP                                                     12411500
+&IEABRCX_STATE(&IEABRCX_LEVEL+1) SETC '&IEABRCX_STATE(&IEABRCX_LEVEL)'  12411600
+&IEABRCX_LEVEL SETA &IEABRCX_LEVEL+1                                    12411700
+.*       MNOTE 4,'&IEABRCX_LEVEL'                                       12411800
+.*       MNOTE 4,'OLD: &IEABRCX_STATE(&IEABRCX_LEVEL-1)'                12411900
+.*       MNOTE 4,'NEW: &IEABRCX_STATE(&IEABRCX_LEVEL)'                  12412000
+.FIRST_PUSH    ANOP                                                     12412100
+         MEXIT                                                          12412200
+.IEABRCX_NOTPUSH ANOP                                                   12412300
+         AIF   ('&OP' NE 'POP').IEABRCX_NOTPOP                          12412400
+         AIF   (&IEABRCX_LEVEL GT 1).POP_OK                             12412500
+       MNOTE 12,'IEABRCX -> POP ignored. No corresponding IEABRCX PUSH' 12412600
+         MEXIT                                                          12412700
+.POP_OK  ANOP                                                           12412800
+         PUSH  PRINT,NOPRINT                                            12412900
+         PRINT OFF,NOPRINT                                              12413000
+&IEABRCX_LEVEL SETA &IEABRCX_LEVEL-1                                    12413100
+.*       MNOTE 4,'&IEABRCX_LEVEL'                                       12413200
+.*       MNOTE 4,'OLD: &IEABRCX_STATE(&IEABRCX_LEVEL+1)'                12413300
+.*       MNOTE 4,'NEW: &IEABRCX_STATE(&IEABRCX_LEVEL)'                  12413400
+         AIF ('&IEABRCX_STATE(&IEABRCX_LEVEL+1)' EQ '&IEABRCX_STATE(&IE*12413500
+               ABRCX_LEVEL)').IEABRCX_POP_SAME                          12413600
+         AIF   ('&IEABRCX_STATE(&IEABRCX_LEVEL)' NE 'DISABLED').POP_ND  12413700
+         IEABRCX DISABLE                                                12413800
+.POP_ND  ANOP                                                           12413900
+         AIF   ('&IEABRCX_STATE(&IEABRCX_LEVEL)' NE 'ENABLED').POP_NE   12414000
+         IEABRCX ENABLE                                                 12414100
+.POP_NE  ANOP                                                           12414200
+.IEABRCX_POP_SAME ANOP                                                  12414300
+         POP   PRINT,NOPRINT                                            12414400
+         MEXIT                                                          12414500
+.IEABRCX_NOTPOP ANOP                                                    12414600
+         AIF   ('&OP' NE 'DEFINE').IEABRCX_NOTDEFINE                    12414700
+         AIF   ('&IEABRCX_DEFINED' EQ 'YES').IEABRCX_DONE               12414800
+&IEABRCX_DEFINED SETC 'YES'                                             12414900
+&IEABRCX_LEVEL SETA 1                                                   12415000
+         PUSH  PRINT,NOPRINT                                            12415100
+         PRINT OFF,NOPRINT                                              12415200
+&IEABRCX_STATE(&IEABRCX_LEVEL) SETC 'ENABLED'                           12415300
+         COPY  IEABRC                                                   12415400
+_B_      OPSYN B                                                        12415500
+_BAL_    OPSYN BAL                                                      12415600
+_BAS_    OPSYN BAS                                                      12415700
+_BC_     OPSYN BC                                                       12415800
+_BCT_    OPSYN BCT                                                      12415900
+_BE_     OPSYN BE                                                       12416000
+_BH_     OPSYN BH                                                       12416100
+_BL_     OPSYN BL                                                       12416200
+_BM_     OPSYN BM                                                       12416300
+_BNE_    OPSYN BNE                                                      12416400
+_BNH_    OPSYN BNH                                                      12416500
+_BNL_    OPSYN BNL                                                      12416600
+_BNM_    OPSYN BNM                                                      12416700
+_BNO_    OPSYN BNO                                                      12416800
+_BNP_    OPSYN BNP                                                      12416900
+_BNZ_    OPSYN BNZ                                                      12417000
+_BO_     OPSYN BO                                                       12417100
+_BP_     OPSYN BP                                                       12417200
+_BXH_    OPSYN BXH                                                      12417300
+_BXLE_   OPSYN BXLE                                                     12417400
+_BZ_     OPSYN BZ                                                       12417500
+         POP   PRINT,NOPRINT                                            12417600
+         MEXIT                                                          12417700
+.IEABRCX_NOTDEFINE ANOP                                                 12417800
+         AIF   ('&OP' NE 'DISABLE').IEABRCX_NOTDISABLE                  12417900
+         PUSH  PRINT,NOPRINT                                            12418000
+         PRINT OFF,NOPRINT                                              12418100
+&IEABRCX_STATE(&IEABRCX_LEVEL) SETC 'DISABLED'                          12418200
+B        OPSYN B_                                                       12418300
+BAL      OPSYN BAL_                                                     12418400
+BAS      OPSYN BAS_                                                     12418500
+BC       OPSYN BC_                                                      12418600
+BCT      OPSYN BCT_                                                     12418700
+BE       OPSYN BE_                                                      12418800
+BH       OPSYN BH_                                                      12418900
+BL       OPSYN BL_                                                      12419000
+BM       OPSYN BM_                                                      12419100
+BNE      OPSYN BNE_                                                     12419200
+BNH      OPSYN BNH_                                                     12419300
+BNL      OPSYN BNL_                                                     12419400
+BNM      OPSYN BNM_                                                     12419500
+BNO      OPSYN BNO_                                                     12419600
+BNP      OPSYN BNP_                                                     12419700
+BNZ      OPSYN BNZ_                                                     12419800
+BO       OPSYN BO_                                                      12419900
+BP       OPSYN BP_                                                      12420000
+BXH      OPSYN BXH_                                                     12420100
+BXLE     OPSYN BXLE_                                                    12420200
+BZ       OPSYN BZ_                                                      12420300
+         POP   PRINT,NOPRINT                                            12420400
+         MEXIT                                                          12420500
+.IEABRCX_NOTDISABLE ANOP                                                12420600
+         AIF   ('&OP' NE 'ENABLE').IEABRCX_NOTENABLE                    12420700
+         PUSH  PRINT,NOPRINT                                            12420800
+         PRINT OFF,NOPRINT                                              12420900
+&IEABRCX_STATE(&IEABRCX_LEVEL) SETC 'ENABLED'                           12421000
+B        OPSYN _B_                                                      12421100
+BAL      OPSYN _BAL_                                                    12422000
+BAS      OPSYN _BAS_                                                    12423000
+BC       OPSYN _BC_                                                     12424000
+BCT      OPSYN _BCT_                                                    12425000
+BE       OPSYN _BE_                                                     12426000
+BH       OPSYN _BH_                                                     12427000
+BL       OPSYN _BL_                                                     12428000
+BM       OPSYN _BM_                                                     12429000
+BNE      OPSYN _BNE_                                                    12429100
+BNH      OPSYN _BNH_                                                    12429200
+BNL      OPSYN _BNL_                                                    12429300
+BNM      OPSYN _BNM_                                                    12429400
+BNO      OPSYN _BNO_                                                    12429500
+BNP      OPSYN _BNP_                                                    12429600
+BNZ      OPSYN _BNZ_                                                    12429700
+BO       OPSYN _BO_                                                     12429800
+BP       OPSYN _BP_                                                     12429900
+BXH      OPSYN _BXH_                                                    12430000
+BXLE     OPSYN _BXLE_                                                   12430100
+BZ       OPSYN _BZ_                                                     12430200
+         POP   PRINT,NOPRINT                                            12430300
+         MEXIT                                                          12431000
+.IEABRCX_NOTENABLE ANOP                                                 12440000
+   MNOTE 12,'IEABRCX --> Operand must be DEFINE, PUSH, DISABLE, ENABLE,*12450000
+                or POP'                                                 12451000
+         MEXIT                                                          12460000
+.IEABRCX_DONE ANOP                                                      12470000
+         MEND                                                           12480000

@@ -1,0 +1,680 @@
+         MACRO                                                          00010001
+&NAME    SETFRR7   &OPT,&FRRAD=,&PARMAD=,&WRKREGS=,&RELATED=,&CLEAR=,  C00020001
+               &MODE=,&EUT=,&INLINE=NO,&ASSIST=NO,&OPT2        @G860P1C 00030001
+.* A-000000-999999                                             @G860P1C 00040001
+.* PTM FIX MOVED PROMT COMMENT ABOVE                           @ZMC3023 00050001
+*    MACDATE    01/03/83  S/370 LEVEL OF SETFRR                    @H1C 00060001
+.*                                                                      00070001
+.********************************************************************** 00080001
+.*                                                                    * 00090001
+.*                                                                    * 00100001
+.* COPYRIGHT =                                                        * 00110001
+.*               5740-XC6                                             * 00120001
+.*               COPYRIGHT IBM CORP. 1977, 1984                       * 00140003
+.*               LICENSED MATERIALS - PROPERTY OF IBM                 * 00150001
+.*                                                                    * 00160001
+.*    STATUS = OS/VS2 JBB2133                                     @H1C* 00170001
+.*                                                                    * 00180001
+.*    MACMEAN = SET UP FUNCTIONAL RECOVERY ROUTINES           @G860P1C* 00190001
+.*              SYSTEM 370 COMPATIBLE LEVEL                   @G860P1C* 00200001
+.*                                                                    * 00210001
+.*     THE SETFRR MACRO EXPANSION GENERATES CODE WHICH MANIPULATES A  * 00220001
+.*     STACK WHEN INLINE=YES IS SPECIFIED.  WHEN INLINE=YES   @G381P2F* 00230001
+.*     IS NOT SPECIFIED, THE SETFRR MACRO EXPANSION           @G381P2F* 00240001
+.*     GENERATES CODE WHICH CALLS IEAVTSFR TO MANIPULATE      @G381P2F* 00250001
+.*     THE CURRENT STACK.                                             * 00260001
+.*                                                                    * 00270001
+.*                                                                    * 00280001
+.*   THERE  ARE TWO STACKS WHICH CAN BE MANIPULATED VIA THE SETFRR    * 00290001
+.*   MACRO                                                            * 00300001
+.*         1. A STACK FOR FRRS  RUNNING IN SUPERVISOR CONTROL MODE    * 00310001
+.*         2. A STACK FOR FRRS RUNNING IN NON-SUPERVISOR CONTROL MODE * 00320001
+.*                                                                    * 00330001
+.*   THE HEADER FORMAT FOR EACH OF THESE STACKS IS AS FOLLOWS         * 00340001
+.*                                                                    * 00350001
+.*      NON-SUPERVISOR CONTROL STACK HEADER FORMAT                    * 00360001
+.*                                                                    * 00370001
+.*       ***********************************************              * 00380001
+.*       * ADDRESS OF STACK - 32 BYTES                 *              * 00390001
+.*       ***********************************************              * 00400001
+.*       *    ADDRESS OF LAST ENTRY IN THE STACK       *              * 00410001
+.*       ***********************************************              * 00420001
+.*       *  LENGTH OF EACH ENTRY IN THE STACK  (32)    *              * 00430001
+.*       ***********************************************              * 00440001
+.*       *ADDRESS OF CURRENT FRR ADDRESS IN THE STACK  *              * 00450001
+.*       *(INITIALIZED TO THE ADDRESS OF STACK - 32)   *              * 00460001
+.*       ***********************************************              * 00470001
+.*                                                                    * 00480001
+.*      SUPERVISOR CONTROL STACK HEADER FORMAT                        * 00490001
+.*                                                                    * 00500001
+.*       ***********************************************              * 00510001
+.*       * ADDRESS OF STACK                            *              * 00520001
+.*       ***********************************************              * 00530001
+.*       *    ADDRESS OF LAST ENTRY IN THE STACK       *              * 00540001
+.*       ***********************************************              * 00550001
+.*       *  LENGTH OF EACH ENTRY IN THE STACK  (32)    *              * 00560001
+.*       ***********************************************              * 00570001
+.*       *ADDRESS OF CURRENT FRR ADDRESS IN THE STACK  *              * 00580001
+.*       *(INITIALIZED TO THE ADDRESS OF THE STACK )   *              * 00590001
+.*       ***********************************************              * 00600001
+.*                                                                    * 00610001
+.* PRIOR TO ISSUING SETFRR THE USER MUST HAVE PERFORMED THE FOLLOWING * 00620001
+.*     1.  ESTABLISHED ADDRESSABILITY TO THE PSA(THE FIRST            * 00630001
+.*         INSTRUCTION GENERATED BY THE SETFRR EXPANSION REFERENCES   * 00640001
+.*         THE PSACSTK FIELD OF THE PSA)                              * 00650001
+.*                                                                    * 00660001
+.*     2.  HAVE ISSUED THE FRR STACK MAPPING MACRO(IHAFRRS)           * 00670001
+.*                                                                    * 00680001
+.*01* EXTERNAL CLASSIFICATION:                                        * 00681002
+.*                                                                    * 00682002
+.*02* PI: BASE                                                        * 00683002
+.*        CLEAR=YES WHEN USED WITH REPLACE                            * 00684002
+.*                                                                    * 00685002
+.*02* NONE: CLEAR                                                     * 00688002
+.*          INLINE                                                    * 00689002
+.*          ASSIST                                                    * 00689102
+.*                                                                    * 00689302
+.*01* END OF EXTERNAL CLASSIFICATION:                                 * 00689402
+.* CHANGE-ACTIVITY                                            @G381P2F* 00690001
+.*         MVS/SYSTEM PRODUCT RELEASE 2 2/21/79               @G381P2F* 00700001
+.*                 CROSS MEMORY PARAMETERS (MODE,EUT)         @G381P2F* 00710001
+.*                 INTRODUCED OUT-OF-LINE CODE (INLINE)       @G381P2F* 00720001
+.*                 RACE CONDITION FIXED                       @G381P2F* 00730001
+.*                 INTRODUCED ADD FRR INSTRUCTION (SETFRRI) 4/17/80   * 00740001
+.*                                                            @G38LP1S* 00750001
+.*                 - USE LA TO OBTAIN NORMAL STACK ADDRESS    @ZM49899* 00760001
+.*                 - ADDED OPT2 TO CATCH MISSING PARENS AND   @ZM50139* 00770001
+.*                 FIXED OVERFLOW OF COMMENTS WHEN SYMBOLIC   @ZM50139* 00780001
+.*                 NAMES ARE USED IN WRKREGS  4/24/79         @ZM50139* 00790001
+.*                 - ON ADDFLUSH, CHANGED THE LOAD ADDRESS    @ZMB0044* 00800001
+.*                 OF FRRSENTS TO AN ADD OF FRRSELEN TO REG 1 @ZMB0044* 00810001
+.*                 TO ADDRESS THE FIRST ENTRY 8/29/79         @ZMB0044* 00820001
+.*      $H1=ADVPROC1,JBB2133,830103,PDXB: REMOVE ASSIST SUPPORT       * 00830001
+.*      $01=OA54807 ,HBB77A0,180330,PDXB: OA54807                     * 00840004
+.*                                                                    * 00850001
+.********************************************************************** 00860001
+      LCLA    &CTRLNK                                          @G381P2F 00870001
+      LCLA    &I                                               @G381P2F 00880001
+      LCLA    &J                                               @G381P2F 00890001
+      LCLA    &MODFLG                                          @G381P2F 00900001
+      LCLB    &B(5)                                            @G381P2F 00910001
+      LCLC    &R1                                                       00920001
+      LCLC    &R2                                                       00930001
+      LCLC    &R3                                                       00940001
+      LCLC    &R4                                                       00950001
+         LCLC  &LABEL                                          @G38LP1S 00960001
+         LCLC  &LABELA,&LABELB                                 @G38LP1S 00970001
+         LCLC  &RX,&RY,&T                                      @G38LP1S 00980001
+&J    SETA    N'&MODE                                          @G381P2F 00990001
+.*    VERIFY THAT THERE ARE NO POSITIONAL PARAMETERS OTHER     @ZM50139 01000001
+.*    THAN OPTION,  THIS COULD OCCUR IF MODE WAS SPECIFIED     @ZM50139 01010001
+.*    WITH MORE THAN ONE PARAMETER AND PARENTHESIS WERE NOT    @ZM50139 01020001
+.*    USED                                                     @ZM50139 01030001
+      AIF    ('&OPT2' NE '').MSG12                             @ZM50139 01040001
+         AIF   ('&ASSIST' NE 'YES').ASSTOK   SKIP IF ASSIST NOT WANTED X01050001
+                                                               @G38LP1S 01060001
+         MNOTE  8,'SETFRR ASSIST NOT SUPPORTED'                    @H1A 01070001
+         AGO   .END                     LEAVE MACRO                @H1A 01080001
+.*                                                                8@H1D 01090001
+.ASSTOK  ANOP  ,                                               @G38LP1S 01100001
+.*    VERIFY VALID OPTION SPECIFIED FOR CLEAR KEYWORD                   01110001
+.C1   AIF    ('&CLEAR' EQ '' OR '&CLEAR' EQ 'Y' OR '&CLEAR' EQ 'N').C2  01120001
+      AIF    ('&CLEAR' EQ 'YES' OR '&CLEAR' EQ 'NO').C2                 01130001
+      AIF    ('&OPT' EQ 'A').CLEARY                            @G38LP2F 01140001
+.*    DEFAULT FOR REPLACE AND ADDFLUSH IS CLEAR=NO             @G38LP2F 01150001
+      MNOTE  0,'INVALID CLEAR OPTION, CLEAR=NO ASSUMED'        @G38LP2F 01160001
+         AGO      .C2                                          @G38LP2F 01170001
+.CLEARY  ANOP  ,                                               @G38LP2F 01180001
+.*    DEFAULT FOR ADD IS CLEAR=YES                             @G38LP2F 01190001
+      MNOTE  0,'INVALID CLEAR OPTION, CLEAR=YES ASSUMED'       @G38LP2F 01200001
+         AGO      .C2                                                   01210001
+.C4      MNOTE      8,'** PARMAD MUST BE SPECIFIED WITH CLEAR OPTION'   01220001
+         MEXIT                                                          01230001
+.C2      AIF       ('&CLEAR' NE '' AND '&PARMAD' EQ '').C4              01240001
+         AIF       ('&WRKREGS' EQ '').MSG1            CHECK TO SEE IF   01250001
+.*                                                    WORK REGISTERS    01260001
+.*                                                    ARE SPECIFIED     01270001
+         AIF   ('&INLINE' EQ 'NO' OR '&INLINE' EQ 'N').OUTLINE          01280001
+.*                                          BRANCH IF INLINE=YES WAS    01290001
+.*                                          NOT SPECIFIED      @G381P2F 01300001
+         AIF   ('&INLINE' NE 'YES' AND '&INLINE' NE 'Y').MSG9           01310001
+.*                                          ISSUE MESSAGE IF &INLINE    01320001
+.*                                          IS SPECIFIED INCORRECTLY    01330001
+.*                                                             @G381P2F 01340001
+         AIF   ('&MODE' NE '' AND '&MODE(1)' NE 'HOME').MSG7   @G381P2F 01350001
+         AIF   ('&MODE' NE '' AND &J GT 1).MSG7                @G381P2F 01360001
+.*                                          ISSUE MESSAGE IF &MODE      01370001
+.*                                          IS SPECIFIED INCORRECTLY    01380001
+.*                                          WITH INLINE=YES    @G381P2F 01390001
+         AIF   ('&EUT' NE '').MSG6                             @G381P2F 01400001
+.*                                          ISSUE MESSAGE IF &EUT       01410001
+.*                                          IS SPECIFIED WITH           01420001
+.*                                          INLINE=YES         @G381P2F 01430001
+         AIF       ('&WRKREGS'(1,1) NE '(' OR N'&WRKREGS NE 2).MSG2     01440001
+.*                                                    IF &WRKREGS IS    01450001
+.*                                                    SPECIFIED BUT     01460001
+.*                                                    INVALIDLY ISSUE   01470001
+.*                                                    ERROR MESSAGE.    01480001
+.*    SET UP LOCAL CHARACTER FOR USE IN EXPANSIONS                      01490001
+&R1    SETC    '&WRKREGS(1)'                                            01500001
+&R2    SETC    '&WRKREGS(2)'                                            01510001
+&R3    SETC    '&PARMAD(1)'                                             01520001
+&R4    SETC    '&FRRAD(1)'                                              01530001
+.*                                                    OTHERWISE CHECK   01540001
+.*                                                    &OPT FOR A VALID  01550001
+.*                                                    OPTION            01560001
+         AIF       ('&OPT' EQ 'A' OR '&OPT' EQ 'R').ADREP               01570001
+         AIF       ('&OPT' EQ 'D' OR '&OPT' EQ 'P').EXPAND              01580001
+         AIF       ('&OPT' EQ 'F').FLUSH                                01590001
+         AIF       ('&OPT' EQ 'AF').ADFL  ADD/FLUSH OPTION              01600001
+.INVOPT  MNOTE     12,'INVALID OPTION &OPT SPECIFIED'          @G38LP1S 01610001
+.*                                                    MESSAGE STATING   01620001
+.*                                                    INVALID OPTION    01630001
+         AGO       .END                               STOP EXPANSION    01640001
+.ADREP   AIF       ('&FRRAD' EQ '').MSG3              ISSUE MESSAGE IF  01650001
+.*                                                    &FRRAD  IS NOT    01660001
+.*                                                    SPECIFIED FOR     01670001
+.*                                                    THE ADD/REPLACE   01680001
+.*                                                    OPTION            01690001
+         AGO       .EXPAND1                                             01700001
+.EXPAND  ANOP                                         BEGIN EXPANSION   01710001
+         AIF       ('&FRRAD' NE '' OR '&PARMAD' NE '').WARN             01720001
+         AGO       .EXPAND1                                             01730001
+.WARN    MNOTE     *,'FRRAD AND/OR PARMAD SPECIFIED FOR DELETE/PURGE'   01740001
+         MNOTE     0,'FRRAD AND/OR PARMAD IGNORED-DELETE/PURGE HONORED' 01750001
+.*                                                             @G38LP2F 01760001
+.EXPAND1 ANOP                                                           01770001
+&NAME    L     &R1,PSACSTK-PSA(0,0)         ADDRESS OF CURRENT STACK    01780001
+         AIF       ('&OPT' EQ 'P').PURGE              GO EXPAND FOR A   01790001
+.*                                                    PURGE OF THE FRR  01800001
+.*                                                    STACK             01810001
+         AIF       ('&OPT' EQ 'A').ADD   GO TO ADD ROUTINE              01820001
+         L     &R2,FRRSCURR-FRRS(0,&R1)     ADDR OF CURRENT             01830001
+*                                           ELEMENT                     01840001
+         CL    &R2,FRRSEMP-FRRS(0,&R1)      IS THE FRR STACK EMPTY      01850001
+         AIF       ('&OPT' EQ 'R').BRANCH             IF OPTION IS      01860001
+.*                                                    REPLACE EXPAND    01870001
+.*                                                    AT .BRANCH        01880001
+         BE    *+12                         YES, DO NOT DELETE ENTRY    01890001
+         SL    &R2,FRRSELEN-FRRS(0,&R1)     DECREMENT CURRENT           01900001
+*                                           ADDRESS                     01910001
+         AGO       .UPDATE                                              01920001
+.ADD     L     &R2,FRRSELEN-FRRS(0,&R1)     LENGTH OF FRR STACK         01930001
+*                                           ENTRY              @G381P2F 01940001
+.*                                          (USE FRRSELEN INSTEAD OF    01950001
+.*                                           OF 32)            @G381P2F 01960001
+         AL    &R2,FRRSCURR-FRRS(0,&R1)     COMPUTE NEXT ENTRY          01970001
+*                                           ADDRESS                     01980001
+         CL    &R2,FRRSLAST-FRRS(0,&R1)     WILL STACK OVERFLOW         01990001
+         BH    PSALSFCC-PSA(0,0)            YES, ISSUE 07D ABEND        02000001
+         AGO       .COMMON1                                             02010001
+.BRANCH  BNE   *+8                          NO, SKIP UPDATE    @G381P2F 02020001
+.COMMON  AL    &R2,FRRSELEN-FRRS(0,&R1)     COMPUTE NEXT ENTRY ADDR     02030001
+.COMMON1 ANOP                                                  @G381P2F 02040001
+         AIF        ('&FRRAD'(1,1) EQ '(').STFRR                        02050001
+         AIF        (T'&FRRAD EQ 'N').MSG4                              02060001
+         MVC   FRRSFRRA-FRRSENTR(4,&R2),&FRRAD  PUT FRR ADDRESS         02070001
+*                                               INTO THE STACK @G381P2F 02080001
+         AGO         .PMCHK                                             02090001
+.STFRR   ST    &R4,FRRSFRRA-FRRSENTR(0,&R2) ADD ADDR TO STACK           02100001
+.PMCHK   AIF    ('&PARMAD' EQ '' ).UPDATE                      @G381P2F 02110001
+.*                             DETERMINE IF PARMS ARE SPECIFIED         02120001
+         AIF        ('&PARMAD'(1,1) EQ '(').LPARM                       02130001
+         AIF        (T'&PARMAD EQ 'N').MSG4                             02140001
+         AIF     ('&OPT' EQ 'R' AND '&CLEAR' EQ 'Y').C5                 02150001
+         AIF     ('&OPT' EQ 'R' AND '&CLEAR' EQ 'YES').C5               02160001
+         AIF       ('&OPT' NE 'A').NOZERO1            IS THIS THE       02170001
+.*                                                    ADD OPTION        02180001
+.*                                                   YES DO FOLLOWING   02190001
+         AIF   ('&CLEAR' EQ 'N' OR '&CLEAR' EQ 'NO').NOZERO1            02200001
+.C5      XC    FRRSPARM-FRRSENTR(24,&R2),FRRSPARM-FRRSENTR(&R2)         02210001
+*                                           ZERO FRR PARM AREA          02220001
+.NOZERO1 ST    &R2,FRRSCURR-FRRS(0,&R1)     UPDATE CURRENT              02230001
+*                                           ENTRY ADDRESS      @G381P2F 02240001
+         LA    &R2,FRRSPARM-FRRSENTR(0,&R2) RETURN PARM AREA            02250001
+         ST    &R2,&PARMAD                  ADDRESS TO USER             02260001
+         AGO        .END                                                02270001
+.LPARM   ANOP                                                           02280001
+         AIF      ('&OPT' EQ 'R' AND '&CLEAR' EQ 'Y').C6                02290001
+         AIF      ('&OPT' EQ 'R' AND '&CLEAR' EQ 'YES').C6              02300001
+         AIF       ('&OPT' NE 'A').NOZERO2            IS THIS THE       02310001
+.*                                                    ADD OPTION        02320001
+.*                                                   YES DO FOLLOWING   02330001
+         AIF   ('&CLEAR' EQ 'N' OR '&CLEAR' EQ 'NO').NOZERO2            02340001
+.C6      XC    FRRSPARM-FRRSENTR(24,&R2),FRRSPARM-FRRSENTR(&R2)         02350001
+*                                           ZERO FRR PARM AREA          02360001
+.NOZERO2 ST    &R2,FRRSCURR-FRRS(0,&R1)     UPDATE CURRENT              02370001
+*                                           ENTRY ADDRESS      @G381P2F 02380001
+         LA    &R3,FRRSPARM-FRRSENTR(0,&R2) ADDR OF PARM AREA           02390001
+         AGO       .END                                                 02400001
+.PURGE   L     &R2,FRRSEMP-FRRS(0,&R1)      LOAD EMPTY STACK ADDR       02410001
+.UPDATE  ST    &R2,FRRSCURR-FRRS(0,&R1)     UPDATE CURRENT STACK        02420001
+*                                           ENTRY                       02430001
+         AIF       ('&OPT' NE 'P').END      FINISHED IF NOT             02440001
+*                                           PURGE              @G382P2F 02450001
+         CL    &R1,PSANSTK-PSA(0,0)         IS THIS THE NORMAL          02460001
+*                                           STACK              @G382P2F 02470001
+         BNE   *+8                          NO, BRANCH         @G382P2F 02480001
+         NI    PSAMFLGS-PSA(0),X'7F'        ENSURE PSANSS FLAG          02490001
+*                                           IS OFF             @G382P2F 02500001
+         AGO       .END                                                 02510001
+.FLUSH   ANOP                                                           02520001
+         MNOTE 8,'SETFRR7 FLUSH IS NOT SUPPORTED'                  @01A 02530001
+         MEXIT ,                                                   @01A 02540001
+&NAME    L     &R1,PSASTAK-PSA(0,0)               NORMAL STACK PTR      02550001
+         ST    &R1,PSASTAK-PSA+FRRSCURR-FRRS(0,0) PURGE STACK           02560001
+         MVI   PSASTAK-PSA+FRRSRTMW-FRRS(0),X'00' ZERO RECURSION BYTE   02570001
+         NI    PSAMFLGS-PSA(0),X'7F'             ENSURE PSANSS          02580001
+*                                                FLAG IS OFF   @G381P2F 02590001
+         AGO   .END                                                     02600001
+.ADFL    ANOP                                                           02610001
+         MNOTE 8,'SETFRR7 ADDFLUSH IS NOT SUPPORTED'               @01A 02620001
+         MEXIT ,                                                   @01A 02630001
+         AIF   ('&FRRAD' EQ '').MSG3  INSURE FRR AD IS SPECIFIED        02640001
+         AIF   ('&FRRAD'(1,1) EQ '(').B10                               02650001
+         AIF   (T'&FRRAD EQ 'N').MSG4                                   02660001
+&R4      SETC  '&WRKREGS(2)'   SET WORK REG                             02670001
+&NAME    L     &R4,&FRRAD                        LOAD FRR ADDRESS       02680001
+         MVI   PSASTAK-PSA+FRRSRTMW-FRRS(0),0    ZERO RECURSION BYTE    02690001
+         AGO  .B11                                                      02700001
+.B10     ANOP                                                           02710001
+&NAME    MVI   PSASTAK-PSA+FRRSRTMW-FRRS(0),0    ZERO RECURSION BYTE    02720001
+.B11     NI    PSAMFLGS-PSA(0),X'7F'             ENSURE PSANSS          02730001
+*                                                FLAG IS OFF   @G381P2F 02740001
+         L     &R1,PSASTAK-PSA+FRRSEMP-FRRS(,0)  EMPTY STACK ADDRESS    02750001
+*                                                              @G381P2F 02760001
+         ST    &R1,PSASTAK-PSA+FRRSCURR-FRRS(,0) RESET STACK            02770001
+         AL    &R1,PSASTAK-PSA+FRRSELEN-FRRS(,0) FIRST ENTRY ADDRESS    02780001
+*                                                              @ZMB0044 02790001
+         ST    &R4,FRRSFRRA-FRRSENTR(0,&R1)      ADD ADDRESS TO STACK   02800001
+         AIF   ('&PARMAD' EQ '').C14    IF NO PARMS REQUEST BRANCH      02810001
+.*                                      TO RESET THE STACK     @G381P2F 02820001
+         AIF    ('&CLEAR' NE 'Y' AND '&CLEAR' NE 'YES').C14    @G381P2F 02830001
+         XC    FRRSPARM-FRRSENTR(24,&R1),FRRSPARM-FRRSENTR(&R1)         02840001
+*                                                CLEAR PARM AREA        02850001
+.C14     ST    &R1,PSASTAK-PSA+FRRSCURR-FRRS(,0) RESET STACK            02860001
+*                                                              @G381P2F 02870001
+         AIF   ('&PARMAD' EQ '').END   FINISHED IF NO PARMS REQUEST     02880001
+.*                                                             @G381P2F 02890001
+         AIF   ('&PARMAD'(1,1) EQ '(').C10                              02900001
+         AIF   (T'&PARMAD EQ 'N').MSG4                                  02910001
+         AGO   .C13                                                     02920001
+.C10     LA    &R3,FRRSPARM-FRRSENTR(0,&R1)      FRR PARM ADDRESS       02930001
+         AGO   .END                                                     02940001
+.C13     LA    &R2,FRRSPARM-FRRSENTR(0,&R1)      FRR PARM ADDRESS       02950001
+         ST    &R2,&PARMAD                       RETURN TO USER         02960001
+         AGO   .END                                                     02970001
+.*                                        ***************************   02980001
+.OUTLINE ANOP                                                  @G381P2F 02990001
+.*                                        FOLLOWING IS CODE TO          03000001
+.*                                        BRANCH TO IEAVTSFR   @G381P2F 03010001
+.*                                        AND PERFORM ADD FRR  @G38LP1S 03020001
+.*                                        INSTRUCTION          @G38LP1S 03030001
+.*                                                                      03040001
+.*    SET UP LOCAL CHARACTER FOR USE IN EXPANSIONS                      03050001
+&I       SETA  1                 INIT INDEX FOR MODE           @G381P2F 03060001
+&MODFLG  SETA  0                 INIT MODE FLAGS               @G381P2F 03070001
+&CTRLNK  SETA  0                 INIT BRANCH TABLE CTR         @G381P2F 03080001
+&B(1)    SETB  0                 INIT MODE=HOME IND            @G381P2F 03090001
+&B(2)    SETB  0                 INIT MODE=FULLXM IND          @G381P2F 03100001
+&B(3)    SETB  0                 INIT MODE=PRIMARY IND         @G381P2F 03110001
+&B(4)    SETB  0                 INIT MODE=LOCAL IND           @G381P2F 03120001
+&B(5)    SETB  0                 INIT MODE=GLOBAL IND          @G381P2F 03130001
+&R1      SETC  '&WRKREGS(1)'                                   @G381P2F 03140001
+&R3      SETC  '&PARMAD(1)'                                    @G381P2F 03150001
+&R4      SETC  '&FRRAD(1)'                                     @G381P2F 03160001
+.*                                                    OTHERWISE CHECK   03170001
+.*                                                    &OPT FOR A VALID  03180001
+.*                                                    OPTION            03190001
+         AIF       ('&OPT' EQ 'A' OR '&OPT' EQ 'R').ADREP2     @G381P2F 03200001
+         AIF       ('&OPT' EQ 'D' OR '&OPT' EQ 'P').EXPAND2    @G381P2F 03210001
+         AIF       ('&OPT' EQ 'F').FLUSH2                      @G381P2F 03220001
+         AIF       ('&OPT' EQ 'AF').ADFL2  ADD/FLUSH OPTION    @G381P2F 03230001
+         MNOTE     12,'INVALID OPTION &OPT SPECIFIED'                   03240001
+.*                                                    MESSAGE STATING   03250001
+.*                                                    INVALID OPTION    03260001
+         AGO       .END                               STOP EXPANSION    03270001
+.*                                                                      03280001
+.ADREP2  ANOP                              SYNTAX CHECK FOR ADD         03290001
+.*                                         AND REPLACE         @G381P2F 03300001
+.*                                                                      03310001
+         AIF       ('&FRRAD' EQ '').MSG3              ISSUE MESSAGE IF  03320001
+.*                                                    &FRRAD  IS NOT    03330001
+.*                                                    SPECIFIED FOR     03340001
+.*                                                    THE ADD/REPLACE   03350001
+.*                                                    OPTION   @G381P2F 03360001
+         AIF       ('&MODE' NE '').MODELP  CHECK MODE          @G381P2F 03370001
+&B(1)    SETB      1                      IND HOME DEFAULTED   @G381P2F 03380001
+         AGO       .CHKEUT                                              03390001
+.MODELP  ANOP                              MODE LOOP WILL SCAN THE      03400001
+.*                                         MODE OPTIONS, SYNTAX CHECK   03410001
+.*                                         AND INDICATE THE OPTIONS     03420001
+.*                                         CHOSEN              @G381P2F 03430001
+         AIF       ('&MODE(&I)' NE 'HOME').FULL  IF NOT HOME, CHECK     03440001
+.*                                               FOR FULLXM    @G381P2F 03450001
+         AIF       (&B(2) OR &B(3)).MSG10  ISSUE MESSAGE IF FULLXM OR   03460001
+.*                                         PRIMARY HAS ALSO BEEN        03470001
+.*                                         SPECIFIED           @G381P2F 03480001
+&B(1)    SETB      1                       IND HOME SPEC       @G381P2F 03490001
+         AGO       .INITLP                                     @G381P2F 03500001
+.FULL    ANOP                                                  @G381P2F 03510001
+         AIF       ('&MODE(&I)' NE 'FULLXM').PRIM IF NOT FULLXM,CHECK   03520001
+.*                                               FOR PRIMARY   @G381P2F 03530001
+         AIF       (&B(2)).INITLP          IGNORE IF FULLXM WAS         03540001
+.*                                         SPECIFIED BEFORE    @G381P2F 03550001
+         AIF       (&B(1) OR &B(3)).MSG10  ISSUE MESSAGE IF HOME OR     03560001
+.*                                         PRIMARY HAS ALSO BEEN        03570001
+.*                                         SPECIFIED           @G381P2F 03580001
+&MODFLG  SETA      &MODFLG+8               IND FULLXM          @G381P2F 03590001
+&B(2)    SETB      1                       IND FULLXM SPEC     @G381P2F 03600001
+         AGO       .INITLP                                     @G381P2F 03610001
+.PRIM    ANOP                                                  @G381P2F 03620001
+         AIF       ('&MODE(&I)' NE 'PRIMARY').LCL IF NOT PRIMARY, CHK   03630001
+.*                                                FOR LOCAL    @G381P2F 03640001
+         AIF       (&B(3)).INITLP          IGNORE IF PRIMARY WAS        03650001
+.*                                         SPECIFIED BEFORE    @G381P2F 03660001
+         AIF       (&B(1) OR &B(2)).MSG10  ISSUE MESSAGE IF HOME OR     03670001
+.*                                         FULLXM HAS ALSO BEEN         03680001
+.*                                         SPECIFIED           @G381P2F 03690001
+&MODFLG  SETA      &MODFLG+4               IND PRIMARY         @G381P2F 03700001
+&B(3)    SETB      1                       IND PRIMARY SPEC    @G381P2F 03710001
+         AGO       .INITLP                                     @G381P2F 03720001
+.LCL     ANOP                                                  @G381P2F 03730001
+         AIF       ('&MODE(&I)' NE 'LOCAL').GLB  IF NOT LOCAL, CHECK    03740001
+.*                                               FOR GLOBAL    @G381P2F 03750001
+         AIF       (&B(4)).INITLP          IGNORE IF LOCAL WAS          03760001
+.*                                         SPECIFIED BEFORE    @G381P2F 03770001
+&MODFLG  SETA      &MODFLG+2               IND LOCAL           @G381P2F 03780001
+&B(4)    SETB      1                       IND LOCAL SPEC      @G381P2F 03790001
+         AGO       .INITLP                                     @G381P2F 03800001
+.GLB     ANOP                                                  @G381P2F 03810001
+         AIF       ('&MODE(&I)' NE 'GLOBAL').MSG10  IF NOT GLOBAL,      03820001
+.*                                               ISSUE MESSAGE THAT     03830001
+.*                                               MODE IS SPECIFIED      03840001
+.*                                               INCORRECTLY   @G381P2F 03850001
+         AIF       (&B(5)).INITLP          IGNORE IF GLOBAL WAS         03860001
+.*                                         SPECIFIED BEFORE    @G381P2F 03870001
+&MODFLG  SETA      &MODFLG+1               IND GLOBAL          @G381P2F 03880001
+&B(5)    SETB      1                       IND GLOBAL SPEC     @G381P2F 03890001
+.INITLP  ANOP                                                  @G381P2F 03900001
+&I       SETA      &I+1                    INCR ELEMENT CTR    @G381P2F 03910001
+         AIF       (&I LE &J).MODELP       IF MORE ELEMENTS, LOOP TO    03920001
+.*                                         SCAN THE NEXT ONE   @G381P2F 03930001
+.*                                                                      03940001
+.CHKEUT  ANOP                              CHECK EUT           @G382P2F 03950001
+.*                                                                      03960001
+         AIF       ('&EUT' NE '' AND '&EUT' NE 'Y' AND                 S03970001
+                   '&EUT' NE 'YES').MSG8    ISSUE MESSAGE IF &EUT       03980001
+.*                                          IS SPECIFIED INCORRECTLY    03990001
+.*                                                             @G382P2F 04000001
+         AGO        .EXPAND3                                   @G382P2F 04010001
+.*                                                                      04020001
+.EXPAND2 ANOP                             SYNTAX CHECK FOR DELETE       04030001
+.*                                        AND PURGE            @G381P2F 04040001
+.*                                                                      04050001
+         AIF       ('&FRRAD' EQ '' AND '&PARMAD' EQ '').WARN2           04060001
+.*                                                             @G381P2F 04070001
+         MNOTE     *,'FRRAD AND/OR PARMAD SPECIFIED FOR DELETE/PURGE'   04080001
+.*                                                             @G381P2F 04090001
+         MNOTE     0,'FRRAD AND/OR PARMAD IGNORED-DELETE/PURGE HONORED' 04100001
+.*                                                             @G38LP2F 04110001
+.WARN2   ANOP                                                  @G381P2F 04120001
+         AIF       ('&WRKREGS'(1,1) NE '(' OR N'&WRKREGS NE 2).MSG2     04130001
+.*                                       IF &WRKREGS IS SPECIFIED BUT   04140001
+.*                                       INVALIDLY, ISSUE ERROR         04150001
+.*                                       MESSAGE.              @G382P2F 04160001
+&R2    SETC    '&WRKREGS(2)'                                   &G382P2F 04170001
+         AIF       ('&MODE' EQ '').WARN3                       @G381P2F 04180001
+         MNOTE     0,'MODE SPECIFIED FOR DELETE/PURGE - MODE IGNORED'   04190001
+.*                                                             @G38LP2F 04200001
+.WARN3   ANOP                                                  @G381P2F 04210001
+         AIF       ('&EUT' NE '' AND '&OPT' EQ 'P').MSG11      @G381P2F 04220001
+         AIF       ('&EUT' EQ '').CHKEUT                       @G382P2F 04230001
+         MNOTE     0,'EUT SPECIFIED FOR DELETE - EUT IGNORED'  @G38LP2F 04240001
+.*                                                                      04250001
+.EXPAND3 ANOP                          START CODE GENERATION FOR        04260001
+.*                                     ADD, REPLACE, DELETE, AND        04270001
+.*                                     PURGE                   @G381P2F 04280001
+&LABEL   SETC  '&NAME'        LABEL REQUESTED BY CALLER        @G38LP1S 04290001
+&LABELA  SETC  'IHB&SYSNDX.A' FOR LOCAL BRANCHING              @G38LP1S 04300001
+&LABELB  SETC  'IHB&SYSNDX.B' FOR LOCAL BRANCHING              @G38LP1S 04310001
+.*                                                                5@H1D 04320001
+.*                                                                      04330001
+&LABEL   L     &R1,PSACSTK-PSA(0,0)      ADDR OF CURRENT STACK @G38LP1S 04340001
+         AIF       ('&OPT' EQ 'D' OR '&OPT' EQ 'P').CHKMPTY  BRANCH     04350001
+.*                                        IF DELETE OR PURGE   @G381P2F 04360001
+         AIF       ('&EUT' EQ '').SAVREGS  BRANCH IF NOT EUT   @G381P2F 04370001
+         CL    &R1,PSANSTK-PSA(0,0)      IS CURRENT STACK THE           04380001
+*                                        NORMAL STACK          @G382P2F 04390001
+         BNE   *+8                       NO, BRANCH            @G382P2F 04400001
+         OI    PSAMFLGS-PSA(0),X'80'     IND EUT TYPE FRR      @G381P2F 04410001
+         AGO   .SAVREGS                                            @H1C 04420001
+.*                                                                3@H1D 04430001
+.CHKMPTY ANOP                                                  @G382P2F 04440001
+         L     &R2,FRRSCURR-FRRS(0,&R1)     ADDR OF CURRENT             04450001
+*                                           ELEMENT            @G382P2F 04460001
+         CL    &R2,FRRSEMP-FRRS(0,&R1)      IS THE FRR STACK            04470001
+*                                           EMPTY              @G382P2F 04480001
+         AIF        (T'&WRKREGS(1) NE 'N').BRMPTY1  IF NOT SELF-        04490001
+.*                                          DEFINING, BRANCH   @G381P2F 04500001
+         AIF        (&R1 EQ 1).BRMPTY2      IF FIRST WORK REG PASSED    04510001
+.*                                          IS REG 1, BRANCH   @G381P2F 04520001
+.BRMPTY1 ANOP                                                  @G382P2F 04530001
+         BE    *+40                     YES, NO NEED TO UPDATE @G381P2F 04540001
+         AGO        .SAVREGS                                   @G381P2F 04550001
+.BRMPTY2 ANOP                                                  @G382P2F 04560001
+         BE    *+38                     YES, NO NEED TO UPDATE @G381P2F 04570001
+         AGO        .SAVREGS                                   @G381P2F 04580001
+.*                                                                      04590001
+.ADFL2   ANOP                          SYNTAX CHECK FOR ADD/FLUSH       04600001
+.*                                                             @G381P2F 04610001
+.*                                                                      04620001
+         AIF       ('&FRRAD' EQ '').MSG3              ISSUE MESSAGE IF  04630001
+.*                                                    &FRRAD  IS NOT    04640001
+.*                                                    SPECIFIED FOR     04650001
+.*                                                    THE ADD/FLUSH     04660001
+.*                                                    OPTION   @G381P2F 04670001
+         AIF       ('&MODE' EQ '').ADFLEUT                     @G381P2F 04680001
+         MNOTE     0,'MODE SPECIFIED FOR ADDFLUSH - MODE IGNORED'       04690001
+.*                                                             @G38LP2F 04700001
+.ADFLEUT ANOP                                                  @G381P2F 04710001
+         MNOTE 8,'SETFRR7 ADDFLUSH IS NOT SUPPORTED'               @01A 04720001
+         MEXIT ,                                                   @01A 04730001
+         AIF       ('&EUT' NE '').MSG11                        @G381P2F 04740001
+.*                                                                      04750001
+.*                                     START CODE GENERATION FOR        04760001
+.*                                     ADDFLUSH                @G381P2F 04770001
+.*                                                                      04780001
+&NAME    LA    &R1,PSASTAK-PSA(0,0)      NORMAL STACK ADDR     @ZM49899 04790001
+.*                                                             @G381P2F 04800001
+.SAVREGS ANOP                          CONTINUE WITH CODE GENERATION    04810001
+.*                                     FOR ADD, REPLACE, ADDFLUSH,      04820001
+.*                                     DELETE, AND PURGE       @G381P2F 04830001
+.*                                                             @G381P2F 04840001
+         STM   14,3,16(&R1)              SAVE REGS 14-3        @G381P2F 04850001
+         AIF        ('&OPT' EQ 'D' OR '&OPT' EQ 'P').DELPUR    @G381P2F 04860001
+.*                                                             @G381P2F 04870001
+.*                                   IF OPTION IS ADD, REPLACE, OR      04880001
+.*                                   ADD/FLUSH, SAVE &FRRAD    @G381P2F 04890001
+.*                                                             @G381P2F 04900001
+         AIF        ('&FRRAD'(1,1) EQ '(').STFRR2 IF A REG WAS          04910001
+.*                                                SPECIFIED    @G381P2F 04920001
+         AIF        (T'&FRRAD EQ 'N').MSG4                     @G381P2F 04930001
+         L     0,&FRRAD                  LOAD FRR ADDRESS      @G381P2F 04940001
+         AGO         .LDREG1                                   @G381P2F 04950001
+.STFRR2  ANOP                                                  @G381P2F 04960001
+         AIF        (T'&FRRAD NE 'N').LDREG0  IF NOT SELF-DEFINING,     04970001
+.*                                          BRANCH             @G381P2F 04980001
+         AIF        (&R4 EQ 0).LDREG1       IF FRR ADDR PASSED IN       04990001
+.*                                          REG 0, BRANCH      @G381P2F 05000001
+.LDREG0  ANOP                                                  @G381P2F 05010001
+         LR    0,&R4                     LOAD FRR ADDRESS      @G381P2F 05020001
+.LDREG1  ANOP                                                  @G381P2F 05030001
+         AIF        (T'&WRKREGS(1) NE 'N').LDREG1A  IF NOT SELF-        05040001
+.*                                          DEFINING, BRANCH   @G381P2F 05050001
+         AIF        (&R1 EQ 1).NTRYAD       IF FIRST WORK REG PASSED    05060001
+.*                                          IS REG 1, BRANCH   @G381P2F 05070001
+.LDREG1A ANOP                                                  @G381P2F 05080001
+         LR    1,&R1                     SAVE STACK PTR        @G381P2F 05090001
+.NTRYAD  ANOP                                                  @G381P2F 05100001
+.*                                   CALCULATE ENTRY ADDRESS INTO       05110001
+.*                                   IEAVTSFR                  @G381P2F 05120001
+.*                                                             @G381P2F 05130001
+         AIF   ('&CLEAR' EQ 'Y' OR '&CLEAR' EQ 'YES').CLEAR    @G381P2F 05140001
+         AIF   ('&OPT' NE 'A').CHKADFL   DEFAULT FOR ADDFLUSH AND       05150001
+.*                                       REPLACE IS CLEAR=NO   @G381P2F 05160001
+         AIF   ('&CLEAR' EQ 'N' OR '&CLEAR' EQ 'NO').CHKADFL            05170001
+.*                                       DEFAULT FOR ADD IS             05180001
+.*                                       CLEAR=YES             @G381P2F 05190001
+.CLEAR   ANOP                                                  @G381P2F 05200001
+&CTRLNK  SETA    4                       OFFSET FOR CLEAR=YES           05210001
+.*                                       (IEAVTSFR BR TABLE)   @G381P2F 05220001
+.CHKADFL ANOP                                                  @G381P2F 05230001
+         AIF   ('&OPT' NE 'AF').CHKEM    CHK IF ADDFLUSH       @G381P2F 05240001
+&CTRLNK  SETA  &CTRLNK+48                OFFSET FOR ADDFLUSH   @G381P2F 05250001
+         AGO   .BALR                                           @G381P2F 05260001
+.CHKEM   ANOP                                                  @G381P2F 05270001
+         AIF   ('&EUT' EQ '').CHKMODE    CHECK FOR MODE IF EUT NOT      05280001
+.*                                       SPECIFIED             @G381P2F 05290001
+&MODFLG  SETA  &MODFLG+128               IND EUT=YES           @G381P2F 05300001
+         AGO   .INDEM                                          @G381P2F 05310001
+.CHKMODE ANOP                                                  @G381P2F 05320001
+         AIF   (&MODFLG EQ 0).OPTS       BRANCH IF MODE WAS NOT         05330001
+.*                                       SPECIFIED OR =HOME    @G381P2F 05340001
+.INDEM   ANOP                            IND EUT OR MODE (OTHER THAN    05350001
+.*                                       HOME) WAS SPECIFIED   @G381P2F 05360001
+         AIF   (&B(2) OR &B(3)).SAVXM    BRANCH IF MODE=FULLXM OR       05370001
+.*                                       PRIMARY WAS SPEC      @G381P2F 05380001
+&CTRLNK  SETA  &CTRLNK+8                 OFFSET FOR EUT OR MODE BUT     05390001
+.*                                       WITHOUT CROSS MEMORY STATUS    05400001
+.*                                       (IEAVTSFR BR TABLE)   @G381P2F 05410001
+         AGO   .INITR2                                         @G381P2F 05420001
+.SAVXM   ANOP                                                  @G381P2F 05430001
+&CTRLNK  SETA  &CTRLNK+16                OFFSET FOR EUT OR MODE AND     05440001
+.*                                       SAVING CROSS MEMORY STATUS     05450001
+.*                                       (IEAVTSFR BR TABLE)   @G381P2F 05460001
+.INITR2  ANOP                                                  @G381P2F 05470001
+         LA    2,&MODFLG                 IND PARAMETERS CHOSEN @G381P2F 05480001
+.OPTS    ANOP                                                  @G381P2F 05490001
+         AIF   ('&OPT' NE 'R').BALR      CHK IF REPLACE        @G381P2F 05500001
+&CTRLNK  SETA  &CTRLNK+24                OFFSET FOR REPLACE    @G381P2F 05510001
+         AGO   .BALR                                           @G381P2F 05520001
+.*                                                             @G381P2F 05530001
+.DELPUR  ANOP                            DELETE OR PURGE       @G381P2F 05540001
+         AIF        (T'&WRKREGS(1) NE 'N').LDREG1D  IF NOT SELF-        05550001
+.*                                          DEFINING, BRANCH   @G381P2F 05560001
+         AIF        (&R1 EQ 1).BRIFPUR      IF FIRST WORK REG PASSED    05570001
+.*                                          IS REG 1, BRANCH   @G381P2F 05580001
+.LDREG1D ANOP                                                  @G381P2F 05590001
+         LR    1,&R1                     SAVE STACK PTR        @G381P2F 05600001
+.BRIFPUR ANOP                                                  @G381P2F 05610001
+         AIF        ('&OPT' EQ 'P').PURGE2   GO TO PURGE       @G381P2F 05620001
+.*                                                             @G381P2F 05630001
+&CTRLNK  SETA  56                        OFFSET FOR DELETE     @G381P2F 05640001
+         AGO   .BALR                                           @G381P2F 05650001
+.PURGE2  ANOP                                                  @G381P2F 05660001
+&CTRLNK  SETA  64                        OFFSET FOR PURGE      @G381P2F 05670001
+         AGO   .BALR                                           @G381P2F 05680001
+.*                                                                      05690001
+.FLUSH2  ANOP                           SYNTAX CHECK AND CODE           05700001
+.*                                      GENERATION FOR FLUSH   @G381P2F 05710001
+.*                                                                      05720001
+         AIF       ('&MODE' EQ '').FLEUT                       @G381P2F 05730001
+         MNOTE     0,'MODE SPECIFIED FOR FLUSH - MODE IGNORED'          05740001
+.*                                                             @G38LP2F 05750001
+.FLEUT   ANOP                                                  @G381P2F 05760001
+         AIF       ('&EUT' NE '').MSG11                        @G381P2F 05770001
+         MNOTE 8,'SETFRR7 ADDFLUSH IS NOT SUPPORTED'               @01A 05780001
+         MEXIT ,                                                   @01A 05790001
+&CTRLNK  SETA  68                        OFFSET FOR FLUSH      @G381P2F 05800001
+&NAME    LA    &R1,PSASTAK-PSA(0,0)      NORMAL STACK ADDR     @ZM49899 05810001
+         STM   14,3,16(&R1)              SAVE REGS 14-3        @G381P2F 05820001
+         AIF        (T'&WRKREGS(1) NE 'N').LDREG1E  IF NOT SELF-        05830001
+.*                                          DEFINING, BRANCH   @G381P2F 05840001
+         AIF        (&R1 EQ 1).BALR         IF FIRST WORK REG PASSED    05850001
+.*                                          IS REG 1, BRANCH   @G381P2F 05860001
+.LDREG1E ANOP                                                  @G381P2F 05870001
+         LR    1,&R1                     SAVE STACK PTR        @G381P2F 05880001
+.*                                                                      05890001
+.*                                       BALR TO IEAVTSFR      @G381P2F 05900001
+.*                                                                      05910001
+.BALR    ANOP                                                  @G381P2F 05920001
+.*                                                                4@H1D 05930001
+         L     15,16(0,0)                LOAD CVT ADDRESS      @G381P2F 05940001
+         L     15,276(0,15)              ADDR OF IEAVTSFR      @G381P2F 05950001
+         L     15,&CTRLNK.(,15)          ADDR OF ENTRY POINT   @G381P2F 05960001
+         BALR  14,15                     GO TO IEAVTSFR        @G381P2F 05970001
+         AIF       ('&OPT' EQ 'F').LMREGS                      @G382P2F 05980001
+         AIF       ('&OPT' EQ 'P' OR '&OPT' EQ 'D').LMNSS      @G382P2F 05990001
+.*                                                             @G381P2F 06000001
+.*                                 IF OPTION IS ADD, REPLACE, OR        06010001
+.*                                 ADDFLUSH CHECK PARMAD       @G381P2F 06020001
+.*                                                             @G381P2F 06030001
+         AIF   ('&PARMAD' EQ '').LMREGS  CHECK IF PARMAD       @G381P2F 06040001
+         AIF   ('&PARMAD'(1,1) EQ '(').C19                     @G381P2F 06050001
+         AIF   (T'&PARMAD EQ 'N').MSG4                         @G381P2F 06060001
+         LM    14,3,16(1)                RESTORE REGS          @G381P2F 06070001
+         L     &R1,FRRSCURR-FRRS(0,&R1)  CURRENT ENTRY                  06080001
+*                                                              @G381P2F 06090001
+         LA    &R1,FRRSPARM-FRRSENTR(0,&R1) FRR PARM ADDRESS            06100001
+*                                                              @G381P2F 06110001
+         ST    &R1,&PARMAD               RETURN ADDR TO USER   @G381P2F 06120001
+         AGO   .ASST1                                          @G38LP1S 06130001
+.C19     ANOP                                                  @G381P2F 06140001
+         AIF   (T'&PARMAD(1) NE 'N').LM1ST  IF NOT SELF-DEFINING,       06150001
+.*                                          BRANCH             @G381P2F 06160001
+         AIF   (&R3 GT 2 AND &R3 LT 14).PARM1ST                @G381P2F 06170001
+.LM1ST   ANOP                                                  @G381P2F 06180001
+         LM    14,3,16(1)                RESTORE REGS          @G381P2F 06190001
+         L     &R1,FRRSCURR-FRRS(0,&R1)  CURRENT ENTRY                  06200001
+*                                                              @G381P2F 06210001
+         LA    &R3,FRRSPARM-FRRSENTR(0,&R1) FRR PARM ADDRESS            06220001
+*                                                              @G381P2F 06230001
+         AGO   .ASST1                                          @G38LP1S 06240001
+.PARM1ST ANOP                                                  @G381P2F 06250001
+         LA    &R3,FRRSPARM-FRRSENTR(0,3) ADDR OF PARM AREA    @G381P2F 06260001
+         AIF   (&R3 EQ 3).LMNOT3                               @G381P2F 06270001
+.LMREGS  ANOP                                                  @G381P2F 06280001
+         LM    14,3,16(1)                RESTORE REGS          @G381P2F 06290001
+         AGO   .ASST1                                          @G38LP1S 06300001
+.LMNOT3  ANOP                                                  @G381P2F 06310001
+         LM    14,2,16(1)                RESTORE REGS          @G381P2F 06320001
+.ASST1   ANOP  ,                                               @G38LP1S 06330001
+         AGO   .END                     THAT'S ALL                 @H1C 06340001
+.*                                                               37@H1D 06350001
+.LMNSS   ANOP                                                  @G381P2F 06360001
+         LM    14,3,16(1)                RESTORE REGS          @G382P2F 06370001
+         B     *+12                                            @G382P2F 06380001
+*                  IEAVTSFR RETURNS HERE WHEN THE PSANSS       @G382P2F 06390001
+*                  BIT (EUT FLAG) NEEDS TO BE SET OFF          @G382P2F 06400001
+         LM    14,3,16(1)                RESTORE REGS          @G382P2F 06410001
+         NI    PSAMFLGS-PSA(0),X'7F'     SET PSANSS FLAG OFF   @G382P2F 06420001
+         AGO   .END                                            @G382P2F 06430001
+.MSG1    MNOTE     12,'WORK REGISTERS NOT SPECIFIED'                    06440001
+         AGO       .END                                                 06450001
+.MSG2    MNOTE     8,'WORK REGISTERS SPECIFIED INCORRECTLY'             06460001
+.MSG5    MNOTE     8,'SPECIFY AS FOLLOWS - WRKREGS=(REGISTER,REGISTER)' 06470001
+         AGO       .END                                                 06480001
+.MSG3    MNOTE     8,'FRR ADDRESS NOT SPECIFIED FOR ADD/REPLACE'        06490001
+         AGO        .END                                                06500001
+.MSG4    MNOTE  8,'ADDRESS SPECIFIED FOR FRRAD/PARMAD IS SELF-DEFINING' 06510001
+         AGO       .END                                        @G381P2F 06520001
+.MSG6    MNOTE     8,'EUT NOT ALLOWED WITH INLINE=YES'         @G381P2F 06530001
+         AGO       .END                                        @G381P2F 06540001
+.MSG7    MNOTE    8,'MODE SPECIFIED INCORRECTLY WITH INLINE'   @G381P2F 06550001
+         AGO        .END                                       @G381P2F 06560001
+.MSG8    MNOTE     8,'EUT SPECIFIED INCORRECTLY'               @G381P2F 06570001
+         AGO       .END                                        @G381P2F 06580001
+.MSG9    MNOTE     8,'INLINE SPECIFIED INCORRECTLY'            @G381P2F 06590001
+         AGO       .END                                        @G381P2F 06600001
+.MSG10   MNOTE    12,'INVALID OPTION IN MODE SUBSTRING ELEMENT &I'      06610001
+.*                                                             @G381P2F 06620001
+         AGO        .END                                       @G381P2F 06630001
+.MSG11   MNOTE     8,'EUT NOT ALLOWED WITH PURGE/FLUSH/ADDFLUSH'        06640001
+.*                                                             @G381P2F 06650001
+         AGO       .END                                        @ZM50139 06660001
+.MSG12   MNOTE    12,'INVALID PARM &OPT2, PARENTHESIS MAY BE MISSING'   06670001
+.*                                                             @ZM50139 06680001
+         AGO   .END                                            @G38LP1S 06690001
+.MSG13   MNOTE 8,'INVALID CLEAR OPTION'                        @G38LP1S 06700001
+.END     MEND                                                           06710001

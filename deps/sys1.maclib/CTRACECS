@@ -1,0 +1,1085 @@
+*/**** START OF SPECIFICATIONS **************************************** 00000100
+*                                                                     * 00000200
+*                                                                     * 00000300
+*01* MACRO NAME:  CTRACECS                              -09/07/18-<0> * 00000400
+*                                                                     * 00000500
+*                                                                     * 00000600
+*01* DESCRIPTIVE NAME:  Component Trace Writer Control Area Set       * 00000700
+*                                                                     * 00000800
+*01* PROPRIETARY STATEMENT:                                           * 00000900
+*                                                                     * 00001000
+*     LICENSED MATERIALS - PROPERTY OF IBM                            * 00001100
+*     5650-ZOS COPYRIGHT IBM CORP. 1990, 2019                         * 00001200
+*                                                                     * 00001300
+* STATUS= HBB77C0                                                     * 00001400
+*                                                                     * 00001500
+*                                                                     * 00001600
+*                                                                     * 00001700
+*01* FUNCTION:                                                        * 00001800
+*                                                                     * 00001900
+*                                                                     * 00002000
+*      The CTRACECS macro serializes the updating of trace buffers    * 00002100
+*      between CTRACE users and the CTRACE External Writer.  Trace    * 00002200
+*      buffers are serialized with a compare double and swap (CDS)    * 00002300
+*      instruction which sets fields in the Trace Writer Buffer       * 00002400
+*      Control area (TWBC).  Code is generated inline to perform this * 00002500
+*      function.                                                      * 00002600
+*                                                                     * 00002700
+*      Register Usage:                                                * 00002800
+*                                                                     * 00002900
+*                                                                     * 00003000
+*      o   GPRs 0,1,14,15 are not preserved.                          * 00003100
+*                                                                     * 00003200
+*      o   GPRs 2-13 are preserved.                                   * 00003300
+*                                                                     * 00003400
+*      o   All ARs are preserved.                                     * 00003500
+*                                                                     * 00003600
+*                                                                     * 00003700
+*                                                                     * 00003800
+*02*   OPERATION:                                                     * 00003900
+*                                                                     * 00004000
+*        The CTRACECS macro performs syntax checking to validate the  * 00004100
+*        user specified request. If an error is detected, macro error * 00004200
+*        messages are issued and a macro phase return code of 8 is    * 00004300
+*        set.                                                         * 00004400
+*                                                                     * 00004500
+*        The requested service is performed by macro generated inline * 00004600
+*        code.                                                        * 00004700
+*                                                                     * 00004800
+*01* EXTERNAL CLASSIFICATION:  PI                                     * 00004900
+*                                                                     * 00005000
+*01* END OF EXTERNAL CLASSIFICATION:                                  * 00005100
+*                                                                     * 00005200
+*01* ENVIRONMENT:                                                     * 00005300
+*                                                                     * 00005400
+*                                                                     * 00005500
+*      Dispatchable unit mode: Task or SRB mode.                      * 00005600
+*                                                                     * 00005700
+*      Minimum authorization: Supervisor state.  Zero PSW key.        * 00005800
+*                                                                     * 00005900
+*      AMODE:            24- or 31-bit.                               * 00006000
+*                                                                     * 00006100
+*      ASC mode:         Primary or Access Register.                  * 00006200
+*                                                                     * 00006300
+*      Interrupt status: Enabled or disabled for I/O and external     * 00006400
+*                        interrupts.                                  * 00006500
+*                                                                     * 00006600
+*      Locks:            The caller may hold locks.                   * 00006700
+*                                                                     * 00006800
+*                                                                     * 00006900
+*                                                                     * 00007000
+*01* RESTRICTIONS:                                                    * 00007100
+*    None                                                             * 00007200
+*                                                                     * 00007300
+*01* SYNTAX:                                                          * 00007400
+*                                                                     * 00007500
+*Ýxlabel¨  CTRACECS     TBWC=xtbwc                                    * 00007600
+*                    Ð ,MODE=FILLING                                  * 00007700
+*                    !     ,BUFFSEQ#=xbuffseq#                        * 00007800
+*                    Ô ,MODE=FULL                                     * 00007900
+*                    ¿ ,MODE=AVAIL                                    * 00008000
+*                    ÐÝ,TESTMODE=CURRENT¨                             * 00008100
+*                    ÔÝ,TESTMODE=AVAIL¨                               * 00008200
+*                    ÔÝ,TESTMODE=FILLING¨                             * 00008300
+*                    ¿Ý,TESTMODE=FULL¨                                * 00008400
+*                     Ý,TESTSEQ#=»xtestseq#!TBWCSEQº¨                 * 00008500
+*                     Ý,CSLABEL=»xcslabel!RETRYº¨                     * 00008600
+*                     Ý,COM=»xcom!NULLº¨                              * 00008700
+*                                                                     * 00008800
+*                                                                     * 00008900
+*      Where:                                                         * 00009000
+*                                                                     * 00009100
+*                                                                     * 00009200
+*      Ýxlabel¨                                                       * 00009300
+*          is an optional symbol, starting in column 1, that is the   * 00009400
+*          name on the CTRACECS macro invocation.  The name must      * 00009500
+*          conform to the rules for an ordinary assembler language    * 00009600
+*          symbol.                                                    * 00009700
+*          DEFAULT: No name.                                          * 00009800
+*                                                                     * 00009900
+*                                                                     * 00010000
+*                                                                     * 00010100
+*                                                                     * 00010200
+*      TBWC=xtbwc                                                     * 00010300
+*          is the name (RS-type), or address in register (2)-(12), of * 00010400
+*          a required 8 character input variable that contains the    * 00010500
+*          storage for the TBWC that is to be manipulated. The TBWC   * 00010600
+*          contains the state of the buffer and the buffer sequence   * 00010700
+*          number.  The TBWC must be aligned on a doubleword boundary * 00010800
+*          and must be addressable when the CTRACECS macro expansion  * 00010900
+*          executes.                                                  * 00011000
+*          If a register is used to give the address of the TBWC and  * 00011100
+*          the program is running in access register ASC mode, then   * 00011200
+*          the corresponding AR must be set appropriately to contain  * 00011300
+*          the ALET of the TBWC.                                      * 00011400
+*                                                                     * 00011500
+*                                                                     * 00011600
+*                                                                     * 00011700
+*                                                                     * 00011800
+*      MODE=»FILLING!FULL!AVAILº                                      * 00011900
+*          is a required keyword input that indicates the requested   * 00012000
+*          state to which the buffer is set.                          * 00012100
+*                                                                     * 00012200
+*                                                                     * 00012300
+*          MODE=FILLING                                               * 00012400
+*              Request that the buffer be set to the "filling" state. * 00012500
+*              Use this keyword before you have put any trace entries * 00012600
+*              in the buffer.  If the buffer is not in the            * 00012700
+*              "available" state when this keyword is used, then the  * 00012800
+*              contents of this buffer that was previously passed to  * 00012900
+*              CTRACE on the CTRACEWR macro will not be written to    * 00013000
+*              the output dataset.  It is recommended that            * 00013100
+*              TESTMODE=AVAIL be used when MODE=FILLING is specified. * 00013200
+*              Specifying this keyword causes flag TBWCUTRC to be set * 00013300
+*              (=1) and the following flags to be cleared (=0):       * 00013400
+*                                                                     * 00013500
+*                                                                     * 00013600
+*                  TBWCUFUL                                           * 00013700
+*                                                                     * 00013800
+*                  TBWCCCAP                                           * 00013900
+*                                                                     * 00014000
+*                  TBWCCAVL                                           * 00014100
+*                                                                     * 00014200
+*                                                                     * 00014300
+*                                                                     * 00014400
+*                                                                     * 00014500
+*              BUFFSEQ#=xbuffseq#                                     * 00014600
+*                  is the name (RS-type), or address in register      * 00014700
+*                  (2)-(12), of a required fullword input that        * 00014800
+*                  specifies the sequence number for this buffer.     * 00014900
+*                  This sequence number indicates the order in which  * 00015000
+*                  the buffers were passed to the writer.  The number * 00015100
+*                  must be unique for every buffer passed to a writer * 00015200
+*                  by a given trace.  This number should be set to 1  * 00015300
+*                  for the first buffer written by a trace to a       * 00015400
+*                  writer, and it should be incremented by 1 for      * 00015500
+*                  every buffer sent by that trace to that writer.    * 00015600
+*                                                                     * 00015700
+*                                                                     * 00015800
+*                                                                     * 00015900
+*          MODE=FULL                                                  * 00016000
+*              Request that the buffer be set to the "full" state.    * 00016100
+*              Use this keyword after you have filled the buffer with * 00016200
+*              trace data.  No more data should be put into the       * 00016300
+*              buffer until the buffer state is set to available by   * 00016400
+*              the CTRACEWR macro service.  Specifying this keyword   * 00016500
+*              causes flag TBWCUFUL to be set (=1), and flag TBWCUTRC * 00016600
+*              to be cleared (=0).                                    * 00016700
+*                                                                     * 00016800
+*          MODE=AVAIL                                                 * 00016900
+*              Request that the buffer be set to the "available"      * 00017000
+*              state.  Use this keyword when no CTRACEWR macro will   * 00017100
+*              be issued.  Specifying this keyword causes flag        * 00017200
+*              TBWCCAVL to be set (=1), and the following flags to be * 00017300
+*              cleared (=0):                                          * 00017400
+*                                                                     * 00017500
+*                                                                     * 00017600
+*                  TBWCUFUL                                           * 00017700
+*                                                                     * 00017800
+*                  TBWCCCAP                                           * 00017900
+*                                                                     * 00018000
+*                  TBWCUTRC                                           * 00018100
+*                                                                     * 00018200
+*                                                                     * 00018300
+*                                                                     * 00018400
+*                                                                     * 00018500
+*                                                                     * 00018600
+*                                                                     * 00018700
+*                                                                     * 00018800
+*                                                                     * 00018900
+*      ÝTESTMODE=»CURRENT!AVAIL!FILLING!FULLº¨                        * 00019000
+*          is an optional keyword input that specifies the expected   * 00019100
+*          state of the buffer. The expected state is compared to the * 00019200
+*          current state of the buffer. The TBWC is only updated with * 00019300
+*          the requested state (MODE) if the expected state           * 00019400
+*          (TESTMODE) is the same as the current state of the buffer. * 00019500
+*          DEFAULT: CURRENT                                           * 00019600
+*                                                                     * 00019700
+*                                                                     * 00019800
+*          ÝTESTMODE=CURRENT¨                                         * 00019900
+*              Default. Set the state of the buffer to the state      * 00020000
+*              specified by the MODE keyword regardless of the        * 00020100
+*              current state.                                         * 00020200
+*                                                                     * 00020300
+*          ÝTESTMODE=AVAIL¨                                           * 00020400
+*              Requests that the state of the buffer be set to the    * 00020500
+*              state requested by the MODE keyword only when the      * 00020600
+*              buffer is in the available state.  Use this keyword    * 00020700
+*              with the MODE=FILLING keyword to change the state of   * 00020800
+*              the buffer to its next valid state.  CSLABEL is        * 00020900
+*              required with TESTMODE=AVAIL.                          * 00021000
+*                                                                     * 00021100
+*          ÝTESTMODE=FILLING¨                                         * 00021200
+*              Requests that the state of the buffer be set to the    * 00021300
+*              state requested by the MODE keyword only when the      * 00021400
+*              buffer is in the filling state.  Use this keyword with * 00021500
+*              the MODE=FULL keyword to change the state of the       * 00021600
+*              buffer to its next valid state.  CSLABEL is required   * 00021700
+*              with TESTMODE=FILLING.                                 * 00021800
+*                                                                     * 00021900
+*          ÝTESTMODE=FULL¨                                            * 00022000
+*              Requests that the state of the buffer be set to the    * 00022100
+*              state requested by the MODE keyword only when the      * 00022200
+*              buffer is in the full state.  Use this keyword with    * 00022300
+*              the MODE=AVAIL keyword to change the state of the      * 00022400
+*              buffer to its next valid state.  CSLABEL is required   * 00022500
+*              with TESTMODE=FULL.                                    * 00022600
+*                                                                     * 00022700
+*                                                                     * 00022800
+*                                                                     * 00022900
+*                                                                     * 00023000
+*                                                                     * 00023100
+*                                                                     * 00023200
+*      ÝTESTSEQ#=»xtestseq#!TBWCSEQº¨                                 * 00023300
+*          is the name (RS-type), or address in register (2)-(12), of * 00023400
+*          an optional fullword input value that specifies the        * 00023500
+*          expected buffer sequence number.  The expected buffer      * 00023600
+*          sequence number is compared to the current buffer sequence * 00023700
+*          number. The TBWC is only updated with the requested state  * 00023800
+*          (specified by the MODE keyword) if the expected buffer     * 00023900
+*          sequence number equals the current buffer sequence number  * 00024000
+*          (TBWCSEQ).  Use TESTSEQ# to ensure a new buffer sequence   * 00024100
+*          number is not being associated with this TBWC.  CSLABEL is * 00024200
+*          required when TESTSEQ# is not the default.                 * 00024300
+*          DEFAULT: TBWCSEQ                                           * 00024400
+*                                                                     * 00024500
+*                                                                     * 00024600
+*                                                                     * 00024700
+*                                                                     * 00024800
+*      ÝCSLABEL=»xcslabel!RETRYº¨                                     * 00024900
+*          is an optional input.  It is the name (A-type) of an       * 00025000
+*          optional label for TESTMODE=CURRENT and TESTSEQ#=TBWCSEQ,  * 00025100
+*          and a required label for the other TESTMODE keyword values * 00025200
+*          and other TESTSEQ# values.                                 * 00025300
+*          The generated code will branch to the label when the       * 00025400
+*          current buffer state does not equal the expected state     * 00025500
+*          specified by the TESTMODE keyword, or the current buffer   * 00025600
+*          sequence number does not equal the expected buffer         * 00025700
+*          sequence number specified by the TESTSEQ# keyword.         * 00025800
+*          If CSLABEL=RETRY is specified, the code will branch to a   * 00025900
+*          generated label to retry the CDS instruction with the      * 00026000
+*          current value of the TBWC.  CSLABEL=RETRY is only valid    * 00026100
+*          with TESTMODE=CURRENT and TESTSEQ#=TBWCSEQ.                * 00026200
+*          DEFAULT: RETRY                                             * 00026300
+*                                                                     * 00026400
+*                                                                     * 00026500
+*                                                                     * 00026600
+*                                                                     * 00026700
+*      ÝCOM=»xcom!NULLº¨                                              * 00026800
+*          is an optional character input  that will appear in the    * 00026900
+*          block comment before the macro invocation echo. It can be  * 00027000
+*          used to comment the macro invocation.  The comment string  * 00027100
+*          must be enclosed in quotes if it contains any lower case   * 00027200
+*          characters.                                                * 00027300
+*          DEFAULT: NULL                                              * 00027400
+*                                                                     * 00027500
+*                                                                     * 00027600
+*                                                                     * 00027700
+*01* RETURN CODES:  None.                                             * 00027800
+*                                                                     * 00027900
+*01* REASON CODES:  None.                                             * 00028000
+*                                                                     * 00028100
+*01* ABEND CODES:  None.                                              * 00028200
+*                                                                     * 00028300
+*01* ABEND REASON CODES:  None.                                       * 00028400
+*                                                                     * 00028500
+*01* MODULE TYPE:  ASSEM MACRO                                        * 00028600
+*                                                                     * 00028700
+*02*   PROCESSOR:  ASSEM                                              * 00028800
+*                                                                     * 00028900
+*01* COMPONENT:  SCTRC                                                * 00029000
+*                                                                     * 00029100
+*01* DISTRIBUTION LIBRARY: AMACLIB                                    * 00029200
+*                                                                     * 00029300
+*01* MACRO USAGE NOTES:                                               * 00029400
+*                                                                     * 00029500
+*                                                                     * 00029600
+*    1.  Printing of the macro expansion is controlled by the ZPRINT  * 00029700
+*        global macro variable.  Any value other than 'NO' will       * 00029800
+*        result in the macro expansion being printed.  The default is * 00029900
+*        'YES'.  The following examples illustrate how the ZPRINT     * 00030000
+*        variable should be set.                                      * 00030100
+*                                                                     * 00030200
+*                    GBLC &ZPRINT                                     * 00030300
+*            &ZPRINT SETC 'YES'          &ZPRINT SETC 'NO'            * 00030400
+*                                                                     * 00030500
+*                                                                     * 00030600
+*                                                                     * 00030700
+*01* CHANGE ACTIVITY:                                                 * 00030800
+*                                                                     * 00030900
+*   Flag LineItem  FMID    Date   ID    Comment                       * 00031000
+*                                                                     * 00031100
+*    $L0=CTWTR    HBB4420 071290 PD34G1:  Ctrace writer support.      * 00031200
+*    $P1=PH31404  HBB4420 091790 PD34G1:  Fix copyright.              * 00031300
+*    $L1=SERV2T8A HBB5520 050694 PD27ZI:  Add MODE(AVAIL), TESTMODE,  * 00031400
+*                                         TESTSEQ#, CSLABEL           * 00031500
+*    $D1=DN70057  HBB5520 060294 PD27ZI:  Rename TESTMODE(CHANGE) to  * 00031600
+*                                         (CURRENT).                  * 00031700
+*    $P2=PN70826  HBB5520 060794 PD27ZI:  Allow TESTMODE and TESTSEQ# * 00031800
+*                                         defaults to be specified.   * 00031900
+*    $P3=PN70989  HBB5520 072694 PDXM:  Fix PE PTM PN70826.           * 00032000
+*    $01=OW33813  HBB6603 061098 PDE1:  No displacement for           * 00032100
+*                                         TESTSEQ#=(nn)               * 00032200
+*    $P4=PWY0717  HBB6608 030699 PDKV:  No displacement for           * 00032300
+*                                         TESTSEQ#=(nn)               * 00032400
+*    $P5=W267561  HBB77C0 180701 PDXB:  Fetch data via LM             * 00032500
+****** END OF SPECIFICATIONS *****************************************/ 00032600
+*/********************************************************************* 00032700
+         MACRO                                                          00032800
+&XLABEL  CTRACECS &TBWC=,&MODE=,&BUFFSEQ#=,&TESTMODE=,&TESTSEQ#=,      *00032900
+               &CSLABEL=,&COM=                                          00033000
+.*                                                                      00033100
+*              MACDATE -09/07/18-<0>                                    00033200
+.*                                                                      00033300
+.*******************************************************************    00033400
+.***AB.02  GLOBAL VARIABLES TO CONTROL PRINT AND CODE GENERATION        00033500
+.*******************************************************************    00033600
+              GBLC  &ZPRINT     YES=PRINT NO=NO PRINT                   00033700
+              GBLC  &ZTEST      YES=TEST NO=NO TEST                     00033800
+              GBLC  &ZSYSTEM    PCCODE10, MVS, SAK, VM, XAX             00033900
+.*                                                                      00034000
+              GBLC  &ZCTRACECS  YES=MACRO USED AT LEAST ONCE            00034100
+.*******************************************************************    00034200
+.***AB.03  COMMONLY USED LOCAL MACRO VARIABLES                          00034300
+.*******************************************************************    00034400
+              LCLC  &ZMS        ERROR MESSAGE WORK AREA                 00034500
+              LCLC  &ZCNDX      SYSNDX CHARACTERS                       00034600
+              LCLC  &ZCLNG      USED WHEN LENGTH IS NEEDED              00034700
+              LCLC  &ZCGPR      USED WHEN VALUE IS IN A GPR             00034800
+              LCLC  &ZCVAL      USED TO CONTAIN FIXED VALUE             00034900
+              LCLA  &ZAWRK      USED AS A WORK AREA                     00035000
+              LCLA  &ZASIZ      USED FOR SIZE OF VALUE                  00035100
+              LCLA  &ZN         NUMERIC WORK VARIABLE                   00035200
+              LCLC  &ZC         CHARACTER WORK VARIABLE                 00035300
+              LCLC  &ZTLC       CHARACTER TOO LONG VARIABLE             00035400
+              LCLA  &ZTLA       VALUE TOO LONG VARIABLE                 00035500
+              LCLC  &ZMAC_G     "G" or null                             00035600
+&ZMAC_G       SETC  ''                                                  00035700
+              LCLC  &ZMAC_LR                                            00035800
+&ZMAC_LR      SETC  'LR'                                                00035900
+              LCLC  &ZMAC_L                                             00036000
+&ZMAC_L       SETC  'L'                                                 00036100
+              LCLC  &ZMAC_ST                                            00036200
+&ZMAC_ST      SETC  'ST'                                                00036300
+              LCLC  &ZMAC_LLGT                                          00036400
+&ZMAC_LLGT    SETC  'L'                                                 00036500
+              LCLC  &ZMAC_LGR                                           00036600
+&ZMAC_LGR     SETC  'LR'                                                00036700
+              LCLC  &ZMAC_LG                                            00036800
+&ZMAC_LG      SETC  'L'                                                 00036900
+              LCLC  &ZMAC_STG                                           00037000
+&ZMAC_STG     SETC  'ST'                                                00037100
+              LCLA  &ZMACRET    MACRO RETURN CODE                       00037200
+&ZMACRET      SETA  0           ASSUME NO ERRORS                        00037300
+.*                                                                      00037400
+              LCLC  &ZCSYSLIST(255)             NONXKEY, POS ARRAY      00037500
+              LCLA  &ZASYSLNDX  WORK INDEX FOR ZCSYSLIST()              00037600
+              LCLA  &ZPLLEN     PARAMETER LIST LENGTH                   00037700
+              LCLC  &ZENDBASEPL                 End of base PL          00037800
+.*******************************************************************    00037900
+.***AB.07  DEFINE ALL MACRO VARIABLES                                   00038000
+.*******************************************************************    00038100
+              LCLC  &XTBWC      ++ NAME                                 00038200
+              LCLC  &XMODE      ++ VALUE                                00038300
+              LCLC  &XBUFFSEQ#  ++ NAME                                 00038400
+              LCLC  &XTESTMODE  ++ VALUE                                00038500
+              LCLC  &XTESTSEQ#  ++ NAME                                 00038600
+              LCLC  &XCSLABEL   ++ NAME                                 00038700
+              LCLC  &XCOM       ++ VALUE                                00038800
+.*******************************************************************    00038900
+.***AB.13  DEFINE MACRO VARIABLES FOR INPUT/OUTPUT PROCESSING           00039000
+.*******************************************************************    00039100
+              LCLC  &ZXTBWC     ++ INPUT NAME                           00039200
+              LCLC  &ZXMODE     ++ INPUT VALUE                          00039300
+              LCLC  &ZXBUFFSEQ#                 ++ INPUT NAME           00039400
+              LCLC  &ZXTESTMODE                 ++ INPUT VALUE          00039500
+              LCLC  &ZXTESTSEQ#                 ++ INPUT NAME           00039600
+              LCLC  &ZXCSLABEL  ++ INPUT NAME                           00039700
+              LCLC  &ZXCOM      ++ INPUT VALUE                          00039800
+.********************************************************************   00039900
+.***AG.MF02  FULL MACRO SYNTAX CHECKING                                 00040000
+.********************************************************************   00040100
+              ACTR  10000                                               00040200
+.*----------------------------------------------------------------***   00040300
+.***AG.KXVAR05 NAME, RQD INPUT, KEYS -XVARIABLE KEY                     00040400
+              AIF   (N'&TBWC LE 1).ZG2A         CK NUM                  00040500
+&ZMS          SETC  '"TBWC='                                            00040600
+&ZMS          SETC  '&ZMS.&TBWC"'                                       00040700
+&ZMS          SETC  '&ZMS "TBWC"'                                       00040800
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00040900
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00041000
+.ZG2A         ANOP  ,                                                   00041100
+.*-------------------------------------------------------------------   00041200
+.***AG.KXVAR06 NAME, RQD INPUT, KEYS -XVARIABLE                         00041300
+&ZXTBWC       SETC  'INPUT'     SET IN/OUTPUT                           00041400
+&XTBWC        SETC  '&TBWC(1)'  SET XVARIABLE                           00041500
+              AIF   (N'&TBWC GT 1).ZG2B         MULTI                   00041600
+&XTBWC        SETC  '&TBWC'     SET XVARIABLE                           00041700
+.ZG2B         AIF   (K'&TBWC(1) GT 0).ZG2C                              00041800
+&ZXTBWC       SETC  ''          RESET IN/OUTPUT                         00041900
+&ZMS          SETC  ' '                                                 00042000
+&ZMS          SETC  '&ZMS "TBWC" KEY AND ITS'                           00042100
+              MNOTE 8,' &ZMS ARGUMENT ARE REQUIRED.'                    00042200
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00042300
+.ZG2C         ANOP  ,                                                   00042400
+.*-------------------------------------------------------------------   00042500
+.***AG.KCK02 NAME, RQD INPUT, KEYS -GPR OUT OF RANGE                    00042600
+              AIF   (K'&ZXTBWC LE 0).ZG2R       NOT I/O                 00042700
+              AIF   ('&XTBWC'(1,1) NE '(').ZG2R                         00042800
+&ZCGPR        SETC  '&XTBWC'(2,K'&XTBWC-2)                              00042900
+              AIF   ('&ZCGPR'(1,1) NE '0').ZG2P                         00043000
+              AIF   (K'&ZCGPR GT 2).ZG2Q                                00043100
+              AIF   ('&ZCGPR' EQ '0').ZG2Q                              00043200
+&ZCGPR        SETC  '&ZCGPR'(2,1)                                       00043300
+              AIF   (T'&ZCGPR NE 'N').ZG2Q      INVALID REG NAME        00043400
+.ZG2P         ANOP  ,                                                   00043500
+              AIF   (T'&ZCGPR NE 'N').ZG2R      NON NUMERIC             00043600
+              AIF   ('&ZCGPR' LT '2').ZG2Q                              00043700
+              AIF   ('&ZCGPR' LE '12').ZG2R                             00043800
+.ZG2Q         ANOP  ,                                                   00043900
+&ZMS          SETC  '"TBWC='                                            00044000
+&ZMS          SETC  '&ZMS.&TBWC"'                                       00044100
+&ZMS          SETC  '&ZMS ARGUMENT 1 MUST SPECIFY A REGISTER'           00044200
+              MNOTE 8,' &ZMS IN THE RANGE (2)-(12).'                    00044300
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00044400
+.ZG2R         ANOP  ,                                                   00044500
+.*------------------------------------------------------------------    00044600
+.***AG.KKCTL01 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00044700
+&XMODE        SETC  ''          INITIALIZE XVARIABLE                    00044800
+.*-------------------------------------------------------------------   00044900
+.***AG.KKCTL02 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00045000
+.ZG6          ANOP  ,                                                   00045100
+              AIF   (K'&MODE(1) LE 0).ZG6A                              00045200
+&ZTLC         SETC 'FILLING'                                            00045300
+              AIF   ('&MODE(1)' NE '&ZTLC').ZG10                        00045400
+&XMODE        SETC  'FILLING'   SET KEYWORD                             00045500
+              AIF   (N'&MODE LE 1).ZG6A         CK NUM                  00045600
+&ZMS          SETC  '"MODE='                                            00045700
+&ZMS          SETC  '&ZMS.&MODE"'                                       00045800
+&ZMS          SETC  '&ZMS "MODE"'                                       00045900
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00046000
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00046100
+.ZG6A         ANOP  ,                                                   00046200
+.*----------------------------------------------------------------***   00046300
+.***AG.KXVAR05 NAME, RQD INPUT, KEYS -XVARIABLE KEY                     00046400
+              AIF   (N'&BUFFSEQ# LE 1).ZG8A     CK NUM                  00046500
+&ZMS          SETC  '"BUFFSEQ#='                                        00046600
+&ZMS          SETC  '&ZMS.&BUFFSEQ#"'                                   00046700
+&ZMS          SETC  '&ZMS "BUFFSEQ#"'                                   00046800
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00046900
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00047000
+.ZG8A         ANOP  ,                                                   00047100
+.*-------------------------------------------------------------------   00047200
+.***AG.KXVAR06 NAME, RQD INPUT, KEYS -XVARIABLE                         00047300
+&ZXBUFFSEQ#   SETC  'INPUT'     SET IN/OUTPUT                           00047400
+&XBUFFSEQ#    SETC  '&BUFFSEQ#(1)'              SET XVARIABLE           00047500
+              AIF   (N'&BUFFSEQ# GT 1).ZG8B     MULTI                   00047600
+&XBUFFSEQ#    SETC  '&BUFFSEQ#'                 SET XVARIABLE           00047700
+.ZG8B         AIF   (K'&BUFFSEQ#(1) GT 0).ZG8C                          00047800
+&ZXBUFFSEQ#   SETC  ''          RESET IN/OUTPUT                         00047900
+&ZMS          SETC  ' '                                                 00048000
+&ZMS          SETC  '&ZMS "BUFFSEQ#" KEY AND ITS'                       00048100
+              MNOTE 8,' &ZMS ARGUMENT ARE REQUIRED.'                    00048200
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00048300
+.ZG8C         ANOP  ,                                                   00048400
+.*-------------------------------------------------------------------   00048500
+.***AG.KCK02 NAME, RQD INPUT, KEYS -GPR OUT OF RANGE                    00048600
+              AIF   (K'&ZXBUFFSEQ# LE 0).ZG8R   NOT I/O                 00048700
+              AIF   ('&XBUFFSEQ#'(1,1) NE '(').ZG8R                     00048800
+&ZCGPR        SETC  '&XBUFFSEQ#'(2,K'&XBUFFSEQ#-2)                      00048900
+              AIF   ('&ZCGPR'(1,1) NE '0').ZG8P                         00049000
+              AIF   (K'&ZCGPR GT 2).ZG8Q                                00049100
+              AIF   ('&ZCGPR' EQ '0').ZG8Q                              00049200
+&ZCGPR        SETC  '&ZCGPR'(2,1)                                       00049300
+              AIF   (T'&ZCGPR NE 'N').ZG8Q      INVALID REG NAME        00049400
+.ZG8P         ANOP  ,                                                   00049500
+              AIF   (T'&ZCGPR NE 'N').ZG8R      NON NUMERIC             00049600
+              AIF   ('&ZCGPR' LT '2').ZG8Q                              00049700
+              AIF   ('&ZCGPR' LE '12').ZG8R                             00049800
+.ZG8Q         ANOP  ,                                                   00049900
+&ZMS          SETC  '"BUFFSEQ#='                                        00050000
+&ZMS          SETC  '&ZMS.&BUFFSEQ#"'                                   00050100
+&ZMS          SETC  '&ZMS ARGUMENT 1 MUST SPECIFY A REGISTER'           00050200
+              MNOTE 8,' &ZMS IN THE RANGE (2)-(12).'                    00050300
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00050400
+.ZG8R         ANOP  ,                                                   00050500
+.*-------------------------------------------------------------------   00050600
+.***AG.KKCTL02 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00050700
+.ZG10         ANOP  ,                                                   00050800
+&ZTLC         SETC 'FULL'                                               00050900
+              AIF   ('&MODE(1)' NE '&ZTLC').ZG11                        00051000
+&XMODE        SETC  'FULL'      SET KEYWORD                             00051100
+              AIF   (N'&MODE LE 1).ZG10A        CK NUM                  00051200
+&ZMS          SETC  '"MODE='                                            00051300
+&ZMS          SETC  '&ZMS.&MODE"'                                       00051400
+&ZMS          SETC  '&ZMS "MODE"'                                       00051500
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00051600
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00051700
+.ZG10A        ANOP  ,                                                   00051800
+.*------------------------------------------------------------------    00051900
+.***AG.KKCTL03 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00052000
+&ZCVAL        SETC ''           CLEAR ERROR KEY ACCUMULATOR             00052100
+.ZG10A0       AIF   (K'&BUFFSEQ# LE 0).ZG10A1   OK                      00052200
+&ZCVAL        SETC '&ZCVAL BUFFSEQ#'            INCORRECT KEY USED      00052300
+.ZG10A1       AIF   (K'&ZCVAL LE 0).ZG10A2      OK                      00052400
+&ZCVAL        SETC '&ZCVAL'(2,K'&ZCVAL-1)                               00052500
+&ZMS          SETC  '"MODE'                                             00052600
+&ZMS          SETC  '&ZMS.=&MODE"'                                      00052700
+&ZMS          SETC  '&ZMS DOES NOT ALLOW THE USE OF THE'                00052800
+              MNOTE 8,' &ZMS FOLLOWING KEY(S) "&ZCVAL".'                00052900
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00053000
+.ZG10A2       ANOP  ,                                                   00053100
+.*-------------------------------------------------------------------   00053200
+.***AG.KKCTL02 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00053300
+.ZG11         ANOP  ,                                                   00053400
+&ZTLC         SETC 'AVAIL'                                              00053500
+              AIF   ('&MODE(1)' NE '&ZTLC').ZG12                        00053600
+&XMODE        SETC  'AVAIL'     SET KEYWORD                             00053700
+              AIF   (N'&MODE LE 1).ZG11A        CK NUM                  00053800
+&ZMS          SETC  '"MODE='                                            00053900
+&ZMS          SETC  '&ZMS.&MODE"'                                       00054000
+&ZMS          SETC  '&ZMS "MODE"'                                       00054100
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00054200
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00054300
+.ZG11A        ANOP  ,                                                   00054400
+.*------------------------------------------------------------------    00054500
+.***AG.KKCTL03 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00054600
+&ZCVAL        SETC ''           CLEAR ERROR KEY ACCUMULATOR             00054700
+.ZG11A0       AIF   (K'&BUFFSEQ# LE 0).ZG11A1   OK                      00054800
+&ZCVAL        SETC '&ZCVAL BUFFSEQ#'            INCORRECT KEY USED      00054900
+.ZG11A1       AIF   (K'&ZCVAL LE 0).ZG11A2      OK                      00055000
+&ZCVAL        SETC '&ZCVAL'(2,K'&ZCVAL-1)                               00055100
+&ZMS          SETC  '"MODE'                                             00055200
+&ZMS          SETC  '&ZMS.=&MODE"'                                      00055300
+&ZMS          SETC  '&ZMS DOES NOT ALLOW THE USE OF THE'                00055400
+              MNOTE 8,' &ZMS FOLLOWING KEY(S) "&ZCVAL".'                00055500
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00055600
+.ZG11A2       ANOP  ,                                                   00055700
+.*------------------------------------------------------------------    00055800
+.***AG.KKCTL04 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00055900
+.ZG12         ANOP  ,                                                   00056000
+&ZXMODE       SETC  'INPUT'     SET IN/OUTPUT                           00056100
+              AIF   (K'&XMODE GT 0).ZG12E       VALID ARG               00056200
+              AIF   (T'&MODE EQ 'O').ZG12D      OMITTED                 00056300
+&ZASYSLNDX    SETA  0                                                   00056400
+.ZG12A        ANOP  ,           POSITIONAL MACRO KEY                    00056500
+&ZASYSLNDX    SETA  &ZASYSLNDX+1                                        00056600
+              AIF   (&ZASYSLNDX GT N'&SYSLIST).ZG12C                    00056700
+&ZTLC         SETC 'MODE'                                               00056800
+              AIF   ('&SYSLIST(&ZASYSLNDX)' NE '&ZTLC').ZG12A           00056900
+.ZG12B        ANOP  ,                                                   00057000
+&ZXMODE       SETC  ''          RESET IN/OUTPUT                         00057100
+&ZMS          SETC  'THE "MODE" KEY'                                    00057200
+&ZMS          SETC  '&ZMS MUST CONTAIN ONE'                             00057300
+              MNOTE 8,' &ZMS (OR MORE) ARGUMENT(S).'                    00057400
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00057500
+              AGO   .ZG12E                                              00057600
+.ZG12C        ANOP  ,                                                   00057700
+&ZXMODE       SETC  ''          RESET IN/OUTPUT                         00057800
+&ZMS          SETC  '"MODE='                                            00057900
+&ZMS          SETC  '&ZMS.&MODE"'                                       00058000
+&ZMS          SETC  '&ZMS ARGUMENT 1 IS AN UNKNOWN KEYWORD. '           00058100
+&ZMS          SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'                 00058200
+&ZMS          SETC  '&ZMS "FILLING",'                                   00058300
+&ZMS          SETC  '&ZMS "FULL",'                                      00058400
+&ZMS          SETC  '&ZMS OR "AVAIL".'                                  00058500
+              MNOTE 8,' &ZMS '                                          00058600
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00058700
+              AGO   .ZG12E                                              00058800
+.ZG12D        ANOP  ,                                                   00058900
+&XMODE        SETC  'FILLING'   SET DEFAULT KEYWORD                     00059000
+.ZG12E        ANOP  ,                                                   00059100
+.*------------------------------------------------------------------    00059200
+.***AG.KKCTL05 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00059300
+              AIF   (K'&MODE(1) GT 0).ZG12F     PARM                    00059400
+&XMODE        SETC  ''          ENSURE NULL KEYWORD                     00059500
+&ZXMODE       SETC  ''          RESET IN/OUTPUT                         00059600
+&ZMS          SETC  'THE'                                               00059700
+&ZMS          SETC  '&ZMS "MODE" KEY AND ITS'                           00059800
+&ZMS          SETC  '&ZMS ARGUMENT ARE REQUIRED.'                       00059900
+&ZMS          SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'                 00060000
+&ZMS          SETC  '&ZMS "FILLING",'                                   00060100
+&ZMS          SETC  '&ZMS "FULL",'                                      00060200
+&ZMS          SETC  '&ZMS OR "AVAIL".'                                  00060300
+              MNOTE 8,' &ZMS '                                          00060400
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00060500
+.ZG12F        ANOP  ,                                                   00060600
+.*------------------------------------------------------------------    00060700
+.***AG.KKCTL01 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00060800
+&XTESTMODE    SETC  ''          INITIALIZE XVARIABLE                    00060900
+.*-------------------------------------------------------------------   00061000
+.***AG.KKCTL02 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00061100
+.ZG15         ANOP  ,                                                   00061200
+              AIF   (K'&TESTMODE(1) LE 0).ZG15A                         00061300
+&ZTLC         SETC 'CURRENT'                                            00061400
+              AIF   ('&TESTMODE(1)' NE '&ZTLC').ZG16                    00061500
+&XTESTMODE    SETC  'CURRENT'   SET KEYWORD                             00061600
+              AIF   (N'&TESTMODE LE 1).ZG15A    CK NUM                  00061700
+&ZMS          SETC  '"TESTMODE='                                        00061800
+&ZMS          SETC  '&ZMS.&TESTMODE"'                                   00061900
+&ZMS          SETC  '&ZMS "TESTMODE"'                                   00062000
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00062100
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00062200
+.ZG15A        ANOP  ,                                                   00062300
+.*-------------------------------------------------------------------   00062400
+.***AG.KKCTL02 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00062500
+.ZG16         ANOP  ,                                                   00062600
+&ZTLC         SETC 'AVAIL'                                              00062700
+              AIF   ('&TESTMODE(1)' NE '&ZTLC').ZG17                    00062800
+&XTESTMODE    SETC  'AVAIL'     SET KEYWORD                             00062900
+              AIF   (N'&TESTMODE LE 1).ZG16A    CK NUM                  00063000
+&ZMS          SETC  '"TESTMODE='                                        00063100
+&ZMS          SETC  '&ZMS.&TESTMODE"'                                   00063200
+&ZMS          SETC  '&ZMS "TESTMODE"'                                   00063300
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00063400
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00063500
+.ZG16A        ANOP  ,                                                   00063600
+.*-------------------------------------------------------------------   00063700
+.***AG.KKCTL02 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00063800
+.ZG17         ANOP  ,                                                   00063900
+&ZTLC         SETC 'FILLING'                                            00064000
+              AIF   ('&TESTMODE(1)' NE '&ZTLC').ZG18                    00064100
+&XTESTMODE    SETC  'FILLING'   SET KEYWORD                             00064200
+              AIF   (N'&TESTMODE LE 1).ZG17A    CK NUM                  00064300
+&ZMS          SETC  '"TESTMODE='                                        00064400
+&ZMS          SETC  '&ZMS.&TESTMODE"'                                   00064500
+&ZMS          SETC  '&ZMS "TESTMODE"'                                   00064600
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00064700
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00064800
+.ZG17A        ANOP  ,                                                   00064900
+.*-------------------------------------------------------------------   00065000
+.***AG.KKCTL02 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00065100
+.ZG18         ANOP  ,                                                   00065200
+&ZTLC         SETC 'FULL'                                               00065300
+              AIF   ('&TESTMODE(1)' NE '&ZTLC').ZG19                    00065400
+&XTESTMODE    SETC  'FULL'      SET KEYWORD                             00065500
+              AIF   (N'&TESTMODE LE 1).ZG18A    CK NUM                  00065600
+&ZMS          SETC  '"TESTMODE='                                        00065700
+&ZMS          SETC  '&ZMS.&TESTMODE"'                                   00065800
+&ZMS          SETC  '&ZMS "TESTMODE"'                                   00065900
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00066000
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00066100
+.ZG18A        ANOP  ,                                                   00066200
+.*------------------------------------------------------------------    00066300
+.***AG.KKCTL04 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00066400
+.ZG19         ANOP  ,                                                   00066500
+&ZXTESTMODE   SETC  'INPUT'     SET IN/OUTPUT                           00066600
+              AIF   (K'&XTESTMODE GT 0).ZG19E   VALID ARG               00066700
+              AIF   (T'&TESTMODE EQ 'O').ZG19D  OMITTED                 00066800
+&ZASYSLNDX    SETA  0                                                   00066900
+.ZG19A        ANOP  ,           POSITIONAL MACRO KEY                    00067000
+&ZASYSLNDX    SETA  &ZASYSLNDX+1                                        00067100
+              AIF   (&ZASYSLNDX GT N'&SYSLIST).ZG19C                    00067200
+&ZTLC         SETC 'TESTMODE'                                           00067300
+              AIF   ('&SYSLIST(&ZASYSLNDX)' NE '&ZTLC').ZG19A           00067400
+.ZG19B        ANOP  ,                                                   00067500
+&ZXTESTMODE   SETC  ''          RESET IN/OUTPUT                         00067600
+&ZMS          SETC  'THE "TESTMODE" KEY'                                00067700
+&ZMS          SETC  '&ZMS MUST CONTAIN ONE'                             00067800
+              MNOTE 8,' &ZMS (OR MORE) ARGUMENT(S).'                    00067900
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00068000
+              AGO   .ZG19E                                              00068100
+.ZG19C        ANOP  ,                                                   00068200
+&ZXTESTMODE   SETC  ''          RESET IN/OUTPUT                         00068300
+&ZMS          SETC  '"TESTMODE='                                        00068400
+&ZMS          SETC  '&ZMS.&TESTMODE"'                                   00068500
+&ZMS          SETC  '&ZMS ARGUMENT 1 IS AN UNKNOWN KEYWORD. '           00068600
+&ZMS          SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'                 00068700
+&ZMS          SETC  '&ZMS "CURRENT",'                                   00068800
+&ZMS          SETC  '&ZMS "AVAIL",'                                     00068900
+&ZMS          SETC  '&ZMS "FILLING",'                                   00069000
+&ZMS          SETC  '&ZMS OR "FULL".'                                   00069100
+              MNOTE 8,' &ZMS '                                          00069200
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00069300
+              AGO   .ZG19E                                              00069400
+.ZG19D        ANOP  ,                                                   00069500
+&XTESTMODE    SETC  'CURRENT'   SET DEFAULT KEYWORD                     00069600
+.ZG19E        ANOP  ,                                                   00069700
+.*----------------------------------------------------------------***   00069800
+.***AG.KXVAR05 NAME, OPT INPUT, KEYS -XVARIABLE KEY                     00069900
+              AIF   (N'&TESTSEQ# LE 1).ZG21A    CK NUM                  00070000
+&ZMS          SETC  '"TESTSEQ#='                                        00070100
+&ZMS          SETC  '&ZMS.&TESTSEQ#"'                                   00070200
+&ZMS          SETC  '&ZMS "TESTSEQ#"'                                   00070300
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00070400
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00070500
+.ZG21A        ANOP  ,                                                   00070600
+.*-------------------------------------------------------------------   00070700
+.***AG.KXVAR13 NAME, OPT INPUT, KEYS -XVARIABLE                         00070800
+&ZXTESTSEQ#   SETC  'INPUT'     SET IN/OUTPUT                           00070900
+&XTESTSEQ#    SETC  'TBWCSEQ'                                           00071000
+              AIF   (K'&TESTSEQ#(1) LE 0).ZG21B  PARM                   00071100
+&XTESTSEQ#    SETC  '&TESTSEQ#(1)'              SET XVARIABLE           00071200
+              AIF   (N'&TESTSEQ# GT 1).ZG21B    MULTI                   00071300
+&XTESTSEQ#    SETC  '&TESTSEQ#'                 SET XVARIABLE           00071400
+.ZG21B        ANOP  ,                                                   00071500
+.*-------------------------------------------------------------------   00071600
+.***AG.KCK02 NAME, OPT INPUT, KEYS -GPR OUT OF RANGE                    00071700
+              AIF   (K'&ZXTESTSEQ# LE 0).ZG21R  NOT I/O                 00071800
+         AIF   ('&XTESTSEQ#' EQ 'TBWCSEQ').ZG21R                        00071900
+              AIF   ('&XTESTSEQ#'(1,1) NE '(').ZG21R                    00072000
+&ZCGPR        SETC  '&XTESTSEQ#'(2,K'&XTESTSEQ#-2)                      00072100
+              AIF   ('&ZCGPR'(1,1) NE '0').ZG21P                        00072200
+              AIF   (K'&ZCGPR GT 2).ZG21Q                               00072300
+              AIF   ('&ZCGPR' EQ '0').ZG21Q                             00072400
+&ZCGPR        SETC  '&ZCGPR'(2,1)                                       00072500
+              AIF   (T'&ZCGPR NE 'N').ZG21Q     INVALID REG NAME        00072600
+.ZG21P        ANOP  ,                                                   00072700
+              AIF   (T'&ZCGPR NE 'N').ZG21R     NON NUMERIC             00072800
+              AIF   ('&ZCGPR' LT '2').ZG21Q                             00072900
+              AIF   ('&ZCGPR' LE '12').ZG21R                            00073000
+.ZG21Q        ANOP  ,                                                   00073100
+&ZMS          SETC  '"TESTSEQ#='                                        00073200
+&ZMS          SETC  '&ZMS.&TESTSEQ#"'                                   00073300
+&ZMS          SETC  '&ZMS ARGUMENT 1 MUST SPECIFY A REGISTER'           00073400
+              MNOTE 8,' &ZMS IN THE RANGE (2)-(12).'                    00073500
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00073600
+.ZG21R        ANOP  ,                                                   00073700
+.*----------------------------------------------------------------***   00073800
+.***AG.KXVAR05 NAME, OPT INPUT, KEYS -XVARIABLE KEY                     00073900
+              AIF   (N'&CSLABEL LE 1).ZG24A     CK NUM                  00074000
+&ZMS          SETC  '"CSLABEL='                                         00074100
+&ZMS          SETC  '&ZMS.&CSLABEL"'                                    00074200
+&ZMS          SETC  '&ZMS "CSLABEL"'                                    00074300
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00074400
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00074500
+.ZG24A        ANOP  ,                                                   00074600
+.*-------------------------------------------------------------------   00074700
+.***AG.KXVAR13 NAME, OPT INPUT, KEYS -XVARIABLE                         00074800
+&ZXCSLABEL    SETC  'INPUT'     SET IN/OUTPUT                           00074900
+&XCSLABEL     SETC  'RETRY'                                             00075000
+              AIF   (K'&CSLABEL(1) LE 0).ZG24B  PARM                    00075100
+&XCSLABEL     SETC  '&CSLABEL(1)'               SET XVARIABLE           00075200
+              AIF   (N'&CSLABEL GT 1).ZG24B     MULTI                   00075300
+&XCSLABEL     SETC  '&CSLABEL'  SET XVARIABLE                           00075400
+.ZG24B        ANOP  ,                                                   00075500
+.*-------------------------------------------------------------------   00075600
+.***AG.KCK01 NAME, OPT INPUT, KEYS -GPR NOT ALLOWED                     00075700
+              AIF   (K'&ZXCSLABEL LE 0).ZG24P   NOT I/O                 00075800
+              AIF   ('&XCSLABEL' EQ 'RETRY').ZG24P                      00075900
+              AIF   ('&XCSLABEL'(1,1) NE '(').ZG24P                     00076000
+&ZXCSLABEL    SETC  ''          RESET IN/OUTPUT                         00076100
+&ZMS          SETC  '"CSLABEL='                                         00076200
+&ZMS          SETC  '&ZMS.&CSLABEL"'                                    00076300
+&ZMS          SETC  '&ZMS CONTAINS GPR NOTATION WHICH IS NOT'           00076400
+              MNOTE 8,' &ZMS ALLOWED FOR ARGUMENT 1.'                   00076500
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00076600
+.ZG24P        ANOP  ,                                                   00076700
+.*----------------------------------------------------------------***   00076800
+.***AG.KXVAR05 VALUE, OPT INPUT, KEYS -XVARIABLE KEY                    00076900
+              AIF   (N'&COM LE 1).ZG27A         CK NUM                  00077000
+&ZMS          SETC  '"COM='                                             00077100
+&ZMS          SETC  '&ZMS.&COM"'                                        00077200
+&ZMS          SETC  '&ZMS "COM"'                                        00077300
+              MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'                 00077400
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00077500
+.ZG27A        ANOP  ,                                                   00077600
+.*-------------------------------------------------------------------   00077700
+.***AG.KXVAR13 VALUE, OPT INPUT, KEYS -XVARIABLE                        00077800
+&ZXCOM        SETC  'INPUT'     SET IN/OUTPUT                           00077900
+&XCOM         SETC  'NULL'                                              00078000
+              AIF   (K'&COM(1) LE 0).ZG27B      PARM                    00078100
+&XCOM         SETC  '&COM(1)'   SET XVARIABLE                           00078200
+              AIF   (N'&COM GT 1).ZG27B         MULTI                   00078300
+&XCOM         SETC  '&COM'      SET XVARIABLE                           00078400
+.ZG27B        ANOP  ,                                                   00078500
+.*-------------------------------------------------------------------   00078600
+.***AG.KCK01 VALUE, OPT INPUT, KEYS -GPR NOT ALLOWED                    00078700
+              AIF   (K'&ZXCOM LE 0).ZG27P       NOT I/O                 00078800
+              AIF   ('&XCOM' EQ 'NULL').ZG27P                           00078900
+              AIF   ('&XCOM'(1,1) NE '(').ZG27P                         00079000
+&ZXCOM        SETC  ''          RESET IN/OUTPUT                         00079100
+&ZMS          SETC  '"COM='                                             00079200
+&ZMS          SETC  '&ZMS.&COM"'                                        00079300
+&ZMS          SETC  '&ZMS CONTAINS GPR NOTATION WHICH IS NOT'           00079400
+              MNOTE 8,' &ZMS ALLOWED FOR ARGUMENT 1.'                   00079500
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00079600
+.ZG27P        ANOP  ,                                                   00079700
+.*-------------------------------------------------------------------   00079800
+.***AG.KCK03 VALUE, OPT INPUT, KEYS -CHARACTER LENGTH                   00079900
+              AIF   (K'&ZXCOM LE 0).ZG27S       NOT I/O                 00080000
+              AIF   ('&XCOM' EQ 'NULL').ZG27S                           00080100
+              AIF   (K'&XCOM LE 256).ZG27S      LNG OK                  00080200
+&ZXCOM        SETC  ''          RESET IN/OUTPUT                         00080300
+&ZMS          SETC  '"COM='                                             00080400
+&ZMS          SETC  '&ZMS.&COM"'                                        00080500
+&ZMS          SETC  '&ZMS ARGUMENT 1 EXCEEDS THE MAXIMUM'               00080600
+              MNOTE 8,' &ZMS LENGTH OF 256 CHARACTERS.'                 00080700
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00080800
+.ZG27S        ANOP  ,                                                   00080900
+.******************************************************************     00081000
+.***AH.P00 CHECK STANDALONE POSITIONAL VARIABLES                        00081100
+.******************************************************************     00081200
+              ACTR  10000                                               00081300
+.*----------------------------------------------------------------***   00081400
+.***AH.P02 EXTRA POSITIONALS                                            00081500
+              AIF   (N'&SYSLIST LE 0).ZGLISTX   NO EXTRAS               00081600
+              AIF   (N'&SYSLIST NE 2).ZGLISTX1  NOT NULL                00081700
+              AIF   ('&SYSLIST(1)' NE '').ZGLISTX1  NOT NULL            00081800
+              AIF   ('&SYSLIST(2)' EQ '').ZGLISTX  NOT NULL             00081900
+.ZGLISTX1     ANOP  ,                                                   00082000
+&ZCVAL        SETC  ''          ERROR FIELD                             00082100
+&ZAWRK        SETA  0           POSITIONAL NUMBER                       00082200
+.ZGLIST2      ANOP  ,                                                   00082300
+&ZAWRK        SETA  &ZAWRK+1    NEXT POSITIONAL                         00082400
+              AIF   (&ZAWRK GT N'&SYSLIST).ZGLIST3  DONE                00082500
+&ZCVAL        SETC '&ZCVAL,&SYSLIST(&ZAWRK)'    EXTRA                   00082600
+              AGO   .ZGLIST2                                            00082700
+.*                                                                      00082800
+.ZGLIST3      ANOP  ,                                                   00082900
+&ZCVAL        SETC '&ZCVAL'(2,K'&ZCVAL-1)       STRIP COMMA             00083000
+&ZMS          SETC  'POSITIONAL ARGUMENT(S),'                           00083100
+&ZMS          SETC  '&ZMS "&ZCVAL"'                                     00083200
+&ZMS          SETC  '&ZMS CANNOT BE USED.'                              00083300
+&ZMS          SETC  '&ZMS NO POSITIONAL ARGUMENTS'                      00083400
+              MNOTE 8,' &ZMS ARE ALLOWED.'                              00083500
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE             00083600
+.ZGLISTX      ANOP  ,                                                   00083700
+&ZASYSLNDX    SETA  0                                                   00083800
+.*******************************************************************    00083900
+.***AE.ZMR01 NO CODE GENERATED IF ERRORS DETECTED                       00084000
+.*******************************************************************    00084100
+              AIF   (&ZMACRET NE 0).ZLX2        ERROR DETECTED          00084200
+.*******************************************************************    00084300
+.***AE.01  START OF CTRACECS MACRO CODE                                 00084400
+.*******************************************************************    00084500
+              LCLC  &M0M0001                 NAME                       00084600
+&M0M0001      SETC  '&XLABEL'                SET NAME                   00084700
+              AIF   (K'&XLABEL NE 0).XLAB2                              00084800
+&M0M0001      SETC  'M00M&SYSNDX'            DEFAULT NAME               00084900
+.*                                                                      00085000
+.XLAB2        ANOP  ,                                                   00085100
+&M0M0001 DS    0H                             CTRACECS-0                00085200
+.*******************************************************************    00085300
+.***AE.PR01 PRINT CONTROLS, DEFAULT IS YES                              00085400
+.*******************************************************************    00085500
+              PUSH  PRINT                                               00085600
+              AIF   ('&ZPRINT' NE 'NO').ZPRINTX  TURN PRINT ON          00085700
+              PRINT OFF         ++ PR01                                 00085800
+              AGO   .ZPRNTXX                                            00085900
+.ZPRINTX      PRINT ON                                                  00086000
+.ZPRNTXX      ANOP  ,                                                   00086100
+.*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*  00086200
+.*====================================================================  00086300
+.*     More ERROR checking...                                           00086400
+.*====================================================================  00086500
+.*  CSLABEL is required with TESTMODE or TESTSEQ# except when the       00086600
+.*  defaults are specified.                                        @P2A 00086700
+              AIF   (T'&CSLABEL  NE 'O').CS11E     SPECIFIED       @L1A 00086800
+              AIF   (T'&TESTSEQ# EQ 'O').CS11A     OMITTED         @P2C 00086900
+              AIF   ('&TESTSEQ#' NE 'TBWCSEQ').CS11B  DEFAULT      @P2A 00087000
+.CS11A        ANOP  ,                                              @P2A 00087100
+              AIF   (T'&TESTMODE EQ 'O').CS11E     OMITTED         @L1A 00087200
+              AIF   ('&TESTMODE' EQ 'CURRENT').CS11E  DEFAULT      @P2A 00087300
+.CS11B        ANOP  ,                                              @L1A 00087400
+&ZMS          SETC  '"CSLABEL'              *KDEPA* MNOTE          @L1A 00087500
+&ZMS          SETC  '&ZMS.=&CSLABEL"'                              @L1A 00087600
+&ZMS          SETC  '&ZMS IS REQUIRED WHEN '                       @L1A 00087700
+&ZMS          SETC  '&ZMS "TESTSEQ#" OR "TESTMODE"'                @L1A 00087800
+              MNOTE 8,' &ZMS IS ALSO SPECIFIED.'                   @L1A 00087900
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE        @L1A 00088000
+              AGO   .CS99E                                         @L1A 00088100
+.CS11E        ANOP  ,                                              @L1A 00088200
+.*====================================================================  00088300
+.*  CSLABEL=RETRY is only valid with MODE, TBWC, TESTMODE=CURRENT       00088400
+.*  or TESTSEQ#=TBWCSEQ                                                 00088500
+              AIF   (T'&CSLABEL  EQ 'O').CS12E      OMITTED        @L1A 00088600
+              AIF   ('&CSLABEL' NE 'RETRY').CS12E                  @L1A 00088700
+              AIF   (T'&TESTSEQ# EQ 'O').CS12A      OMITTED        @P2C 00088800
+              AIF   ('&TESTSEQ#' NE 'TBWCSEQ').CS12B  DEFAULT      @P2A 00088900
+.CS12A        ANOP  ,                                              @P2A 00089000
+              AIF   (T'&TESTMODE EQ 'O').CS12E      OMITTED        @P2A 00089100
+              AIF   ('&TESTMODE' EQ 'AVAIL').CS12B                 @L1A 00089200
+              AIF   ('&TESTMODE' EQ 'FULL').CS12B                  @L1A 00089300
+              AIF   ('&TESTMODE' NE 'FILLING').CS12E  CURRENT      @L1A 00089400
+.CS12B        ANOP  ,                                              @L1A 00089500
+&ZMS          SETC  '"CSLABEL'              *KDEPA* MNOTE          @L1A 00089600
+&ZMS          SETC  '&ZMS.=&CSLABEL"'                              @L1A 00089700
+&ZMS          SETC  '&ZMS IS NOT VALID WITH "TESTSEQ#'             @L1A 00089800
+&ZMS          SETC  '&ZMS.=&TESTSEQ#" OR'                          @P2A 00089900
+              MNOTE 8,' &ZMS "TESTMODE=AVAIL / FULL / FILLING".'   @L1A 00090000
+&ZMACRET      SETA  8           SET MACRO ERROR RETURN CODE        @L1A 00090100
+              AGO   .CS99E                                         @L1A 00090200
+.CS12E        ANOP  ,                                              @L1A 00090300
+.********************************************************************   00090400
+.*         INVOKE MVS MACROS TO CONTROL CODE GENERATION                 00090500
+.********************************************************************   00090600
+         GBLC  &SYSSPLV    SP LEVEL 1,2,3 -SPLEVEL                      00090700
+         GBLC  &SYSASCE    SYSTEM STATE P ANY AR-SYSSTATE               00090800
+.*                                                                      00090900
+         AIF   (K'&SYSASCE GT 0).CS04      SYS STATE DEFINED            00091000
+         AIF   (K'&SYSSPLV GT 0).CS02      SP LEVEL DEFINED             00091100
+         SPLEVEL  TEST                                                  00091200
+.CS02    ANOP  ,                                                        00091300
+         AIF   ('&SYSSPLV' EQ '1').CS03    PRE SP 3.1                   00091400
+         AIF   ('&SYSSPLV' EQ '2').CS03    PRE SP 3.1                   00091500
+         SYSSTATE TEST                                                  00091600
+         AGO   .CS04                                                    00091700
+.CS03    ANOP  ,                                                        00091800
+&SYSASCE SETC  'P'         ASSUME SYSSTATE PRIMARY                      00091900
+.CS04    ANOP  ,                                                        00092000
+.*====================================================================  00092100
+         LCLC  &CSL0001                LABEL NAME                       00092200
+         LCLC  &CSTBWC0,&CSTBWC1       TBWC + 0 - FLAGS            @01C 00092300
+         LCLC  &CSTBWC4                TBWC + 4 - SEQUENCE NUMBER       00092400
+         LCLC  &CSBSEQ                 BUFFSEQ#                         00092500
+&CSL0001 SETC  '#CS&SYSNDX'            LABEL FOR CDS                    00092600
+&CSTBWC0 SETC  '&XTBWC'                          - FLAGS (R0)      @P5M 00092700
+&CSTBWC1 SETC  '&XTBWC'                          - FLAGS (R0)      @P5M 00092800
+         AIF   ('&XTBWC'(1,1) NE '(').CS24B      NOT REGISTER      @P5M 00092900
+&CSTBWC0 SETC  '0('.'&XTBWC'(2,K'&XTBWC-2).')'   TBWC=(REGISTER)   @P5M 00093000
+&CSTBWC1 SETC  '0(,'.'&XTBWC'(2,K'&XTBWC-2).')'  TBWC=(REGISTER)   @P5M 00093100
+.CS24B   ANOP  ,                                                   @P5M 00093200
+.*====================================================================  00093300
+.*  SET (R1) to the SEQUENCE NUMBER                                     00093400
+         AIF   (T'&TESTSEQ# EQ 'O').CS21A        OMITTED           @P2C 00093500
+         AIF   ('&TESTSEQ#' NE 'TBWCSEQ').CS21C  NOT DEFAULT       @P2A 00093600
+.CS21A   ANOP  ,                                                   @L1A 00093700
+.*                               Assume defaults are in Register        00093800
+.*                                                                4@P5D 00093900
+         LM    0,1,&CSTBWC0       ++ Save flags and seq num        @P5C 00094000
+         AGO   .CS21E                                              @L1A 00094100
+.CS21C   ANOP  ,                                                   @L1A 00094200
+&CSTBWC4 SETC  '&XTESTSEQ#'                  - OLD SQUENCE NUMBER  @L1A 00094300
+         AIF   ('&XTESTSEQ#'(1,1) NE '(').CS21D      NOT REGISTER  @L1A 00094400
+&CSTBWC4 SETC  '0(,'.'&XTESTSEQ#'(2,K'&XTESTSEQ#-2).')'            @P5C 00094500
+.CS21D   ANOP  ,                                                   @L1A 00094600
+         L     1,&CSTBWC4         ++ TEST OLD SEQUENCE NUMBER      @L1A 00094700
+         L     0,&CSTBWC1         ++ Old flags                     @P5A 00094800
+.CS21E   ANOP  ,                                                   @L1A 00094900
+.*====================================================================  00095000
+.*  SET (R0) to the TESTMODE value (Filling, Available, Full, Current)  00095100
+.*                               Assume defaults are in Register        00095200
+.* moved, not deleted                                             6@P5D 00095300
+.* moved, not deleted                                             1@P5D 00095400
+.*--------------- TESTMODE VALUES ---------------------------           00095500
+         AIF   ('&XTESTMODE' EQ 'CURRENT').CS29E   -- DEFAULT      @D1C 00095600
+         AIF   ('&XTESTMODE' EQ 'AVAIL').CS25A                     @L1A 00095700
+         AIF   ('&XTESTMODE' EQ 'FILLING').CS26A                   @L1A 00095800
+         AIF   ('&XTESTMODE' EQ 'FULL').CS27A                      @L1A 00095900
+.*--------------- AVAILABLE                                             00096000
+.CS25A   ANOP  ,                                                   @L1A 00096100
+         OILH  0,X'0040'          ++ TEST FOR AVAILABLE            @P5C 00096200
+         AGO   .CS29E                                              @L1A 00096300
+.*--------------- FILLING                                               00096400
+.CS26A   ANOP  ,                                                   @L1A 00096500
+         OILH  0,X'8000'          ++ TEST FOR FILLING              @P5C 00096600
+         AGO   .CS29E                                              @L1A 00096700
+.*--------------- FULL                                                  00096800
+.CS27A   ANOP  ,                                                   @L1A 00096900
+         OILH  0,X'4000'          ++ TEST FOR FULL                 @P5C 00097000
+.CS29E   ANOP  ,                  END OF TESTMODE                  @L1A 00097100
+.*====================================================================  00097200
+.* Setup BUFSEQ# for use with MODE(FILLING)                             00097300
+         AIF   ('&ZXBUFFSEQ#' EQ '').CS31E       NOT USED               00097400
+&CSBSEQ  SETC  '&XBUFFSEQ#'                      ASSUME NOT REGISTER    00097500
+         AIF   ('&XBUFFSEQ#'(1,1) NE '(').CS31B  NOT GPR                00097600
+&CSBSEQ  SETC  '0(,'.'&XBUFFSEQ#'(2,K'&XBUFFSEQ#-2).')'  REGISTER  @L1C 00097700
+         AGO   .CS31E                                                   00097800
+.CS31B   ANOP  ,                                                        00097900
+&ZC      SETC  '&XBUFFSEQ#'(1,1)                 GET FIRST CHAR         00098000
+         AIF   (T'&ZC NE 'N').CS31E              NOT SELF-DEFINING      00098100
+&CSBSEQ  SETC  '=FL4''&XBUFFSEQ#'''                                     00098200
+.CS31E   ANOP  ,                                                        00098300
+.*====================================================================  00098400
+.* Set R14 to the MODE value  (Filling, Available, Full) and            00098500
+.* Set R15 to the desired SEQUENCE number                               00098600
+.*--------------- MODE(FILLING)                                         00098700
+         AIF   ('&XMODE' NE 'FILLING').CS41B    NOT FILLING             00098800
+         L     14,=X'80000000'    ++ SET TO FILLING                     00098900
+         L     15,&CSBSEQ         ++ NEW SEQUENCE NUMBER                00099000
+&CSL0001 DS    0H                                                       00099100
+         AGO   .CS49E                                                   00099200
+.*--------------- GENERATE LABEL                                        00099300
+.CS41B   ANOP  ,                                                        00099400
+&CSL0001 DS    0H                                                       00099500
+.*--------------- MODE(AVAILABLE)                                       00099600
+         AIF   ('&XMODE' NE 'AVAIL').CS43B    NOT AVAILABLE        @L1A 00099700
+         L     14,=X'00400000'    ++ SET TO AVAILABLE              @L1A 00099800
+         LR    15,1               ++ SAME SEQUENCE NUMBER          @L1A 00099900
+         AGO   .CS49E                                              @L1A 00100000
+.CS43B   ANOP  ,                                                   @L1A 00100100
+.*--------------- MODE(FULL)                                            00100200
+         LR    14,0               ++ COPY FLAGS TO CHANGE               00100300
+         NILH  14,X'7FFF'         ++ CLEAR FILLING FLAG            @P5C 00100400
+         OILH  14,X'4000'         ++ SET FULL FLAG                 @P5C 00100500
+         LR    15,1               ++ SAME SEQUENCE NUMBER               00100600
+.CS49E   ANOP  ,                                                        00100700
+.*-------------------------------------------------------------------   00100800
+.*  Perform Compare and Swap and branch according to CSLABEL       @L1A 00100900
+         CDS   0,14,&CSTBWC0      ++ SET NEW MODE, SEQ NUM              00101000
+         AIF   (T'&CSLABEL EQ 'O').CS51A     OMITTED               @L1A 00101100
+         AIF   ('&XCSLABEL' EQ 'RETRY').CS51A                      @L1A 00101200
+         BC    7,&XCSLABEL        ++ BRANCH ON FAILURE             @L1A 00101300
+         AGO   .CS51B                                              @L1A 00101400
+.CS51A   ANOP  ,                                                   @L1A 00101500
+         BC    7,&CSL0001         ++ REPEAT ON FAILURE                  00101600
+.CS51B   ANOP  ,                                                   @L1A 00101700
+.CS99E   ANOP  ,                                                   @L1A 00101800
+.*====================================================================  00101900
+.*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*  00102000
+.********************************************************************   00102100
+.***AL.A01  INTERNAL ARRAY TO PRODUCE FORMATTED CODE                    00102200
+.********************************************************************   00102300
+                      LCLA  &ZOPN          LIST INSTRUCTION INDEX       00102400
+                      LCLA  &ZOPN1         INVOCATION INDEX             00102500
+                      LCLC  &ZOPL(4095)    LABEL                        00102600
+                      LCLC  &ZOPO(4095)    OPERATION                    00102700
+                      LCLC  &ZOPV(4095)    VALUE                        00102800
+                      LCLC  &ZOPD(4095)    DESCRIPTION                  00102900
+.*                                                                      00103000
+&ZOPN                 SETA  0              INITIAL INST INDEX VALUE     00103100
+.*******************************************************************    00103200
+.***AO.X05  FORMAT GENERATED INSTRUCTIONS                               00103300
+.*******************************************************************    00103400
+                      ACTR  10000                                       00103500
+.*                                                                      00103600
+                      LCLA  &ZLC           COLUMN POSITION              00103700
+                      LCLA  &ZOPX          LIST TABLE INDEX             00103800
+                      LCLC  &ZLL           LABEL                        00103900
+                      LCLC  &ZLOP          OPERATION                    00104000
+                      LCLC  &ZLV           VALUE                        00104100
+                      LCLC  &ZLD           DESCRIPTION                  00104200
+.*                                                                      00104300
+&ZOPX                 SETA  1                                           00104400
+.*******************************************************************    00104500
+.***AP.X01  FORMAT GENERATED CODE                                       00104600
+.ZL21                 AIF   (&ZOPX GT &ZOPN).ZLX1  B IF DONE            00104700
+&ZLL                  SETC  '&ZOPL(&ZOPX)'                              00104800
+&ZLOP                 SETC  '&ZOPO(&ZOPX)'                              00104900
+&ZLV                  SETC  '&ZOPV(&ZOPX)'                              00105000
+&ZLD                  SETC  '&ZOPD(&ZOPX)'                              00105100
+                      AIF   (K'&ZLD LE 0).ZL51                          00105200
+&ZLC                  SETA  35             COMMENT COLUMN               00105300
+                      AIF   ('&ZLD'(1,1) NE '*').ZL31                   00105400
+&ZLC                  SETA  33             COMMENT COLUMN               00105500
+.ZL31                 AIF   (K'&ZLV GE &ZLC-16-1).ZL41                  00105600
+&ZLV                  SETC  '&ZLV'.' '                                  00105700
+                      AGO   .ZL31                                       00105800
+.*                                                                      00105900
+.ZL41                 ANOP  ,                                           00106000
+&ZLV                  SETC  '&ZLV'.' '                                  00106100
+.ZL51                 ANOP  ,                                           00106200
+&ZLV                  SETC  '&ZLV'.'&ZLD'                               00106300
+.*                                                                      00106400
+&ZLL     &ZLOP &ZLV                                                     00106500
+.*                                                                      00106600
+&ZOPX                 SETA  &ZOPX+1        NEXT STRUCTURE               00106700
+                      AGO   .ZL21          CONTINUE LOOPING             00106800
+.*                                                                      00106900
+.ZLX1                 ANOP  ,                                           00107000
+.*******************************************************************    00107100
+.***AP.X02  END OF CTRACECS MACRO                                       00107200
+&ZCTRACECS            SETC  'YES'          SET CTRACECS USED            00107300
+         POP   PRINT                                                    00107400
+*                                            CTRACECS-0                 00107500
+         SPACE 1                                                        00107600
+.ZLX2                 ANOP  ,                                           00107700
+         MEND                                                           00107800
+**********************************************************************/ 00107900
+*/*PB.OC01 INVOKE MACRO---------------------------------------------*/  00108000
+*%CTRACECS: MACRO KEYS(TBWC,MODE,BUFFSEQ#,TESTMODE,TESTSEQ#,CSLABEL,    00108100
+*                 COM);                                                 00108200
+*  ANS('?'!!MACLABEL!!' '!!'CTRACECP '!!MACLIST!!                       00108300
+*         ' '!!MACKEYS!!';') COL(MACLMAR);                              00108400
+*%END CTRACECS;                                                         00108500

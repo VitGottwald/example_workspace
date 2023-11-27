@@ -1,0 +1,947 @@
+*%/* START OF PL/X COMMENT ENDING ON %MACRO STATEMENT            @L2A   00000100
+         MACRO                                                          00000200
+&LABEL   PARTREL &DSN=,                                                X00000300
+               &MF=,                                                   X00000400
+               &MODE=,                                                 X00000500
+               &UCB=,                                                  X00000600
+               &TIOT=,                                                 X00000700
+               &ERASE=,                                                X00000800
+               &VSAMTYPE=,                                             X00000900
+               &VSAMFMT=,                                              X00001000
+               &VSAMCLLR=,                                             X00001100
+               &VSAMSEC=,                                              X00001200
+               &VSAMTRKS=                                               00001300
+.**** START OF SPECIFICATIONS ****************************************  00001400
+.*                                                                      00001500
+.*$MAC(PARTREL):     PARTREL INTERFACE TO PARTIAL RELEASE               00001600
+.*                                                                      00001700
+.*DESCRIPTIVE-NAME = PARTREL INTERFACE TO PARTIAL RELEASE               00001800
+.*                                                                      00001900
+.*PROPRIETARY V3 STATEMENT                                              00002000
+.*LICENSED MATERIALS - PROPERTY OF IBM                                  00002100
+.*"RESTRICTED MATERIALS OF IBM"                                         00002200
+.*5694-A01                                                              00002301
+.*Copyright IBM Corp. 1980,2019                                         00002401
+.*END PROPRIETARY V3 STATEMENT                                          00002500
+.*                                                                      00002600
+.*STATUS = DFSMS/MVS 1.5.0                                              00002700
+.*                                                                      00002800
+.*FUNCTION = THIS MACRO WILL SET UP THE PARTREL PARAMETER LIST TO       00002900
+.*     ALLOW THE CALLER TO RELEASE UNUSED SPACE FROM A SEQUENTIAL OR    00003000
+.*     PARTITIONED DATA SET.                                            00003100
+.*                                                                      00003200
+.*NOTES = THE PARTREL CALL TO DADSM IS USED TO RELEASE UNUSED SPACE     00003300
+.*     STARTING WITH THE TRACK FOLLOWING THAT DEFINED IN THE FORMAT 1   00003400
+.*     DSCB FIELD KNOWN AS DS1LSTAR.  IF THE FORMAT 1 DSCB INDICATES    00003500
+.*     THAT THE ORIGINAL ALLOCATION WAS IN CYLINDER ALLOCATION, THE     00003600
+.*     DS1LSTAR VALUE WILL BE INCREMENTED TO THE NEXT CYLINDER          00003700
+.*     BOUNDARY.                                                        00003800
+.*                                                                      00003900
+.*     PARTREL WILL SUPPORT BOTH INDEXED AND NON-INDEXED VTOCS.         00004000
+.*                                                                      00004100
+.*     THE CALLING PROGRAM:                                             00004200
+.*       1. MUST BE APF AUTHORIZED.                                     00004300
+.*       2. MUST HAVE ALLOCATED THE VOLUME TO THIS TASK AND ENSURE      00004400
+.*          IT WILL STAY MOUNTED DURING THE PARTREL FUNCTION.           00004500
+.*       3. MUST ENSURE THAT THE REQUESTED DATA SET IS NOT OPEN.        00004600
+.*       4. MUST NOT BE HOLDING ANY LOCKS.                              00004700
+.*       5. MUST PROVIDE THE ADDRESS OF AN AVAILABLE STANDARD REGISTER  00004800
+.*          SAVE AREA IN GENERAL REGISTER 13.                           00004900
+.*       6. MAY BE SET TO ANY STORAGE KEY.                              00005000
+.*       7. MAY BE IN EITHER SUPERVISOR OR PROBLEM PROGRAM STATE.       00005100
+.*                                                                      00005200
+.*     THE USER MAY INCLUDE THE CVAFTBL MAPPING MACRO (ICVAFPRM) IN     00005300
+.*     THEIR PROGRAM AND TEST THE CVFDFPFT FIELD.  IF CVFPREL IS ON,    00005400
+.*     THE PARTREL FUNCTION IS SUPPORTED.                               00005500
+.*                                                                      00005600
+.*     THE PARTIAL RELEASE WILL FAIL IF THE DATA SET NAME CAN NOT BE    00005700
+.*     ENQUEUED EXCLUSIVELY (TIOT=ENQ) OR IF THE DATA SET NAME IS  @01C 00005800
+.*     NOT ALREADY ENQEUED EXCLUSIVELY (TIOT=NOENQ).               @01A 00005900
+.*                                                                      00006000
+.*     IF 'TTR' OF THE DS1LSTAR FIELD IS ZERO AND THE DATA SET IS       00006100
+.*     SEQUENTIAL, ALL SPACE IS RELEASED.                               00006200
+.*                                                                      00006300
+.*     'ADDR', IN KEYWORD=ADDR ! MF=(E,ADDR)                            00006400
+.*             MUST BE SPECIFIED AS A LABEL OF AN AREA.                 00006500
+.*             THIS LABEL MUST REPRESENT A VALID RX-TYPE ADDRESS        00006600
+.*             WHEN USED IN THE MACRO'S EXECUTE-FORM, AND A VALID       00006700
+.*             A-TYPE ADDRESS WHEN USED IN THE MACRO'S LIST-FORM.       00006800
+.*                                                                      00006900
+.*     'REG', IN KEYWORD=(REG) ! MF=(E,(REG))                           00007000
+.*             MAY BE SPECIFIED AS ANY REGISTER, 2 - 12.                00007100
+.*                                                                      00007200
+.*                                                                      00007300
+.*KEYWORDS APPLICABLE TO THE PARTREL MACRO ARE:                         00007400
+.*                                                                      00007500
+.*  MF=        THE 'MF' KEYWORD IS REQUIRED.  IT'S SUB-PARAMETERS WILL  00007600
+.*             DETERMINE WHETHER THE PARTREL PARAMETER LIST IS EXPANDED 00007700
+.*             AND/OR EXECUTABLE INSTRUCTIONS ARE GENERATED TO INVOKE   00007800
+.*             DADSM PARTIAL RELEASE.  THE FOLLOWING SUB-PARAMETERS ARE 00007900
+.*             VALID FOR THE 'MF' KEYWORD:                              00008000
+.*                                                                      00008100
+.*  MF=D       THE SPECIFICATION OF MF=D WILL RESULT IN THE EXPANSION   00008200
+.*             OF THE PARAMETER LIST IN DSECT FORMAT WITH LABELS FOR    00008300
+.*             EACH OF THE FIELDS IN THE PARAMETER LIST.  IN THIS FORM  00008400
+.*             OF THE MACRO, NO OTHER MACRO PARAMETERS WILL APPLY (IF   00008500
+.*             THEY ARE SPECIFIED, THEY WILL BE IGNORED AND AN MNOTE    00008600
+.*             ISSUED).  THIS FORM OF THE MACRO WILL NOT GENERATE THE   00008700
+.*             LOAD, BRANCH, DELETE SEQUENCE FOR DADSM PARTIAL RELEASE. 00008800
+.*                                                                      00008900
+.*  MF=(E,ADDR) ! MF=(E,(REG)) ! MF=(E,(1))                             00009000
+.*             THE SPECIFICATION OF ANY OF THE ABOVE FORMATS FOR THE    00009100
+.*             'MF' KEYWORD WILL RESULT IN THE MODIFICATION OF AN       00009200
+.*             EXISTING PARAMETER LIST.  THE ADDRESS OF THE PARAMETER   00009300
+.*             LIST IS PROVIDED VIA THE SECOND SUB-PARAMETER ('ADDR',   00009400
+.*             'REG', OR '1').  THIS SPECIFICATION WILL ALSO RESULT IN  00009500
+.*             THE GENERATION OF A LOAD FOR, BRANCH TO, AND DELETE OF   00009600
+.*             THE DADSM PARTIAL RELEASE ENTRY POINT MODULE. THIS       00009700
+.*             SPECIFICATION IS CALLED THE EXECUTE-FORM OF THE MACRO.   00009800
+.*                                                                      00009900
+.*  MF=L       THE SPECIFICATION OF MF=L WILL RESULT IN THE EXPANSION   00010000
+.*             OF THE PARAMETER LIST AND INITIALIZE IT ACCORDING TO     00010100
+.*             THE SPECIFIED KEYWORDS.  HOWEVER, IF A REGISTER IS USED  00010200
+.*             INSTEAD OF AN ADDRESS, THE LIST WILL CONTAIN AN ADCON    00010300
+.*             SPECIFICATION OF ZERO (AN MNOTE WILL BE ISSUED).  THIS   00010400
+.*             FORM OF THE MACRO WILL NOT GENERATE THE LOAD, BRANCH,    00010500
+.*             DELETE SEQUENCE FOR DADSM PARTIAL RELEASE.               00010600
+.*                                                                      00010700
+.*  DSN=ADDR ! DSN=(REG)                                                00010800
+.*             THE 'DSN' KEYWORD MAY BE USED TO SPECIFY THE ADDRESS     00010900
+.*             OF AN AREA WHICH DESCRIBES A DATA SET NAME.              00011000
+.*             THIS PARAMETER WILL NOT APPLY TO THE DSECT-FORM OF THIS  00011100
+.*             MACRO.  IF THE LIST-FORM IS REQUESTED, THE 'REG' FORMAT  00011200
+.*             FOR THIS PARAMETER WILL NOT APPLY.                       00011300
+.*             'ADDR', IN DSN=ADDR, MUST BE SPECIFIED AS THE LABEL      00011400
+.*                   OF AN AREA WHICH DESCRIBES A DATA SET NAME.        00011500
+.*             'REG', IN DSN=(REG), MUST REPRESENT ANY REGISTER,        00011600
+.*                   2 - 12.  THE REGISTER WILL CONTAIN THE ADDRESS     00011700
+.*                   OF AN AREA WHICH DESCRIBES A DATA SET NAME.        00011800
+.*                                                                      00011900
+.*  MODE=PGM   THE SPECIFICATION OF MODE=PGM IDENTIFIES THAT THE        00012000
+.*             PROGRAM ISSUING THE PARTREL MACRO IS IN PROBLEM PROGRAM  00012100
+.*             STATE.  THE PARTREL MACRO WILL DEFAULT TO MODE=PGM       00012200
+.*             WHENEVER THE 'MODE' KEYWORD IS NOT CODED AS A PARAMETER. 00012300
+.*             DADSM PARTIAL RELEASE WILL RETURN IN PROBLEM PROGRAM     00012400
+.*             STATE WHENEVER MODE=PGM IS SPECIFIED OR DEFAULTED.       00012500
+.*                                                                      00012600
+.*  MODE=SUP   THE SPECIFICATION OF MODE=SUP IDENTIFIES THAT THE        00012700
+.*             PROGRAM ISSUING THE PARTREL MACRO IS IN SUPERVISOR       00012800
+.*             STATE.  IF PARTREL MODE=SUP IS ISSUED FROM A PROGRAM     00012900
+.*             IN PROBLEM PROGRAM STATE, THE REQUESTING PROGRAM IS      00013000
+.*             SUBJECT TO ABEND.  OTHERWISE DADSM PARTIAL RELEASE WILL  00013100
+.*             RETURN IN SUPERVISOR STATE.                              00013200
+.*                                                                      00013300
+.*  UCB=(REG)  THE 'UCB' KEYWORD MAY BE USED TO SPECIFY THE ADDRESS     00013400
+.*             OF THE UCB WHICH DESCRIBES THE VOLUME UPON WHICH THE     00013500
+.*             DATA SET IS TO BE ALLOCATED.                             00013600
+.*             THIS PARAMETER WILL ONLY APPLY TO THE EXECUTE-FORM       00013700
+.*             OF THIS MACRO.                                           00013800
+.*             'REG', IN UCB=(REG), MUST REPRESENT ANY REGISTER,        00013900
+.*                   2 - 12.  THE REGISTER WILL CONTAIN THE ADDRESS     00014000
+.*                   OF THE UCB.                                        00014100
+.*                                                                 @01A 00014200
+.*  TIOT=      THE 'TIOT' KEYWORD IS AN OPTIONAL PARAMETER.        @01A 00014300
+.*             IT'S SUB-PARAMETERS DETERMINE IF PARTIAL RELEASE    @01A 00014400
+.*             SHOULD OBTAIN EXCLUSIVE ENQUES ON SYSZTIOT AND      @01A 00014500
+.*             SYSDSN.  THE PARTREL MACRO WILL DEFAULT TO THE      @01A 00014600
+.*             SETTING IN THE LIST FORM OF THE PARAMETER LIST IF   @01A 00014700
+.*             THE KEYWORD IS OMITTED.                             @01A 00014800
+.*                                                                 @01A 00014900
+.*  TIOT=ENQ   THE SPECIFICATION OF TIOT=ENQ IDENTIFIES THAT       @01A 00015000
+.*             PARTIAL RELEASE WILL OBTAIN EXCLUSIVE ENQUES ON     @01A 00015100
+.*             SYSZTIOT AND SYSDSN.  IF EITHER OF THESE EXCLUSIVE  @01A 00015200
+.*             ENQUES CANNOT BE OBTAINED, THE REQUEST IS FAILED.   @01A 00015300
+.*                                                                 @01A 00015400
+.*  TIOT=NOENQ THE SPECIFICATION OF TIOT=NOENQ IDENTIFIES THAT     @01A 00015500
+.*             PARTIAL RELEASE WILL NOT OBTAIN THE SYSZTIOT AND    @01A 00015600
+.*             SYSDSN ENQUES.  THE CALLER IS REQUIRED TO HOLD AN   @01A 00015700
+.*             EXCLUSIVE ENQUE ON SYSDSN.  PARTIAL RELEASE WILL    @01A 00015800
+.*             FAIL THE REQUEST IF THIS ENQUE IS NOT ALREADY HELD. @01A 00015900
+.*                                                                 @01A 00016000
+.*  ERASE=     THE 'ERASE' KEYWORD IS AN OPTIONAL PARAMETER.       @02A 00016100
+.*             SUB-PARAMETERS DETERMINE IF PARTIAL RELEASE         @02A 00016200
+.*             SHOULD ERASE, NOT ERASE, OR TEST FOR ERASE OF       @02A 00016300
+.*             RELEASED SPACE.  THE PARTREL MACRO WILL DEFAULT     @02A 00016400
+.*             TO THE SETTINGS IN THE LIST FORM OF THE PARAMETER   @02A 00016500
+.*             LIST IF THE KEYWORD IS OMITTED.                     @02A 00016600
+.*                                                                 @02A 00016700
+.*  ERASE=YES  THE SPECIFICATION OF ERASE=YES IDENTIFIES THAT      @02A 00016800
+.*             PARTIAL RELEASE WILL ERASE THE RELEASED SPACE.      @02A 00016900
+.*                                                                 @02A 00017000
+.*  ERASE=NO   THE SPECIFICATION OF ERASE=NO IDENTIFIES THAT       @02A 00017100
+.*             PARTIAL RELEASE WILL NOT ERASE THE RELEASED SPACE.  @02A 00017200
+.*                                                                 @02A 00017300
+.*  ERASE=TEST THE SPECIFICATION OF ERASE=TEST IDENTIFIED THAT     @02A 00017400
+.*             PARTIAL RELEASE WILL ISSUE A RACROUTE TO DETERMINE  @02A 00017500
+.*             IF RELEASED SPACE SHOULD BE ERASED.                 @02A 00017600
+.*                                                                 @03A 00017700
+.*  VSAMTYPE=  THE 'VSAMTYPE' KEYWORD IS AN OPTIONAL PARAMETER     @03A 00017800
+.*             SUB-PARAMETERS DETERMINES THE TYPE OF VSAM          @03A 00017900
+.*             DATASET.                                            @03A 00018000
+.*                                                                 @03A 00018100
+.*  VSAMTYPE=YES   DATASET TYPE IS A VSAM DATASET                  @L1C 00018200
+.*                 WHICH PARTIAL RELEASE WILL ATTEMPT TO RELESE    @L1C 00018300
+.*                 ALLOCATED BUT UNUSED SPACE.                     @L1C 00018400
+.*                                                                 @L1C 00018500
+.*                                                                 @03A 00018600
+.*  VSAMTYPE=ESDS ! RRDS ! LDS ! VRRDS ! KSDS                      @L1C 00018700
+.*                                                                 @03A 00018800
+.*                 DOWNLEVEL COMPATABILITY. SAME AS VSAMTYPE=YES.  @L1C 00018900
+.*                 PARTIAL RELEASE WILL ACCEPT THESE FORMS         @L1C 00019000
+.*                 OF VSAM DATASETS.                               @L1C 00019100
+.*                                                                 @03A 00019200
+.*  VSAMFMT=   THE 'VSAMFMT' KEYWORD IS AN OPTIONAL PARAMETER,     @03A 00019300
+.*             BUT IS REQUIRED WHEN 'VSAMTYPE' IS ALSO SPECIFIED   @03A 00019400
+.*             SUB-PARAMETERS DETERMINE THE FORMAT OF THE          @03A 00019500
+.*             REQUESTED VSAM DATASET.                             @03A 00019600
+.*                                                                 @03A 00019700
+.*  VSAMFMT=EXTD  THIS INDICATES THAT THE REQUESTED VSAM DATASET   @03A 00019800
+.*                IS AN EXTENDED FORMAT VSAM DATASET.  PARTIAL     @03A 00019900
+.*                RELEASE WILL ATTEMPT TO FREE ALLOCATED BUT       @03A 00020000
+.*                UNUSED SPACE.                                    @03A 00020100
+.*                                                                 @03A 00020200
+.*  VSAMFMT=STD   PARTIAL RELEASE WILL REJECT THIS FORMAT          @03A 00020300
+.*                OF VSAM DATASET.                                 @03A 00020400
+.*                                                                 @03A 00020500
+.*  VSAMCLLR=  THE 'VSAMCALLR' KEYWORD IS AN OPTIONAL PARAMETER,   @03A 00020600
+.*             BUT IS REQUIRED WHEN 'VSAMTYPE' IS ALSO SPECIFIED.  @03A 00020700
+.*             SUB-PARAMETERS DETERMINE WHO IS THE CALLER OF       @03A 00020800
+.*             PARTIAL RELEASE.                                    @03A 00020900
+.*                                                                 @03A 00021000
+.*  VSAMCLLR=VSAMCLSE                                              @03A 00021100
+.*                                                                 @03A 00021200
+.*             IF VSAM CLOSE IS SET AND THE CALLER IS              @03A 00021300
+.*             AUTHORIZED (KEY < 8) THEN PARTIAL RELEASE WILL      @03A 00021400
+.*             CALL CATALOG WITH 'VSAMCLSE' BEING SET.             @03A 00021500
+.*                                                                 @03A 00021600
+.*             IF VSAM CLOSE IS SET AND THE CALLER IS              @03A 00021700
+.*             NOT-AUTORIZDED (KEY=8) THEN PARTIAL RELEASE         @03A 00021800
+.*             WILL TURN OFF THE 'VSAMCLSE' BIT AND TURN ON THE    @03A 00021900
+.*             NOTVSAM (PRLVCNV) BIT.                              @03A 00022000
+.*                                                                 @03A 00022100
+.*  VSAMCLLR=NOTVSAM                                               @03A 00022200
+.*                                                                 @03A 00022300
+.*             WHEN PARTIAL RELEASE CALLS CATALOG SERVICES         @03A 00022400
+.*             PARTIAL RELEASE WILL INDICATE THAT THE CALLER OF    @03A 00022500
+.*             PARTIAL RELEASE IS NOT VSAM CLOSE.                  @03A 00022600
+.*                                                                 @03A 00022700
+.*                                                                 @03A 00022800
+.*  VSAMSEC=   THE 'VSAMSEC' KEYWORD IS AN OPTIONAL PARAMETER,     @03A 00022900
+.*             BUT IS REQUIRED WHEN 'VSAMTYPE' IS ALSO SPECIFIED.  @03A 00023000
+.*             SUB-PARAMETERS DETERMINE WHO IS THE CALLER OF       @03A 00023100
+.*             PARTIAL RELEASE.                                    @03A 00023200
+.*                                                                 @03A 00023300
+.*  VSAMSEC=BYPASS                                                 @03A 00023400
+.*                                                                 @03A 00023500
+.*             IF THE CALLER OF PARTIAL RELEASE IS KEY < 8 THEN    @03A 00023600
+.*             PARTIAL RELEASE WILL PASS TO CATALOG, THE           @03A 00023700
+.*             BYPASS SECURITY CHECKING BIT INDICATING THAT        @03A 00023800
+.*             CATALOG CAN BYPASS SECURITY CHECKING.               @03A 00023900
+.*                                                                 @03A 00024000
+.*             IF THE CALLER OF PARTIAL RELEASE IS KEY = 8 THEN    @03A 00024100
+.*             PARTIAL RELEASE WILL TURN OFF THE BYPASS BIT        @03A 00024200
+.*             BEFORE CALLING CATALOG.  THIS WILL FORCE CATALOG    @03A 00024300
+.*             TO PERFORM SECURITY CHECKING.                       @03A 00024400
+.*                                                                 @03A 00024500
+.*  VSAMSEC=NOBYPASS                                               @03A 00024600
+.*                                                                 @03A 00024700
+.*             PARTIAL RELEASE WILL TURN OFF THE BYPASS BIT        @03A 00024800
+.*             BEFORE CALLING CATALOG.  THIS WILL FORCE CATALOG    @03A 00024900
+.*             TO PERFORM SECURITY CHECKING.                       @03A 00025000
+.*                                                                 @03A 00025100
+.*             THE 'VSAMTRKS' KEYWORD IS AN OPTIONAL PARAMETER,    @03A 00025200
+.*             BUT IS REQUIRED WHEN 'VSAMTYPE' IS ALSO SPECIFIED.  @03A 00025300
+.*             SUB-PARAMETERS DETERMINE WHO IS THE CALLER OF       @03A 00025400
+.*             PARTIAL RELEASE.                                    @03A 00025500
+.*                                                                 @03A 00025600
+.*                                                                 @03A 00025700
+.*                                                                 @03A 00025800
+.*  VSAMTRKS=ADDR ! VSAMTRKS=(REG)                                 @03A 00025900
+.*                                                                 @03A 00026000
+.*         THE 'VSAMTRKS' KEYWORD MAY BE USED TO SPECIFY THE       @03A 00026100
+.*         ADDRESS OF AN AREA WHICH CONTAINS THE NUBER OF TRACKS   @03A 00026200
+.*         RELEASED BY THE PARTIAL RELEASE FUNCTION.               @03A 00026300
+.*         THIS PARAMETER WILL NOT APPLY TO THE DSECT-FORM OF THIS @03A 00026400
+.*         MACRO.  IF THE LIST-FORM IS REQUESTED, THE 'REG' FORMAT @03A 00026500
+.*         FOR THIS PARAMETER WILL NOT APPLY.                      @03A 00026600
+.*         'ADDR', IN VSAMTRKS=ADDR, MUST BE SPECIFIED AS THE      @03A 00026700
+.*         LABEL OF AN AREA WHICH WILL CONTAIN THE NUMBER OF       @03A 00026800
+.*         TRACKS RELEASED.  THIS IS A 4 BYTE FIELD.               @03A 00026900
+.*         'REG', IN VSAMTRKS=(REG), MUST REPRESENT ANY REGISTER,  @03A 00027000
+.*         2 - 12.  THE REGISTER WILL CONTAIN THE ADDRESS          @03A 00027100
+.*         OF AN AREA WHICH WILL CONTAIN THE NUMBER OF TRACKS      @03A 00027200
+.*         RELEASED.                                               @03A 00027300
+.*                                                                      00027400
+.*SUMMARY OF PARAMETERS -- KEYWORD=OPTION COMBINATIONS:                 00027500
+.*                                                                      00027600
+.*        THE 'MF' KEYWORD IS REQUIRED.  THE SPECIFICATION OF KEYWORDS  00027700
+.*        'DSN' 'MODE' AND/OR 'UCB' IS DEFINED AS A FUNCTION OF 'MF'    00027800
+.*                                                                      00027900
+.*                MF   DSN    MODE   UCB    TIOT   ERASE           @01C 00028000
+.*                --   ----   ----   ----   ----   -----           @01C 00028100
+.*                D    IG     IG     IG     IG     IG              @01C 00028200
+.*                E    OPT    KWD    REG    OPT    OPT             @01C 00028300
+.*                L    ADDR   KWD    IG     OPT    OPT             @01C 00028400
+.*                                                                      00028500
+.*                                                                      00028600
+.*                MF   VSAMTYPE   VSAMFMT   VSAMSEC   VSAMTRKS     @03A 00028700
+.*                --   --------   -------   -------   --------     @03A 00028800
+.*                D    IG         IG        IG        IG           @03A 00028900
+.*                E    OPT        OPT       OPT       OPT          @03A 00029000
+.*                L    OPT        OPT       OPT       ADDR         @03A 00029100
+.*                                                                      00029200
+.*        ENTRIES IN THE ABOVE TABLE IDENTIFY RESTRICTIONS ON THE       00029300
+.*        PARTREL MACRO PARAMETERS AS:                                  00029400
+.*                                                                      00029500
+.*        ADDR THE PARAMETER IS OPTIONAL.  IF THE PARAMETER IS          00029600
+.*             SPECIFIED, IT IS RESTRICTED TO THE KEYWORD=LABEL         00029700
+.*             FORMAT.  IF THE PARAMETER IS SPECIFIED IN THE            00029800
+.*             KEYWORD=(REG) FORMAT:                                    00029900
+.*                1. THE PARAMETER IS IGNORED, AND                      00030000
+.*                2. ONE 4 LEVEL MNOTE IS ISSUED FOR THE MACRO CALL     00030100
+.*                   (IF NO MAJOR ERROR IS FOUND).                      00030200
+.*                                                                      00030300
+.*        IG   IF THE PARAMETER IS SPECIFIED:                           00030400
+.*                1. THE PARAMETER IS IGNORED, AND                      00030500
+.*                2. ONE 4 LEVEL MNOTE IS ISSUED FOR THE MACRO CALL     00030600
+.*                   (IF NO MAJOR ERROR IS FOUND).                      00030700
+.*                                                                      00030800
+.*        KWD  THE PARAMETER IS OPTIONAL.  THE 'MODE' PARAMETER         00030900
+.*             MAY BE SPECIFIED AS EITHER MODE=PGM OR MODE=SUP.         00031000
+.*             IF THE 'MODE' PARAMETER IS NOT SPECIFIED, MODE=PGM       00031100
+.*             WILL BE ASSUMED.                                         00031200
+.*                                                                      00031300
+.*        OPT  THE PARAMETER IS OPTIONAL.  IF THE PARAMETER IS          00031400
+.*             SPECIFIED, EITHER FORMAT:  KEYWORD=LABEL, OR             00031500
+.*             KEYWORD=(REG) MAY BE USED.                               00031600
+.*                                                                      00031700
+.*        REG  THE PARAMETER IS OPTIONAL.  IF THE PARAMETER IS          00031800
+.*             SPECIFIED, IT IS RESTRICTED TO THE KEYWORD=(REG)         00031900
+.*             FORMAT.                                                  00032000
+.*                                                                      00032100
+.*        ALL REFERENCES TO THE WORD 'OPTIONAL' IS RELATIVE TO          00032200
+.*        PARAMETER SPECIFICATION ON THE MACRO CALL.  WHEN DADSM        00032300
+.*        PARTIAL RELEASE IS INVOKED, VALUES FOR BOTH 'DSN' AND 'UCB'   00032400
+.*        MUST BE DEFINED OR THE PARTIAL RELEASE WILL FAIL.             00032500
+.*                                                                      00032600
+.*                                                                      00032700
+.*MODULE-TYPE = MACRO                                                   00032800
+.*                                                                      00032900
+.*PROCESSOR = ASSEMBLER LANGUAGE                                        00033000
+.*                                                                      00033100
+.*ATTRIBUTES = EXECUTABLE MACRO                                         00033200
+.*                                                                      00033300
+.*ENTRY-POINT = MACRO STATEMENT.                                        00033400
+.*                                                                      00033500
+.*INPUT = SEE DESCRIPTION OF KEYWORDS UNDER 'FUNCTION'.                 00033600
+.*                                                                      00033700
+.*OUTPUT = PARTREL PARAMETER LIST WITH THE FLAGS AND THE ADDRESSES      00033800
+.*         SET DEPENDING UPON THE KEYWORDS SPECIFIED AS DEFINED         00033900
+.*         UNDER 'KEYWORDS' ABOVE.                                      00034000
+.*                                                                      00034100
+.*EXIT-NORMAL = MEND STATEMENT.                                         00034200
+.*                                                                      00034300
+.*EXIT-ERROR  = MNOTE AND MEND STATEMENT.  MNOTES WILL BE GENERATED     00034400
+.*              FOR ANY OF THE FOLLOWING ERRORS ENCOUNTERED:            00034500
+.*                                                                      00034600
+.*              FOR ALL FORMS OF THE MACRO:                             00034700
+.*                 1. MF IS A REQUIRED KEYWORD.                         00034800
+.*                 2. INVALID OPERAND - KEYWORD=OPERAND.                00034900
+.*                 3. ONE OR MORE PARAMETERS IGNORED DUE TO             00035000
+.*                    MF=OPERAND.                                       00035100
+.*                                                                      00035200
+.*              FOR THE EXECUTE FORM OF THE MACRO:                      00035300
+.*                 1. MF=(E,ADDR) FORM: SUPPLY PARAMETER LIST ADDRESS.  00035400
+.*                                                                      00035500
+.*EXTERNAL-REFERENCES = NONE                                            00035600
+.*                                                                      00035700
+.*TABLES = NONE                                                         00035800
+.*                                                                      00035900
+.*MACROS = DELETE, IHBINNRA, LOAD                                       00036000
+.*                                                                      00036100
+.*CHANGE-ACTIVITY = NEW MACRO                                           00036200
+.*                                                                      00036300
+.*$L0=MVS/XA,HDP2210,,STLAM: INTERFACE MACRO TO PARTIAL RELEASE         00036400
+.*$01=OZ94340,HDP2210,,STLMC: SUPPORT SYSZTIOT BYPASS FOR HSM      @01A 00036500
+.*$02=OZ94337,HDP2210,,STLMC: SUPPORT ERASE, NOERASE ON PARTREL    @02A 00036600
+.*$03=OW03622,HDZ11B0,,SJPLMKD: SUPPORT VSAM PARTIAL RELEASE       @03A 00036700
+.*$L1=VSAMAF,HDZ11E0,11Feb98,,SJPLGAP: ADVANCED VSAM PARTREL SUP.  @L1A 00036800
+.*$P1=K150458,HDZ11E0,23Feb98,,SJPLGAP: DONT USE R0 FOR DIAG CODE  @P1A 00036900
+.*$04=OW49940,HDZ11F0,31May01,,SJPLJBC: DONT ENQ TEST FLAG         @04A 00037000
+.*$P2=249631,HDZ2240,20180524,SVLSLH: 1. Replace 0CEF with BASSM   @P2A 00037001
+.*                                    2. Set basereg for CVT       @P2A 00037100
+.*$P2=269995,HDZ2240,20180827,SVLSLH: Remove non-XA Glue code      @P3A 00037101
+.*                                                                      00037102
+.**** END OF SPECIFICATIONS ******************************************  00037200
+.*                                                                      00037300
+         LCLB  &DSNA      DSN=ADDR WILL BE USED                         00037400
+         LCLB  &DSNR      DSN=(REG) WILL BE USED                        00037500
+         LCLB  &TRKSA     VSAMTRKS=ADDR WILL BE USED               @03A 00037600
+         LCLB  &TRKSR     VSAMTRKS=(REG) WILL BE USED              @03A 00037700
+         LCLB  &ERRORSW   A MAJOR ERROR WAS DETECTED                    00037800
+         LCLC  &L         LOCAL LABEL VARIABLE                          00037900
+         LCLB  &MFD       MF=D WAS SPECIFIED                            00038000
+         LCLB  &MFE       MF=(E,..) WAS SPECIFIED                       00038100
+         LCLB  &MFL       MF=L WAS SPECIFIED                            00038200
+         LCLA  &NO        BRANCH INDEX NUMBER                           00038300
+         LCLA  &NMASK1    USED TO RESET PARTREL FLAGS (BYTE1)      @03C 00038400
+         LCLA  &OMASK1    USED TO SET PARTREL FLAGS   (BYTE1)      @03C 00038500
+         LCLA  &NMASK2    USED TO RESET PARTREL FLAGS (BYTE2)      @03C 00038600
+         LCLA  &OMASK2    USED TO SET PARTREL FLAGS   (BYTE2)      @03C 00038700
+         LCLB  &UCBR      UCB=(REG) WILL BE USED                        00038800
+         LCLB  &WARNSW    A WARNING ERROR WAS DETECTED                  00038900
+         LCLB  &NB1(8)    BITS TO RESET PARTREL FLAG BYTE  (BYTE1) @03C 00039000
+         LCLB  &OB1(8)    BITS TO SET PARTREL FLAG BYTE    (BYTE1) @03C 00039100
+         LCLB  &NB2(8)    BITS TO RESET PARTREL FLAG BYTE  (BYTE2) @03C 00039200
+         LCLB  &OB2(8)    BITS TO SET PARTREL FLAG BYTE    (BYTE2) @03C 00039300
+         LCLB  &DF1       BIT TO SET DEFAULT CALLER                @L1A 00039400
+         LCLB  &DF2       BIT TO SET DEFAULT SECURITY CHECK        @L1A 00039500
+&NO      SETA  &SYSNDX                  SET BRANCH INDEX NUMBER         00039600
+.*                                                                      00039700
+.* ******************************************************************** 00039800
+.* *  VERIFICATION 1: MF PARAMETER                                      00039900
+.* ******************************************************************** 00040000
+.*                                                                      00040100
+.V1      AIF   ('&MF' EQ '').V1ER2      IF NO MF GIVEN, BRANCH, ERROR   00040200
+         AIF   ('&MF'(1,2) EQ '(E').V1E IF E FORM, BRANCH               00040300
+         AIF   ('&MF' EQ 'L').V1L       IF L FORM, BRANCH               00040400
+         AIF   ('&MF' NE 'D').V1ER1     IF NOT D FORM, BRANCH, ERROR    00040500
+&MFD     SETB  1                        ELSE SET MF=D FOUND             00040600
+         AGO   .V1X                       AND CONTINUE                  00040700
+.*                                                                      00040800
+.V1L     ANOP                                                           00040900
+&MFL     SETB  1                        SET MF=L FOUND                  00041000
+         AGO   .V1X                     AND CONTINUE                    00041100
+.*                                                                      00041200
+.V1E     ANOP                                                           00041300
+&MFE     SETB  1                        SET MF=E FOUND                  00041400
+         AIF   (N'&MF EQ 2).V1X         IF TWO PARMS ON MF, BRANCH      00041500
+         AIF   (N'&MF EQ 1).V1ER3       IF ONE PARM, BRANCH, ERROR      00041600
+.V1ER1   ANOP                                                           00041700
+         SPACE 1                                                        00041800
+         MNOTE 8,'***  IHB001 INVALID OPERAND - MF=&MF'                 00041900
+         AGO   .V1ERX                   GO SET ERROR FLAG               00042000
+.*                                                                      00042100
+.V1ER2   ANOP                                                           00042200
+         SPACE 1                                                        00042300
+         MNOTE 8,'***  IHB002 MF IS A REQUIRED KEYWORD'                 00042400
+         AGO   .V1ERX                   GO SET ERROR FLAG               00042500
+.*                                                                      00042600
+.V1ER3   ANOP                                                           00042700
+         SPACE 1                                                        00042800
+         MNOTE  8,'***  IHB004 MF=(E,ADDR) FORM: SUPPLY PARAMETER LIST X00042900
+               ADDRESS'                                                 00043000
+.V1ERX   ANOP                                                           00043100
+         SPACE 1                                                        00043200
+&ERRORSW SETB  1                        SET ERROR SWITCH ON             00043300
+.V1X     ANOP                                                           00043400
+.*                                                                      00043500
+.* ******************************************************************** 00043600
+.* *  V2: DSN= PARAMETER                                                00043700
+.* ******************************************************************** 00043800
+.*                                                                      00043900
+.V2      AIF   ('&DSN' EQ '').V2X       IF DSN NOT GIVEN, BRANCH        00044000
+         AIF   (&MFD).V2NOTE            IF D FORM, BRANCH, WARNING      00044100
+         AIF   ('&DSN'(1,1) EQ '(').V2R IF DSN=(REG), BRANCH            00044200
+&DSNA    SETB  1                        ELSE SET DSN=ADDR               00044300
+         AGO   .V2X                       AND CONTINUE                  00044400
+.*                                                                      00044500
+.V2R     AIF   (&MFL).V2NOTE            IF L FORM, BRANCH, WARNING      00044600
+         AIF   (N'&DSN NE 1).V2ER1      IF NE ONE PARM, BRANCH, ERROR   00044700
+&DSNR    SETB  1                        SET DSN=(REG)                   00044800
+         AGO   .V2X                     AND CONTINUE                    00044900
+.*                                                                      00045000
+.V2ER1   ANOP                                                           00045100
+         SPACE 1                                                        00045200
+         MNOTE 8,'***  IHB005 INVALID OPERAND - DSN=&DSN'               00045300
+         SPACE 1                                                        00045400
+&ERRORSW SETB  1                        SET ERROR SWITCH ON             00045500
+.V2NOTE  ANOP                                                           00045600
+&WARNSW  SETB  1                        SET WARNING SWITCH ON           00045700
+.V2X     ANOP                                                           00045800
+.*                                                                      00045900
+.* ******************************************************************** 00046000
+.* *  V3: MODE=  PARAMETER                                              00046100
+.* ******************************************************************** 00046200
+.*                                                                      00046300
+.V3      AIF   ('&MODE' EQ '').V3X      IF MODE NOT GIVEN, BRANCH       00046400
+         AIF   (&MFD).V3NOTE            IF D FORM, BRANCH, WARNING      00046500
+         AIF   ('&MODE' EQ 'PGM').V3X   IF MODE=PGM, BRANCH             00046600
+         AIF   ('&MODE' NE 'SUP').V3ER1 IF NOT MODE=SUP, BRANCH, ERROR  00046700
+&OB1(1)  SETB  1                        ELSE SET MODE=UP          @03C  00046800
+         AGO   .V3X                       AND CONTINUE                  00046900
+.*                                                                      00047000
+.V3ER1   ANOP                                                           00047100
+         SPACE 1                                                        00047200
+         MNOTE 8,'***  IHB006 INVALID OPERAND - MODE=&MODE'             00047300
+         SPACE 1                                                        00047400
+&ERRORSW SETB  1                        SET ERROR SWITCH ON             00047500
+.V3NOTE  ANOP                                                           00047600
+&WARNSW  SETB  1                        SET WARNING SWITCH ON           00047700
+.V3X     ANOP                                                           00047800
+.*                                                                      00047900
+.* ******************************************************************** 00048000
+.* *  V4: UCB= PARAMETER                                                00048100
+.* ******************************************************************** 00048200
+.*                                                                      00048300
+.V4      AIF   ('&UCB' EQ '').V4X       IF UCB NOT GIVEN, BRANCH        00048400
+         AIF   (&MFD OR &MFL).V4NOTE    IF D OR L FORM, GO SET WARNING  00048500
+         AIF   ('&UCB'(1,1) NE '(').V4ER1 IF NOT UCB=(REG), BRANCH, ERR 00048600
+         AIF   (N'&UCB NE 1).V4ER1      IF NE ONE PARM, BRANCH, ERROR   00048700
+&UCBR    SETB  1                       ELSE SET UCB=(REG)               00048800
+         AGO   .V4X                       AND CONTINUE                  00048900
+.*                                                                      00049000
+.V4ER1   ANOP                                                           00049100
+         SPACE 1                                                        00049200
+         MNOTE 8,'***  IHB007 INVALID OPERAND - UCB=&UCB'               00049300
+         SPACE 1                                                        00049400
+&ERRORSW SETB  1                        SET ERROR SWITCH ON             00049500
+.V4NOTE  ANOP                                                           00049600
+&WARNSW  SETB  1                        SET WARNING SWITCH ON           00049700
+.V4X     ANOP                                                           00049800
+.*                                                                      00049900
+.* ******************************************************************** 00050000
+.* *  V5: TIOT= PARAMETER                                          @01A 00050100
+.* ******************************************************************** 00050200
+.*                                                                      00050300
+.V5      ANOP                                                      @01A 00050400
+&NB1(2)  SETB  ('&TIOT' EQ '')          SET 'AND' BIT              @03C 00050500
+         AIF   ('&TIOT' EQ '').V5X      IF TIOT NOT GIVEN, BRANCH  @01A 00050600
+         AIF   (&MFD).V5NOTE            IF D FORM, ISSUE WARNING   @01A 00050700
+         AIF   ('&TIOT' EQ 'ENQ').V5X   IF TIOT=ENQ, BRANCH        @01A 00050800
+&OB1(2)  SETB  ('&TIOT' EQ 'NOENQ')     SET 'OR' BIT               @03C 00050900
+         AIF   ('&TIOT' EQ 'NOENQ').V5X IF TIOT=NOENQ, BRANCH      @01A 00051000
+.V5ER1   ANOP                                                      @01A 00051100
+         SPACE 1                                                   @01A 00051200
+         MNOTE 8,'***  IHB008 INVALID OPERAND - TIOT=&TIOT'        @01A 00051300
+         SPACE 1                                                   @01A 00051400
+&ERRORSW SETB  1                        SET ERROR SWITCH ON        @01A 00051500
+.V5NOTE  ANOP                                                      @01A 00051600
+&WARNSW  SETB  1                        SET WARNING SWITCH ON      @01A 00051700
+.V5X     ANOP                                                      @01A 00051800
+.*                                                                      00051900
+.* ******************************************************************** 00052000
+.* *  V6: ERASE= PARAMETER                                         @02A 00052100
+.* ******************************************************************** 00052200
+.*                                                                      00052300
+.V6      ANOP                                                      @02A 00052400
+&NB1(3)  SETB  ('&ERASE' EQ '')         SET 'AND' BIT              @03C 00052500
+&NB1(4)  SETB  (&NB1(3))                SET 'AND' BIT              @03C 00052600
+         AIF   ('&ERASE' EQ '').V6X     IF ERASE NOT GIVEN, BRANCH @02A 00052700
+         AIF   (&MFD).V6NOTE            IF D FORM, ISSUE WARNING   @02A 00052800
+         AIF   ('&ERASE' EQ 'TEST').V6X IF ERASE=TEST, BRANCH      @02A 00052900
+&OB1(3)  SETB  ('&ERASE' EQ 'NO')       SET 'OR' BIT               @03C 00053000
+&OB1(4)  SETB  ('&ERASE' EQ 'YES')      SET 'OR' BIT               @03C 00053100
+         AIF   (&OB1(3) OR &OB1(4)).V6X IF YES OR NO SPECIFIED, BR @02A 00053200
+.V6ER1   ANOP                                                      @02A 00053300
+         SPACE 1                                                   @02A 00053400
+         MNOTE 8,'***  IHB009 INVALID OPERAND - ERASE=&ERASE'      @02A 00053500
+         SPACE 1                                                   @02A 00053600
+&ERRORSW SETB  1                        SET ERROR SWITCH ON        @02A 00053700
+.V6NOTE  ANOP                                                      @02A 00053800
+&WARNSW  SETB  1                        SET WARNING SWITCH ON      @02A 00053900
+.V6X     ANOP                                                      @02A 00054000
+.*                                                                 @03A 00054100
+.* *************************************************************** @03A 00054200
+.* *  V7: VSAMTYPE= PARAMETER                                      @03A 00054300
+.* *************************************************************** @03A 00054400
+.*                                                                 @03A 00054500
+.V7      ANOP                                                      @03A 00054600
+&NB2(1)  SETB  ('&VSAMTYPE' EQ '')    SET TYPE KSDS  = 0           @03A 00054700
+&NB2(2)  SETB  (&NB2(1))              SET TYPE ESDS  = 0           @03A 00054800
+&NB2(3)  SETB  (&NB2(1))              SET TYPE RRDS  = 0           @03A 00054900
+&NB2(4)  SETB  (&NB2(1))              SET TYPE VRRDS = 0           @03A 00055000
+&NB2(5)  SETB  (&NB2(1))              SET TYPE LDS   = 0           @03A 00055100
+&NB2(8)  SETB  1                      SET TYPE       = 1           @04A 00055200
+.*                                                                 @03A 00055300
+         AIF   ('&VSAMTYPE' EQ '').V7W  VSAM DATASET NOT SPECIFIED @03A 00055400
+         AIF   ('&VSAMFMT'  EQ '').V7ER1                           @03A 00055500
+         AIF   ('&VSAMCLLR' EQ '').V7ER2 SET DEFAULT 'NOTVSAM'     @L1C 00055600
+         AIF   ('&VSAMSEC'  EQ '').V7ER3 SET DEFAULT 'NOBYPASS'    @L1C 00055700
+.*       AIF   ('&VSAMTRKS' EQ '').V7ER4                           @03A 00055800
+         AGO   .V7T                                                @03A 00055900
+.*                                                                 @03A 00056000
+.V7W     ANOP                                                      @03A 00056100
+         AIF   ('&VSAMFMT'  NE '').V7ER6                           @03A 00056200
+         AIF   ('&VSAMCLLR' NE '').V7ER7                           @03A 00056300
+         AIF   ('&VSAMSEC'  NE '').V7ER8                           @03A 00056400
+         AIF   ('&VSAMTRKS' NE '').V7ER9                           @03A 00056500
+.*                                                                 @03A 00056600
+.V7T     ANOP                                                      @03A 00056700
+         AIF   ('&VSAMTYPE' EQ '').V7X                             @03A 00056800
+         AIF   (&MFD).V7NOTE            IF D FORM, ISSUE WARNING   @03A 00056900
+.*                                                                 @03A 00057000
+         AIF   ('&VSAMTYPE' EQ 'KSDS').V7TYP                       @L1C 00057100
+         AIF   ('&VSAMTYPE' EQ 'ESDS').V7TYP                       @L1C 00057200
+         AIF   ('&VSAMTYPE' EQ 'RRDS').V7TYP                       @L1C 00057300
+         AIF   ('&VSAMTYPE' EQ 'VRRDS').V7TYP                      @L1C 00057400
+         AIF   ('&VSAMTYPE' EQ 'LDS').V7TYP                        @L1C 00057500
+         AIF   ('&VSAMTYPE' EQ 'YES').V7TYP                        @L1A 00057600
+         AGO   .V7TYE                                                   00057700
+.V7TYP   ANOP                                                      @L1A 00057800
+&OB2(1)  SETB  1                                                   @L1A 00057900
+&OB2(2)  SETB  0                                                   @L1A 00058000
+&OB2(3)  SETB  0                                                   @L1A 00058100
+&OB2(4)  SETB  0                                                   @L1A 00058200
+&OB2(5)  SETB  0                                                   @L1A 00058300
+.V7TYE   ANOP                                                      @L1A 00058400
+         AIF   (&OB2(1)).V7X                                       @L1C 00058500
+.*                                                                 @L1D 00058600
+.*                                                                 @03A 00058700
+.V7ER5   ANOP                                                      @03A 00058800
+         SPACE 1                                                   @03A 00058900
+         MNOTE 8,'***IHB010 INVALID OPERAND - VSAMTYPE=&VSAMTYPE'  @03A 00059000
+         SPACE 1                                                   @03A 00059100
+         AGO   .V7ERROR                                            @03A 00059200
+.*                                                                 @03A 00059300
+.V7ER1   ANOP                                                      @03A 00059400
+         SPACE 1                                                   @03A 00059500
+         MNOTE 8,'*** IHB011 PARAMETER VSAMFMT MUST BE SPECIFIED'  @03A 00059600
+         MNOTE 8,'***        WHEN PARAMETER VSAMTYPE IS SPECIFIED' @03A 00059700
+         SPACE 1                                                   @03A 00059800
+         AGO   .V7ERROR                                            @03A 00059900
+.*                                                                 @03A 00060000
+.V7ER2   ANOP                                                      @03A 00060100
+&DF1     SETB  1                                DEFAULT FOR CALLER @L1A 00060200
+         AIF   ('&VSAMSEC'  EQ '').V7ER3 SET DEFAULT 'NOBYPASS'    @L1C 00060300
+.*                                                                4@L1D 00060400
+         AGO   .V7T                                                @L1A 00060500
+.*                                                                 @03A 00060600
+.V7ER3   ANOP                                                      @03A 00060700
+&DF2     SETB  1                             DEFAULT FOR SEC CHECK @L1A 00060800
+.*                                                                4@L1D 00060900
+         AGO   .V7T                                                @L1A 00061000
+.*                                                                 @03A 00061100
+.V7ER4   ANOP                                                      @03A 00061200
+         SPACE 1                                                   @03A 00061300
+         MNOTE 8,'*** IHB014 PARAMETER VSAMTRKS MUST BE SPECIFIED' @03A 00061400
+         MNOTE 8,'***        WHEN PARAMETER VSAMTYPE IS SPECIFIED' @03A 00061500
+         SPACE 1                                                   @03A 00061600
+         AGO   .V7ERROR                                            @03A 00061700
+.*                                                                 @03A 00061800
+.V7ER6   ANOP                                                      @03A 00061900
+         SPACE 1                                                   @03A 00062000
+         MNOTE 8,'*** IHB015 PARAMETER VSAMFMT MUST NOT BE'        @03A 00062100
+         MNOTE 8,'***    SPECIFIED WHEN VSAMTYPE IS NOT SPECIFIED' @03A 00062200
+         SPACE 1                                                   @03A 00062300
+         AGO   .V7ERROR                                            @03A 00062400
+.*                                                                 @03A 00062500
+.V7ER7   ANOP                                                      @03A 00062600
+         SPACE 1                                                   @03A 00062700
+         MNOTE 8,'*** IHB016 PARAMETER VSAMCLLR MUST NOT BE'       @03A 00062800
+         MNOTE 8,'       SPECIFIED WHEN VSAMTYPE IS NOT SPECIFIED' @03A 00062900
+         SPACE 1                                                   @03A 00063000
+         AGO   .V7ERROR                                            @03A 00063100
+.*                                                                 @03A 00063200
+.V7ER8   ANOP                                                      @03A 00063300
+         SPACE 1                                                   @03A 00063400
+         MNOTE 8,'*** IHB017 PARAMETER VSAMSEC MUST NOT BE'        @03A 00063500
+         MNOTE 8,'       SPECIFIED WHEN VSAMTYPE IS NOT SPECIFIED' @03A 00063600
+         SPACE 1                                                   @03A 00063700
+         AGO   .V7ERROR                                            @03A 00063800
+.*                                                                 @03A 00063900
+.V7ER9   ANOP                                                      @03A 00064000
+         SPACE 1                                                   @03A 00064100
+         MNOTE 8,'*** IHB018 PARAMETER VSAMTRKS MUST NOT BE'       @03A 00064200
+         MNOTE 8,'       SPECIFIED WHEN VSAMTYPE IS NOT SPECIFIED' @03A 00064300
+         SPACE 1                                                   @03A 00064400
+         AGO   .V7ERROR                                            @03A 00064500
+.*                                                                 @03A 00064600
+.V7ERROR ANOP                                                      @03A 00064700
+&ERRORSW SETB  1                        SET ERROR SWITCH ON        @03A 00064800
+.V7NOTE  ANOP                                                      @03A 00064900
+&WARNSW  SETB  1                        SET WARNING SWITCH ON      @03A 00065000
+.V7X     ANOP                                                      @03A 00065100
+.*                                                                 @03A 00065200
+.* *************************************************************** @03A 00065300
+.* *  V8: VSAMTRKS= PARAMETER                                      @03A 00065400
+.* *************************************************************** @03A 00065500
+.*                                                                 @03A 00065600
+.V8      AIF   ('&VSAMTRKS' EQ '').V8X    IF VSAMTRKS NOT GIVEN,BR @03A 00065700
+         AIF   (&MFD).V8NOTE            IF D FORM, BRANCH, WARNING @03A 00065800
+         AIF   ('&VSAMTRKS'(1,1) EQ '(').V8R IF DSN=(REG), BRANCH  @03A 00065900
+&TRKSA   SETB  1                        ELSE SET DSN=ADDR          @03A 00066000
+         AGO   .V8X                       AND CONTINUE             @03A 00066100
+.*                                                                 @03A 00066200
+.V8R     AIF   (&MFL).V8NOTE            IF L FORM, BRANCH, WARNING @03A 00066300
+         AIF   (N'&VSAMTRKS NE 1).V8ER1 IF NE 1 PARM, BRANCH, ERROR@03A 00066400
+&TRKSR   SETB  1                        SET DSN=(REG)              @03A 00066500
+         AGO   .V8X                     AND CONTINUE               @03A 00066600
+.*                                                                 @03A 00066700
+.V8ER1   ANOP                                                      @03A 00066800
+         SPACE 1                                                   @03A 00066900
+         MNOTE 8,'***  IHB019 INVALID OPERAND - VSAMTRKS=&VSAMTRKS'@03A 00067000
+         SPACE 1                                                   @03A 00067100
+&ERRORSW SETB  1                        SET ERROR SWITCH ON        @03A 00067200
+.V8NOTE  ANOP                                                      @03A 00067300
+&WARNSW  SETB  1                        SET WARNING SWITCH ON      @03A 00067400
+.V8X     ANOP                                                      @03A 00067500
+.*                                                                 @03A 00067600
+.* *************************************************************** @03A 00067700
+.* *  V9: VSAMFMT= PARAMETER                                       @03A 00067800
+.* *************************************************************** @03A 00067900
+.*                                                                 @03A 00068000
+.V9      ANOP                                                      @03A 00068100
+&NB2(6)  SETB  ('&VSAMFMT' EQ '')       SET 'AND' BIT              @03A 00068200
+&NB2(7)  SETB  (&NB2(6))                SET 'AND' BIT              @03A 00068300
+         AIF   ('&VSAMFMT' EQ '').V9X   IF VSAMFMT NOT GIVEN, BR.  @03A 00068400
+         AIF   (&MFD).V9NOTE            IF D FORM, ISSUE WARNING   @03A 00068500
+&OB2(6)  SETB  ('&VSAMFMT' EQ 'EXTD')   SET 'OR' BIT               @03A 00068600
+&OB2(7)  SETB  ('&VSAMFMT' EQ 'STD')    SET 'OR' BIT               @03A 00068700
+         AIF   (&OB2(6) OR &OB2(7)).V9X IF YES OR NO SPECIFIED, BR @03A 00068800
+.V9ER1   ANOP                                                      @03A 00068900
+         SPACE 1                                                   @03A 00069000
+         MNOTE 8,'***IHB020 INVALID OPERAND - VSAMFMT=&VSAMFMT'    @03A 00069100
+         SPACE 1                                                   @03A 00069200
+&ERRORSW SETB  1                        SET ERROR SWITCH ON        @03A 00069300
+.V9NOTE  ANOP                                                      @03A 00069400
+&WARNSW  SETB  1                        SET WARNING SWITCH ON      @03A 00069500
+.V9X     ANOP                                                      @03A 00069600
+.*                                                                 @03A 00069700
+.*                                                                 @03A 00069800
+.* *************************************************************** @03A 00069900
+.* *  VA: VSAMCLLR= PARAMETER                                      @03A 00070000
+.* *************************************************************** @03A 00070100
+.*                                                                 @03A 00070200
+.VA      ANOP                                                      @03A 00070300
+         AIF   (&DF1).VACK2                                        @L1A 00070400
+&NB1(5)  SETB  ('&VSAMCLLR' EQ '')      SET 'AND' BIT              @03A 00070500
+&NB1(6)  SETB  (&NB1(5))                SET 'AND' BIT              @03A 00070600
+         AIF   ('&VSAMCLLR' EQ '').VAX  IF VSAMCLLR NOT GIVEN, BR. @03A 00070700
+         AIF   (&MFD).VANOTE            IF D FORM, ISSUE WARNING   @03A 00070800
+&OB1(5)  SETB  ('&VSAMCLLR' EQ 'VSAMCLSE')  SET 'OR' BIT           @03A 00070900
+&OB1(6)  SETB  ('&VSAMCLLR' EQ 'NOTVSAM')   SET 'OR' BIT           @03A 00071000
+         AIF   (&OB1(5) OR &OB1(6)).VAX IF YES OR NO SPECIFIED, BR @03A 00071100
+.VAER1   ANOP                                                      @03A 00071200
+         SPACE 1                                                   @03A 00071300
+         MNOTE 8,'***IHB021 INVALID OPERAND - VSAMCLLR=&VSAMCLLR'  @03A 00071400
+         SPACE 1                                                   @03A 00071500
+&ERRORSW SETB  1                        SET ERROR SWITCH ON        @03A 00071600
+.VANOTE  ANOP                                                      @03A 00071700
+&WARNSW  SETB  1                        SET WARNING SWITCH ON      @03A 00071800
+         AGO   .VAX                                                     00071900
+.VACK2   ANOP                           SET DEFAULT VALUE          @L1A 00072000
+&NB1(5)  SETB  (0)                      SET AND BIT                @L1A 00072100
+&NB1(6)  SETB  (0)                      SET AND BIT                @L1A 00072200
+&OB1(5)  SETB  (0)                      SET OR BIT                 @L1A 00072300
+&OB1(6)  SETB  (1)                      SET OR BIT                 @L1A 00072400
+.VAX     ANOP                                                      @03A 00072500
+.*                                                                 @03A 00072600
+.*                                                                 @03A 00072700
+.* *************************************************************** @03A 00072800
+.* *  VB: VSAMSEC= PARAMETER                                       @03A 00072900
+.* *************************************************************** @03A 00073000
+.*                                                                 @03A 00073100
+.VB      ANOP                                                      @03A 00073200
+         AIF   (&DF2).VBCK2                                        @L1A 00073300
+&NB1(7)  SETB  ('&VSAMSEC' EQ '')       SET 'AND' BIT              @03A 00073400
+&NB1(8)  SETB  (&NB1(7))                SET 'AND' BIT              @03A 00073500
+         AIF   ('&VSAMSEC' EQ '').VBX   IF VSAMSEC NOT GIVEN, BR.  @03A 00073600
+         AIF   (&MFD).VBNOTE            IF D FORM, ISSUE WARNING   @03A 00073700
+&OB1(7)  SETB  ('&VSAMSEC' EQ 'BYPASS')     SET 'OR' BIT           @03A 00073800
+&OB1(8)  SETB  ('&VSAMSEC' EQ 'NOBYPASS')   SET 'OR' BIT           @03A 00073900
+         AIF   (&OB1(7) OR &OB1(8)).VBX IF YES OR NO SPECIFIED, BR @03A 00074000
+.VBER1   ANOP                                                      @03A 00074100
+         SPACE 1                                                   @03A 00074200
+         MNOTE 8,'***IHB022 INVBLID OPERAND - VSAMSEC=&VSAMSEC'    @03A 00074300
+         SPACE 1                                                   @03A 00074400
+&ERRORSW SETB  1                        SET ERROR SWITCH ON        @03A 00074500
+.VBNOTE  ANOP                                                      @03A 00074600
+&WARNSW  SETB  1                        SET WARNING SWITCH ON      @03A 00074700
+         AGO   .VBX                                                     00074800
+.VBCK2   ANOP                           SET DEFAULT VALUE          @L1A 00074900
+&NB1(7)  SETB  (0)                      SET AND BIT                @L1A 00075000
+&NB1(8)  SETB  (0)                      SET AND BIT                @L1A 00075100
+&OB1(7)  SETB  (0)                      SET OR BIT                 @L1A 00075200
+&OB1(8)  SETB  (1)                      SET OR BIT                 @L1A 00075300
+.VBX     ANOP                                                      @03A 00075400
+.*                                                                 @03A 00075500
+.*                                                                 @03A 00075600
+.* ******************************************************************** 00075700
+.* *  CHECK ERRORS                                                      00075800
+.* ******************************************************************** 00075900
+.*                                                                      00076000
+         AIF   (&ERRORSW EQ 0).CONT     IF NO MAJOR ERROR, BRANCH       00076100
+&LABEL   DS    0F  *** INVALID OPERAND(S) FOUND IN MACRO EXPANSION.***  00076200
+         AGO   .FINISH                                                  00076300
+.*                                                                      00076400
+.CONT    AIF   (&WARNSW EQ 0).BLD       IF NO WARNING ERROR, BRANCH     00076500
+         SPACE 1                                                        00076600
+     MNOTE 4,'***  IHB023 ONE OR MORE PARAMETERS IGNORED DUE TO MF=&MF' 00076700
+         SPACE 1                                                        00076800
+.BLD     ANOP                                                      @01A 00076900
+&NMASK1  SETA  128*&NB1(1)+64*&NB1(2)+32*&NB1(3)+16*&NB1(4)        @03C 00077000
+&NMASK1  SETA  &NMASK1+8*&NB1(5)+4*&NB1(6)+2*&NB1(7)+1*&NB1(8)     @03A 00077100
+&OMASK1  SETA  128*&OB1(1)+64*&OB1(2)+32*&OB1(3)+16*&OB1(4)        @03C 00077200
+&OMASK1  SETA  &OMASK1+8*&OB1(5)+4*&OB1(6)+2*&OB1(7)+1*&OB1(8)     @03A 00077300
+.*                                                                 @03A 00077400
+&NMASK2  SETA  128*&NB2(1)+64*&NB2(2)+32*&NB2(3)+16*&NB2(4)        @03A 00077500
+&NMASK2  SETA  &NMASK2+8*&NB2(5)+4*&NB2(6)+2*&NB2(7)+1*&NB2(8)     @04A 00077600
+&OMASK2  SETA  128*&OB2(1)+64*&OB2(2)+32*&OB2(3)+16*&OB2(4)        @03A 00077700
+&OMASK2  SETA  &OMASK2+8*&OB2(5)+4*&OB2(6)+2*&OB2(7)               @03A 00077800
+.*                                                                      00077900
+         AIF   (&MFE).E1                IF E FORM, BRANCH          @01C 00078000
+&L       SETC  '&LABEL'                 ELSE ASSUME A LABEL WAS GIVEN   00078100
+         AIF   ('&L' NE '').TSTDL         IF A LABEL WAS GIVEN, BRANCH  00078200
+&L       SETC  'PRL&NO.S'                 ELSE CONSTRUCT A LABEL        00078300
+.TSTDL   AIF   (&MFL).L1                    IF L FORM, BRANCH           00078400
+.*                                                                      00078500
+.* ******************************************************************** 00078600
+.* *  BEGIN BUILD FOR DSECT FORM OF MACRO                               00078700
+.* ******************************************************************** 00078800
+.*                                                                      00078900
+&L       DSECT                          DSECT FOR PARAMETER LIST        00079000
+PRLPLID  DS    CL4                      EBCDIC 'PREL' FOR PARTREL       00079100
+PRLNGTH  DS    AL2                      LENGTH OF PARAMETER LIST        00079200
+PRERRCDE DS    H                        ERROR CODE RETURNED FROM        00079300
+*                                         PARTIAL RELEASE               00079400
+PRLFLAG  DS    XL1                      PARAMETER FLAG BYTE             00079500
+PRLPGM   EQU   X'00'                    MODE=PGM (PROBLEM PROGRAM)      00079600
+PRLSUP   EQU   X'80'                    MODE=SUP (SUPERVISOR STATE)     00079700
+PRLTIOT  EQU   X'40'                    TIOT=NOENQ                 @01A 00079800
+PRLNERAS EQU   X'20'                    ERASE=NO                   @02A 00079900
+PRLERASE EQU   X'10'                    ERASE=YES                  @02A 00080000
+PRLVCLOS EQU   X'08'          VSAMCLLR=VSAMCLSE                    @03A 00080100
+PRLVCNV  EQU   X'04'          VSAMCLLR=NOTVSAM                     @03A 00080200
+PRLBYPS  EQU   X'02'          VSAM: BYPASS SECURITY CHECKING       @03A 00080300
+PRLNBYPS EQU   X'01'          VSAM: SECURITY CHECKING TO BE DONE   @03A 00080400
+PRLFLAG2 DS    XL1                                                 @03A 00080500
+PRLVKSDS EQU   X'80'          VSAMTYPE=YES                         @L1C 00080600
+*                                                                 4@L1D 00080700
+PRLEXTD  EQU   X'04'          VSAMFMT=Extended format data set     @03A 00080800
+PRLSTD   EQU   X'02'          VSAMFMT=Standard format data set     @03A 00080900
+PRLTIOTX EQU   X'01'          No ENQ TEST when TIOT=NOENQ is spec  @04C 00081000
+PRLRSVD  DS    XL2                      RESERVED                   @03C 00081100
+PRLDSN   DS    A                        DATA SET NAME POINTER           00081200
+PRLUCB   DS    A                        UCB POINTER                     00081300
+PRLTRKS  DS    A              Ptr to area to contain number of     @03A 00081400
+*                                 tracks released by partial rel   @03A 00081500
+*                              (ONLY VALID FOR VSAM REQUESTS)      @03A 00081600
+PRLCTGR  DS    F               CATALOG REASON CODE, ONLY VALID     @03A 00081700
+*                              WHEN REQUEST IS FOR A VSAM DATASET  @03A 00081800
+*                              (ONLY VALID FOR VSAM REQUESTS)      @03A 00081900
+PRLDDIG  DS    F               DADSM DIAGNOSTIC INFORMATION        @L1A 00082000
+*                              COPIED HERE FROM REG 0 PRIOR TO     @L1A 00082100
+*                              CALL TO DELETE 20P0 ENTRY POINT     @L1A 00082200
+PRLEND   EQU   *                        END OF PARAMETER LIST           00082300
+PRLENGTH EQU   PRLEND-&L                LENGTH OF PARAMETER LIST        00082400
+         AGO   .FINISH                                                  00082500
+.*                                                                      00082600
+.* ******************************************************************** 00082700
+.* *  BEGIN BUILD FOR EXECUTE FORM OF MACRO                             00082800
+.* ******************************************************************** 00082900
+.*                                                                      00083000
+.E1      AIF   ('&LABEL' EQ '').E2      IF NO LABEL GIVEN, BRANCH       00083100
+&LABEL   DS    0H                                                       00083200
+.E2      AIF   ('&MF(2)' EQ '(1)').E3   IF MF=(E,(1))  BRANCH           00083300
+         LOAD  EP=IGG020P0              GET ADDR OF IGG020P0 IN REG 0   00083400
+         IHBINNRA &MF(2)                GET PARM LIST ADDR IN REG 1     00083500
+         AGO   .E4                      BRANCH AROUND MF=(E,(1)) FORM   00083600
+.*                                                                      00083700
+.E3      ANOP                                                           00083800
+         LR    14,1                     SAVE PARM LIST ADDR AROUND LOAD 00083900
+         LOAD  EP=IGG020P0              GET ADDR OF IGG020P0 IN REG 0   00084000
+         LR    1,14                     RESTORE PARM LIST ADDR          00084100
+.*                                                                      00084200
+.E4      ANOP                                                      @01C 00084300
+         NI    8(1),&NMASK1             RESET FLAG BITS            @01C 00084400
+         NI    9(1),&NMASK2             RESET FLAG BITS            @01C 00084500
+.*                                                                 @01D 00084600
+.E5      ANOP                                                           00084700
+         AIF   (&OMASK1 EQ 0).E5A       IF NO BITS TO SET, BRANCH  @03C 00084800
+         OI    8(1),&OMASK1             SET FLAG BITS              @01C 00084900
+.*                                                                 @03A 00085000
+.E5A     ANOP                                                      @03A 00085100
+         AIF   (&OMASK2 EQ 0).E6        IF NO BITS TO SET, BRANCH  @03A 00085200
+         OI    9(1),&OMASK2             SET FLAG BITS              @03A 00085300
+.*                                                                 @03A 00085400
+.E6      AIF   (&DSNR).E7               IF DSN=(REG), BRANCH            00085500
+         AIF   (&DSNA EQ 0).E6A         IF NOT DSN=ADDR, BRANCH    @03C 00085600
+         LA    15,&DSN                  GET ADDR OF DATA SET NAME       00085700
+         ST    15,12(,1)                AND STORE IN PARM LIST          00085800
+         AGO   .E6A                     BRANCH AROUND DSN=(REG)    @03C 00085900
+.E7      ANOP                                                           00086000
+         ST    &DSN(1),12(,1)           STORE ADDR OF DATA SET NAME     00086100
+.*                                                                 @03A 00086200
+.E6A     AIF   (&TRKSR).E7A             IF VSAMTRKS=(REG),  BRANCH @03A 00086300
+         AIF   (&TRKSA EQ 0).E8         IF NOT DSN=ADDR, BRANCH    @03A 00086400
+         LA    15,&VSAMTRKS              GET ADDR OF DATA SET NAME @03A 00086500
+         ST    15,20(,1)                AND STORE IN PARM LIST     @03A 00086600
+         AGO   .E8                      BRANCH AROUND DSN=(REG)    @03A 00086700
+.E7A     ANOP                                                      @03A 00086800
+         ST    &VSAMTRKS(1),20(,1)      STORE ADDR OF VSAMTRKS RET @03A 00086900
+.*                                                                 @03A 00087000
+.E8      AIF   (&UCBR EQ 0).E9          IF NOT UCB=(REG), BRANCH   @03A 00087100
+         ST    &UCB(1),16(,1)           STORE UCB PTR IN PARM LIST @03A 00087200
+.*                                                                 @03A 00087300
+.E9      ANOP                                                           00087400
+         LR    15,0                     GET ENTRY ADDRESS TO IGG020P0   00087500
+         BASSM 14,15                    BASSM 14,15  TO PARTREL   @P2C  00088301
+         LR    14,15                    SAVE RETURN CODE AROUND DELETE  00088500
+*                                                                 @P1D  00088600
+         DELETE EP=IGG020P0             FINISHED WITH IGG020P0          00088700
+         LTR   15,14                    RESTORE RETURN CODE             00088800
+*                                                                 @P1D  00088900
+         AGO   .FINISH                  EXECUTE FROM IS DONE            00089000
+.*                                                                      00089100
+.* ******************************************************************** 00089200
+.* *  BEGIN BUILD FOR LIST FORM OF MACRO                                00089300
+.* ******************************************************************** 00089400
+.*                                                                      00089500
+.L1      ANOP                                                           00089600
+&L       DS    0F                                                       00089700
+         DC    CL4'PREL'                EBCDIC 'PREL' FOR PARTREL       00089800
+         DC    AL2(PRL&NO.E-&L)         LENGTH OF PARAMETER LIST        00089900
+         DC    H'0'                     ERROR CODE RETURNED FROM        00090000
+.*                                        PARTIAL RELEASE               00090100
+.*                                                               3 @01D 00090200
+.L2      ANOP                                                           00090300
+         DC    AL1(&OMASK1)             PARAMETER FLAG BYTE1       @03C 00090400
+         DC    AL1(&OMASK2)             PARAMETER FLAG BYTE2       @03A 00090500
+.L3      ANOP                                                           00090600
+         DC    XL2'00'                  RESERVED                        00090700
+.*                                                                      00090800
+         AIF   (&DSNA).L4               IF DSN=ADDR, BRANCH             00090900
+         DC    A(0)                     ADDRESS OF DATA SET NAME        00091000
+         AGO   .L5                      BRANCH AROUND DSN=ADDR          00091100
+.L4      ANOP                                                           00091200
+         DC    A(&DSN)                  ADDRESS OF DATA SET NAME        00091300
+.*                                                                      00091400
+.L5      ANOP                                                           00091500
+         DC    A(0)                     UCB ADDRESS                     00091600
+.*                                                                 @03A 00091700
+         AIF   (&TRKSA).L6              IF VSAMTRKS=ADDR, BRANCH   @03A 00091800
+         DC    A(0)                     ADDRESS OF VSAMTRKS        @03A 00091900
+         AGO   .L7                      BR AROUND VSAMTRKS=ADDR    @03A 00092000
+.L6      ANOP                                                      @03A 00092100
+         DC    A(&VSAMTRKS)             ADDRESS OF VSAMTRKS        @03A 00092200
+.L7      ANOP                                                      @03A 00092300
+         DC    F'0'                     CATALOG REASON CODE, ONLY  @03A 00092400
+*                                       VALID WHEN CATALOG FAILED  @03A 00092500
+*                                       THE PARTREL REQUEST FOR A  @03A 00092600
+*                                       VSAM DATASET.              @03A 00092700
+*                                                                  @03A 00092800
+         DC    F'0'                     DADSM DIAG INFO.           @L1A 00092900
+.*                                                                 @03A 00093000
+PRL&NO.E EQU   *                        END OF PARTREL PARM LIST        00093100
+.*                                                                      00093200
+.FINISH  ANOP                                                           00093300
+         MEND                                                           00093400
+**/ PARTREL: MACRO KEYS(0:1(DSN_NAME,DSN_ADDR),                         00093500
+*                       MODE,                                           00093600
+*                       RETCODE,                                        00093700
+*                       RSNCODE,                                        00093800
+*                       CATALOG_REASON_CODE,                            00093900
+*                       DIAGNOSTIC_CODE,                                00094000
+*                       0:1(UCB_NAME,UCB_ADDR),                         00094100
+*                       TIOT,                                           00094200
+*                       ERASE,                                          00094300
+*                       VSAM_TYPE,                                      00094400
+*                       VSAM_FORMAT,                                    00094500
+*                       VSAM_CALLER,                                    00094600
+*                       VSAM_SECURITY,                                  00094700
+*                       0:1(VSAM_TRACKS_NAME,VSAM_TRACKS_ADDR),         00094800
+*                       MF);                                            00094900
+*  ANS('?' !! MACLABEL !! ' PARTRELP ' !! MACKEYS !! ';') RESCAN SKIP;  00095000
+* %END PARTREL;                                                         00095100
+                                                                        00095200

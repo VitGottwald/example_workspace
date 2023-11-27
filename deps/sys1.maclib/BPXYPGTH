@@ -1,0 +1,700 @@
+*        %GOTO PGTHPRO ;        /* Bilingual header                     00010000
+         MACRO                                                          00020000
+         BPXYPGTH  &DSECT=YES,&LIST=YES                                 00030000
+         LCLA  &VAR                                                     00040000
+         GBLB  &PGTH411                                                 00050000
+         AIF   (&PGTH411 EQ 1).E411                                     00060000
+&PGTH411 SETB  1                                                        00070000
+         AIF   ('&DSECT' EQ 'YES').AA411                           @P7A 00071000
+         MNOTE 12,'BPXYPGTH: DSECT=YES required'                   @P7A 00072000
+.AA411   AIF   ('&LIST'  EQ 'YES').A411                            @P7A 00073000
+         PUSH  PRINT  BPXYPGTH: __getthent input/output structures      00074000
+         PRINT OFF                                                      00075000
+         AGO   .A411                                                    00076000
+*                               */                                      00077000
+*%PGTHPRO : ;                                                           00078000
+*/****START OF SPECIFICATIONS****************************************** 00079000
+*  $MAC (BPXYPGTH) COMP(SCPX1) PROD(BPX):                               00080000
+*01* MACRO NAME: BPXYPGTH                                               00090000
+*01* DSECT NAME: BPXYPGTH                                               00100000
+*01* DESCRIPTIVE NAME: __getthent input and output data mapping         00110000
+*02*   ACRONYM: PGTH                                                    00120000
+**/                                                                     00130000
+*/*01* PROPRIETARY STATEMENT=                                        */ 00140000
+*/***PROPRIETARY_STATEMENT********************************************/ 00150000
+*/*                                                                  */ 00160000
+*/*                                                                  */ 00170000
+*/* LICENSED MATERIALS - PROPERTY OF IBM                             */ 00180000
+*/* 5650-ZOS                                                         */ 00190000
+*/* COPYRIGHT IBM CORP. 1999, 2017                                   */ 00200000
+*/*                                                                  */ 00210000
+*/* STATUS= HBB77B0                                                  */ 00220000
+*/*                                                                  */ 00230000
+*/***END_OF_PROPRIETARY_STATEMENT*************************************/ 00240000
+*/*                                                                     00250000
+*                                                                       00260000
+*01* EXTERNAL CLASSIFICATION:  GUPI                                     00270000
+*01* END OF EXTERNAL CLASSIFICATION:                                    00280000
+*                                                                       00290000
+*01* FUNCTION:  Provides PL/S and BAL mapping of the output information 00300000
+*               returned by the getthent (BPX1GTH) service routine.     00310000
+*01* METHOD OF ACCESS:                                                  00320000
+*02*   PL/X:  %INCLUDE(BPXYPGTH)                                        00330000
+*             To contain the mapping of the OpenMVS getpsent            00340000
+*02*   ASM:                                                             00350000
+*       BPXYPGTH DSECT=YES,LIST=YES!NO                                  00360000
+*                                                                       00370000
+*       With DSECT=YES                                                  00380000
+*        A DSECT is produced for all the defined sections (see code     00390000
+*         below).                                                       00400000
+*        A USING on the DSECT name, PGTHx, is required for              00410000
+*         addressability. For example                                   00420000
+*          "USING  PGTHA,reg"                                           00430000
+*         Here, reg contains the address of storage PGTHA#LEN bytes     00440000
+*         long.                                                         00450000
+*        DSECT=YES is the default.  No other values are allowed for     00451000
+*         DSECT.                                                        00452000
+*                                                                       00453000
+*       LIST=YES is the DEFAULT                                         00454000
+*                                                                       00455000
+*01* POINTED TO BY: Local to caller                                     00456000
+*01* CREATED BY: Caller.                                                00457000
+*01* DELETED BY: Caller.                                                00458000
+*01* STORAGE ATTRIBUTES:                                                00459000
+*02*   SUBPOOL:   As defined by the caller.                             00460000
+*02*   KEY:       User's key                                            00470000
+*02*   RESIDENCY: Invoker's primary address space                       00480000
+*01* FREQUENCY: N/A                                                     00490000
+*01* SERIALIZATION: N/A                                                 00500000
+*                                                                       00510000
+*01* NOTES: Length of PGTHA and BPX1GTH parm 1 are used to check if     00520000
+*      invoker and SYSCALL are using the same level BPXYPGTH.           00530000
+*                                                                       00540000
+*01* COMPONENT: OpenMVS (SCPX1)                                         00550000
+*01* DISTRIBUTION LIBRARY:  AMACLIB                                     00560000
+*01* EYE-CATCHER: None.                                                 00570000
+*01* CHANGE-ACTIVITY:                                                   00580000
+* $D0=DWAA247 JBB6607 980209 PDJM: A247.01 RAS - Task level debugging   00590000
+* $P0=PWA0086 JBB6607 980406 PDJM: Add Pgth#Flag1Mask for JrBadOptions  00600000
+* $P1=PWA0132 JBB6607 980506 PDJM: Remove PprtExitStatus                00610000
+* $P2=PWA0148 JBB6607 980511 PDJM: ASM PGTHGCOUNT ^= PLX (was FL2)      00620000
+* $P3=PWK0748 HBB6608 990216 PDJM: Report zombie processes              00630000
+* $P4=PWY0307 JBB6609 990409 PDJM: Switch from MVS to ALIAS LoginName   00640000
+* $D1=DYN0519 HBB7708 010315 PDZJ: A519.11 memlimit support for 64bit   00650000
+* $P5=PYN0220 HBB7708 020301 PDFO: Bilingual fixup                      00660000
+* $P6=PJK0056 HBB7709 020515 PDZJ: change megs to bytes for memlimit    00670000
+* $D2=DYN0519 HBB7709 020825 PDZJ: Change Pages to Usage                00680000
+* $D3=DCRA585 HBB7730 050217 PDKG: inittab/respawn                      00690000
+* $P7=ME05333 HBB7730 060112 PDMJ: Don't allow DSECT=NO                 00700000
+* $D4=DCRB395 HBB7750 071215 PDI6: User Syscall Trace                   00701000
+* $D5=DCRB448 HBB7760 080428 PDKG: BPX1GTH RAS ME13549/ME13630          00702000
+* $01=OA37105 HBB7770 110714 PDKG: Skip scheduling SRB                  00702050
+* $D6=ME23769 HBB7790 120418 PDND: area h path extention                00702110
+* $02=OA42278 HBB7790 130515 PDJQ: Include PpstSigMask in PgthJ         00702510
+* $D7=DCRC965 HBB77B0 160203 PDKG: Report micro seconds (OA49485)       00702510
+* $D8=DCRC965 HBB77B0 160909 PDMX: 2038/2042                            00702510
+* $02=OA42278 HBB7790 130515 PDJQ: Include PpstSigMask in PgthJ         00702510
+****END OF SPECIFICATIONS*********************************************/ 00703000
+*        %GOTO PGTHPLS ;        /* Bilingual header                     00704000
+.A411    ANOP  ,                                                        00705000
+** BPXYPGTH: __getthent input and output structures                     00706000
+**  Used By: GTH                                                        00707000
+PGTHA                 DSECT ,        I N P U T - - - - - - - - - - -    00708000
+PGTHACONTINUE         DS    0CL14                                       00709000
+PGTHAPID              DS    F        PROCESS ID (IGNORED IF FIRST)      00710000
+PGTHATHID             DS    CL8      THREAD ID (IGNORED IF FIRST/LAST)  00720000
+PGTHAACCESSPID        DS    FL1      FIRST, CURRENT, NEXT               00730000
+PGTH#NEXT             EQU   2        NEXT AFTER SPECIFIED               00740000
+PGTH#CURRENT          EQU   1        AS SPECIFIED                       00750000
+PGTH#FIRST            EQU   0        FIRST (EQUIV NEXT WITH PID=0)      00760000
+PGTH#LAST             EQU   3        only with PGTHIACCESSTHID          00770000
+                      SPACE ,                                           00780000
+PGTHAACCESSTHID       DS    FL1      FIRST, CURRENT, NEXT, LAST         00790000
+* ONLY FLAG1 BITS THREAD AND PTAG WILL BE CONSIDERED WHEN               00800000
+* ACCESSPID=CURRENT AND ACCESSTHID=NEXT                                 00810000
+                      SPACE ,                                           00820000
+* ASID AND LOGINNAME FILTERS APPLY ONLY WHEN ACCESSPID = FIRST, NEXT    00830000
+PGTHAASID             DS    FL2      FILTER - ASID                      00840000
+* LOGINNAME COMPARISON WILL LOOK FOR UNIX ALIAS. IF PGHTALOGINNAME      00850000
+* IS NOT AN ALIAS, IT WILL BE SHIFTED TO UPPER CASE AND CHECKED         00860000
+* AGAINST MVS ID.                                                       00870000
+PGTHALOGINNAME        DS    CL8      FILTER - USERID ALIAS OR MVS       00880000
+                      SPACE ,                                           00890000
+PGTHAFLAG1            DS    FL1      WHAT OUTPUT AREAS TO INCLUDE       00900000
+PGTHAPROCESS          EQU   X'80'      PGTHC, PROCESS DATA              00910000
+PGTHACONTTY           EQU   X'40'      PGTHD, CONTTY                    00920000
+PGTHAPATH             EQU   X'20'      PGTHE, PATH                      00930000
+PGTHACOMMAND          EQU   X'10'      PGTHF, CMD & ARGS - UP TO        00940000
+*                                                          1024 BYTES   00941000
+PGTHAFILEDATA         EQU   X'08'      PGTHG, FILE DATA                 00942000
+PGTHATHREAD           EQU   X'04'      PGTHJ, THREAD DATA               00943000
+PGTHAPTAG             EQU   X'02'      PGTHK, PTAG (NEEDS PGTHJ)        00944000
+PGTHACOMMANDLONG      EQU   X'01'      PGTHF, CMD & ARGS - UP TO        00945000
+*                                                          2048 BYTES   00946000
+PGTHAFLAG1B2          DS    FL1       Flag1, Byte 2                     00947000
+PGTHATHREADFAST       EQU   x'80'      SKIP SCHEDULING SRB              00947100
+PGTHAFILEPATH         EQU   x'40'      RETURN PATH NAME                 00947130
+PGTHATHDSIGMASK       EQU   x'20'      RETURN SIGMASK IN PGTHJ          00947160
+PGTHA#LEN             EQU   *-PGTHA                                     00947200
+                      SPACE ,                                           00947300
+PGTHB                 DSECT ,        O U T P U T - - - - - - - - - -    00947400
+PGTHBID               DS    CL4      "gthb"                             00947500
+PGTHBCONTINUE         DS    0CL14    NEXT VALUE FOR PGTHACONTINUE       00947600
+PGTHBPID              DS    F        PROCESS ID                         00947700
+PGTHBTHID             DS    CL8      THREAD ID                          00947800
+PGTHBACCESSPID        DS    FL1      CURRENT/FIRST/NEXT                 00947900
+PGTHBACCESSTHID       DS    FL1      CURRENT/FIRST/NEXT/LAST            00948000
+                      DS    FL2                                         00949000
+PGTHBLENUSED          DS    F        LENGTH OF OUTPUT BUFFER USED       00950000
+PGTHBLIMITC           DS    CL1      Can be 0, N, A, V                  00960000
+PGTHBOFFC             DS    FL3      OFFSET OF PROCESS AREA             00970000
+*                                                                       00980000
+PGTHBLIMITD           DS    CL1      Can be 0, N, A, V, S, X            00990000
+PGTHBOFFD             DS    FL3      OFFSET OF CONTTY  AREA             01000000
+*                                                                       01010000
+PGTHBLIMITE           DS    CL1      Can be 0, N, A, V, S, X            01020000
+PGTHBOFFE             DS    FL3      OFFSET OF PATH    AREA             01030000
+*                                                                       01040000
+PGTHBLIMITF           DS    CL1      Can be 0, N, V, A, S, X            01050000
+PGTHBOFFF             DS    FL3      OFFSET OF COMMAND AREA             01060000
+*                                                                       01070000
+PGTHBLIMITG           DS    CL1      Can be 0, N, A, V, X               01080000
+PGTHBOFFG             DS    FL3      OFFSET OF FILE DATA AREA           01090000
+*                                                                       01100000
+PGTHBLIMITJ           DS    CL1      Can be 0, N, A, V, X               01110000
+PGTHBOFFJ             DS    FL3      OFFSET OF THREAD AREA              01120000
+*                                                                       01130000
+PGTHB#LEN             EQU   *-PGTHB                                     01140000
+                      SPACE ,                                           01150000
+*********************************************************************** 01160000
+*                                                                     * 01170000
+* Values for PGTHBLIMITx fields and PgthGLimitH, PgthJLimitJ, and     * 01180000
+*                                    PgthJLimitK fields               * 01190000
+*                                                                     * 01200000
+* Values for PGTHBLIMITx fields are                                   * 01210000
+*         N - asociated area was not requested to be filled in        * 01220000
+*         A - the section was completely filled in                    * 01230000
+*         S - the output buffer is not big enough for the requested   * 01240000
+*             data.  The section has been filled in as much           * 01250000
+*             as possible.                                            * 01260000
+*         V - the section was started but could not be completed      * 01270000
+*             due to a system error.  Data in this section can        * 01280000
+*             not be trusted.                                         * 01290000
+*         X - the requested data was not available                    * 01300000
+*         0 - processing did not get far enough to fill out this      * 01301000
+*             section of the buffer.  Most likeley, a buffer full     * 01302000
+*             condition occurred while filling out a previous section * 01303000
+*             and the service stops further processing and returns    * 01304000
+*             EINVAL JrBuffTooSmall to the caller.                    * 01305000
+*                                                                     * 01306000
+*********************************************************************** 01307000
+PGTH#NOTREQUESTED     EQU   C'N'     Associated PghtA.. bit off         01308000
+PGTH#OK               EQU   C'A'     All data included                  01309000
+PGTH#STORAGE          EQU   C'S'     output buffer exhausted            01310000
+* EXHAUSTED STORAGE < 1ST PGTHJ RESULTS IN -1 EINVAL JRBUFFTOOSMALL     01311000
+PGTH#VAGUE            EQU   C'V'     Changed out from under us          01311100
+PGTH#NOTCONNECTED     EQU   C'X'     Need data not connected            01311200
+                      SPACE ,                                           01311300
+* USING PGTHC,Rx where Rx = ADDRESS of PGTHB + PGTHBOFFC                01311400
+PGTHC                 DSECT ,        P R O C E S S - - - - - - - - -    01311500
+PGTHCID               DS    CL4      "gthc"                             01311600
+PGTHCFLAG1            DS    FL1                                         01311700
+PGTHCMULPROCESS       EQU   X'80'    HAD OR HAS MULTIPLE PROCESSES      01311800
+PGTHCSWAP             EQU   X'40'    TCBOUT                             01311900
+PGTHCTRACE            EQU   X'20'    THREAD IS BEING TRACED             01312000
+PGTHCSTOPPED          EQU   X'10'    STOPPED                            01313000
+PGTHCINCOMPLETE       EQU   X'08'    NOT ALL BLOCKS PRESENT             01314000
+PGTHCZOMBIE           EQU   X'04'    PROCESS IS A ZOMBIE                01315000
+PGTHCBLOCKING         EQU   X'02'    Shutdown blocking                  01316000
+PGTHCPERM             EQU   X'01'    SHutdown permanent                 01317000
+PGTHCFLAG2            DS    FL1                                         01318000
+PGTHCMEMLTYPE         EQU   X'80'    ON - MemLimit is a BinMult         01319000
+PGTHCRESPAWN          EQU   X'40'    respawnable process                01320000
+PGTHCUSERTRACEACT     EQU   X'20'    User Syscall Trace Active          01330000
+PGTHCFLAG3            DS    FL1                                         01340000
+PGTHCMEMUTYPE         EQU   X'80'    ON - MemUsage is a BinMult         01350000
+                      DS    1FL1                                        01360000
+PGTHCPID              DS    F        PROCESS ID                         01370000
+PGTHCPPID             DS    F        PARENT ID                          01380000
+PGTHCPGPID            DS    F        PROCESS GROUP                      01390000
+PGTHCSID              DS    F        SESSION ID                         01400000
+PGTHCFGPID            DS    F        FOREGROUND PROCESS GROUP           01410000
+PGTHCEUID             DS    F        EFFECTIVE USER ID                  01420000
+PGTHCRUID             DS    F        REAL USER ID                       01430000
+PGTHCSUID             DS    F        SAVED SET USER ID                  01440000
+PGTHCEGID             DS    F        EFFECTIVE GROUP ID                 01450000
+PGTHCRGID             DS    F        REAL GROUP ID                      01460000
+PGTHCSGID             DS    F        SAVED SET GROUP ID                 01470000
+PGTHCTSIZE            DS    F        Allocated user storage > 16 MB     01480000
+PGTHCSYSCALLCOUNT     DS    F        COUNT OF SLOW-PATH SYSCALLS        01490000
+*                                                                               
+* PgthCUserTime and PcthCSYSTime units are 1/100ths of a second .01             
+PGTHCUSERTIME         DS    F        TIME SPENT IN USER CODE            01491000
+PGTHCSYSTIME          DS    F        TIME SPENT IN SYSTEM CODE          01492000
+PGTHCSTARTTIME        DS    F        TIME PROCESS WAS DUBBED            01493000
+PGTHCCNTOE            DS    FL2      NO. OE THREADS                     01494000
+PGTHCCNTPTCREATED     DS    FL2      NO. PTHREAD CREATED THREADS        01495000
+PGTHCCNTTHREADS       DS    FL2      COUNT OF ALL THREADS               01496000
+PGTHCASID             DS    FL2      ADDRESS SPACE ID                   01497000
+PGTHCJOBNAME          DS    CL8      MVS JOB NAME                       01498000
+PGTHCLOGINNAME        DS    CL8      LOGIN NAME - ALIAS OR MVS          01499000
+PGTHCMEMLIMIT         DS    1FL4     maximum Memlimit in bytes          01500000
+        ORG    PGTHCMEMLIMIT                                            01510000
+PGTHCMEMLIMITVAL      DS    1FL3     Hex value                          01520000
+PGTHCMEMLMULT         DS    1CL1     multiplier when PGTHCMEMLTYPE      01530000
+PGTHCMEMUSAGE         DS    1FL4     bytes in use above the 2G bar      01540000
+        ORG    PGTHCMEMUSAGE                                            01550000
+PGTHCMEMUSAGEVAL      DS    1FL3     Hex value                          01560000
+PGTHCMEMUMULT         DS    1CL1     multiplier when PGTHCMEMUTYPE      01570000
+PgthCUserTimeMics     DS    XL8      User CPU time in Mics       @D7A           
+PgthCSysTimeMics      DS    XL8      System CPU time in Mics     @D7A           
+PGTHCSTARTTIME64      DS    XL8      Time process was dubbed     @D8A   01493000
+PGTHCX   DS    0C                                                       01580000
+*                                                                       01590000
+*      **************************************************************   01600000
+*      *                                                                01610000
+*      * PGTHCMEMLIMIT constants are used by PGTHCMEMLMULT and          01620000
+*      * PGTHCMEMUMULT when the TYPE is a binmult.                      01630000
+*      *                                                                01640000
+*      * When PGTHCMEMLTYPE is on PGTHCMEMLIMIT consists or a           01650000
+*      * 24bit binary value in the first three bytes followed by        01660000
+*      * and ebcdic constant that indicates the denomination.           01670000
+*      *                                                                01680000
+*      * When PGTHCMEMLTYPE is off PGTHCMEMLIMIT consists of a          01690000
+*      * 32bit binary value.                                            01700000
+*      *                                                                01710000
+*      **************************************************************   01720000
+*                                                                       01730000
+*                                                                       01740000
+PGTH#KILO EQU  C'K'      Kilobytes                                      01750000
+PGTH#MEGA EQU  C'M'      Megabytes                                      01760000
+PGTH#GIGA EQU  C'G'      Gigabytes                                      01770000
+PGTH#TERA EQU  C'T'      Terabytes                                      01780000
+PGTH#PETA EQU  C'P'      Petabytes                                      01790000
+PGTHC#LEN             EQU   *-PGTHC                                     01800000
+                      SPACE ,                                           01810000
+* USING PGTHD,Rx where Rx = ADDRESS of PGTHB + PGTHBOFFD                01820000
+PGTHD                 DSECT ,        C O N T T Y - - - - - - - - - -    01830000
+PGTHDID               DS    CL4      "gthd"                             01840000
+PGTHDLEN              DS    FL2      Length of ConTty                   01850000
+PGTHDCONTTY           DS    CL1024   1024 = max ConTty                  01860000
+                      SPACE ,                                           01870000
+* USING PGTHE,Rx where Rx = ADDRESS of PGTHB + PGTHBOFFE                01880000
+PGTHE                 DSECT ,        P A T H - - - - - - - - - - - -    01890000
+PGTHEID               DS    CL4      "gthe"                             01900000
+PGTHELEN              DS    FL2      Length of Path                     01910000
+PGTHEPATH             DS    CL1024   1024 = max path                    01920000
+                      SPACE ,                                           01930000
+* USING PGTHF,Rx where Rx = ADDRESS of PGTHB + PGTHBOFFF                01940000
+PGTHF                 DSECT ,        C O M M A N D - - - - - - - - -    01950000
+PGTHFID               DS    CL4      "gthf"                             01960000
+PGTHFLEN              DS    FL2      Length of command and arguments    01970000
+PGTHFCOMMAND          DS    CL1024   1024 = max command                 01980000
+          ORG  PGTHFCOMMAND                                             01990000
+PGTHFCOMMANDL         DS    CL2048   Allow up to 2K for cmd/args  @D5A  02000000
+                      SPACE ,                                           02010000
+* USING PGTHG,Rx where Rx = ADDRESS of PGTHB + PGTHBOFFG                02020000
+PGTHG                 DSECT ,        F I L E   H E A D E R - - - - -    02030000
+PGTHGID               DS    CL4      "gthg"                             02040000
+PGTHGLIMITH           DS    CL1      Can be 0, V, S, A                  02050000
+PGTHGOFFH             DS    FL3      Offset of PgthH                    02060000
+PGTHGCOUNT            DS    F        Count of PgthH elements            02070000
+PGTHGMAXVNODETOKENS   DS    F        MAX NUMBER VNODE TOKENS            02080000
+PGTHGVNODETOKENCOUNT  DS    F        CURRENT NUMBER VNODE TOKENS        02090000
+PGTHGSERVERFLAGS      DS    F        Internal use                       02100000
+PGTHGSERVERNAME       DS    CL32     NRegsName from v_reg               02110000
+PGTHGACTIVEFILES      DS    F        Current num of files               02120000
+PGTHGMAXFILES         DS    F        Max num of files allowed           02130000
+PGTHGSERVERTYPE       DS    F        NRegsType from v_reg               02140000
+PGTHG#LEN             EQU   *-PGTHG                                     02150000
+                      SPACE ,                                           02160000
+PGTHGARRAY            DS    0C       first PGTHH                        02170000
+                      SPACE ,                                           02180000
+* USING PGTHH,Rx where Rx = ADDRESS of PGTHB + PGHTGOFFH                02190000
+* Increment   Rx by PGTHH#LEN until PGTHGCOUNT exhausted                02200000
+* Increment Rx again by PGTHHX#LEN+PGTHHPATHLEN if path data requested  02201007
+*   and 2nd character of PGTHHID is PGTHH#IDP                           02202009
+PGTHH                 DSECT ,        F I L E   D A T A - - - - - - -    02210000
+PGTHHID               DS    CL2                                         02220000
+PGTHH#IDR             EQU   C'rd'    root directory    (first)          02230000
+PGTHH#IDC             EQU   C'cd'    current directory (second)         02240000
+PGTHH#IDF             EQU   C'fd'    file directory                     02250000
+PGTHH#IDV             EQU   C'vd'    vnode directory                    02260000
+PGTHH#IDP             EQU   C'p'     path included in entry             02261009
+PGTHHTYPE             DS    BL1      Mapped in BPXYFTYP see FT_DIR +    02270000
+PGTHHOPEN             DS    BL1      Mapped in BPXYOPNF see O_FLAGS4    02280000
+PGTHHINODE            DS    F        I-NODE        see stat()           02290000
+PGTHHDEVNO            DS    F        DEVICE NUMBER see stat()           02300000
+PGTHH#LEN             EQU   *-PGTHH                                     02310000
+                      SPACE ,                                           02320000
+* USING PGTHHX,Rx where Rx = ADDRESS of PGTHH + PGTHH#LEN        9@D6A  02321008
+PGTHHX                DSECT ,        F I L E   P A T H   D A T A - -    02323007
+PGTHHXFLAGS           DS    CL1                                         02324007
+PGTHHPATHTRUNC        EQU   X'80'    partial path returned              02325007
+PGTHHXRSVD            DS    CL1                                         02326007
+PGTHHPATHLEN          DS    FL2                                         02327007
+PGTHHX#LEN            EQU   *-PGTHHX                                    02327107
+PGTHHPATH             DS    0CL1                                        02328007
+                      SPACE ,                                           02329507
+* USING PGTHJ,Rx where Rx = ADDRESS of PGTHB + PGTHBOFFJ                02330000
+* Reset Rx to be PGTHB + PGTHJOFFJ for the next thread                  02340000
+PGTHJ                 DSECT ,        T H R E A D - - - - - - - - - -    02350000
+PGTHJID               DS    CL4      "gthj"                             02360000
+PGTHJLIMITJ           DS    CL1      Can be 0, A, S, X                  02370000
+PGTHJOFFJ             DS    FL3      Offset of next PgthJ               02380000
+PGTHJLIMITK           DS    CL1      Can be 0, N, A, S, X               02390000
+PGTHJOFFK             DS    FL3      Offset of PgthK, this thread       02400000
+PGTHJTHID             DS    CL8      THREAD ID                          02410000
+PGTHJSYSCALL          DS    CL4      SYSCALL (eg. "1FRK" for fork)      02420000
+PGTHJTCB              DS    A        TCB ADDRESS                        02430000
+PGTHJTTIME            DS    F        TIME RUNNING .001 SECS (millisecs) 02440000
+PGTHJWTIME            DS    F        OE WAITING TIME .001 SECS (milli)  02450000
+                      DS    F         space                             02460000
+PGTHJSEMNUM           DS    H        SEMAPHORE NUMBER IF STATUS2=D      02470000
+PGTHJSEMVAL           DS    H        SEMAPHORE VALUE  IF STATUS2=D      02480000
+PGTHJLATCHWAITPID     DS    F        LATCH PROCESS ID WAITED FOR        02490000
+PGTHJPENMASK          DS    XL8      SIGNAL PENDING MASK                02500000
+PGTHJLOGINNAME        DS    CL8      LOGIN NAME - ALIAS or MVS          02510000
+PGTHJPREVSC           DS    5CL4     LAST FIVE SYSCALLS                 02520000
+         ORG   PGTHJPREVSC                                              02521000
+         DS    CL12                                                     02522000
+PGTHJSIGMASK DS XL8                                                     02523000
+*                                                                       02524000
+*   End of PGTHJPREVSC/PGTHJSIGMASK UNION                               02525000
+*                                                                       02526000
+PGTHJSTATUSCHARS      DS    0CL5     STATUS                             02530000
+                      SPACE ,                                           02540000
+PGTHJSTATUS1          DS    CL1      STATUS 1                           02550000
+PGTHJ#PTHDCREATED     EQU   C'J'       pthread created                  02560000
+                      SPACE ,                                           02570000
+PGTHJSTATUS2          DS    CL1      STATUS 2                           02580000
+PGTHJ#MSGRCV          EQU   C'A'       msgrcv wait                      02590000
+PGTHJ#MSGSND          EQU   C'B'       msgsnd wait                      02600000
+PGTHJ#WAITC           EQU   C'C'       communication wait               02610000
+PGTHJ#SEMOP           EQU   C'D'       see PgthJSemVal/SemNum           02620000
+PGTHJ#WAITF           EQU   C'F'       file system wait                 02630000
+PGTHJ#MVSPAUSE        EQU   C'G'       MVS in pause                     02640000
+PGTHJ#WAITO           EQU   C'K'       other kernel wait                02650000
+PGTHJ#WAITP           EQU   C'P'       PTwaiting                        02660000
+PGTHJ#RUN             EQU   C'R'       running / non-kernel wait        02670000
+PGTHJ#SLEEP           EQU   C'S'       sleep                            02680000
+PGTHJ#CHILD           EQU   C'W'       waiting for child                02690000
+PGTHJ#FORK            EQU   C'X'       fork new process                 02700000
+PGTHJ#MVSWAIT         EQU   C'Y'       MVS wait                         02710000
+                      SPACE ,                                           02720000
+PGTHJSTATUS3          DS    CL1      STATUS 3                           02730000
+PGTHJ#MEDIUMWGHT      EQU   C'N'       medium weight thread             02740000
+PGTHJ#ASYNC           EQU   C'O'       asynchronous thread              02750000
+PGTHJ#IPT             EQU   C'U'       Initial process thread           02760000
+PGTHJ#ZOMBIE          EQU   C'Z'       Process terminated and parent    02770000
+*                                           has not completed wait      02780000
+                      SPACE ,                                           02790000
+PGTHJSTATUS4          DS    CL1      STATUS 4                           02800000
+PGTHJ#DETACHED        EQU   C'V'       thread is detached               02810000
+                      SPACE ,                                           02820000
+PGTHJSTATUS5          DS    CL1      STATUS 5                           02830000
+PGTHJ#FREEZE          EQU   C'E'       quiesce freeze                   02840000
+                      DS    CL3                                         02850000
+PgthJTTimeMics        DS    XL8      TCBTTime in microseconds    @D7A           
+PgthJWTimeMics        DS    XL8      Wait time in microseconds   @D7A           
+                      SPACE ,                                           02860000
+PGTHJ#LEN             EQU   *-PGTHJ                                     02870000
+* USING PGTHH,Rx where Rx = ADDRESS of PGTHB + PGTHJOFFK                02880000
+PGTHK                 DSECT ,        P T A G - - - - - - - - - - - -    02890000
+PGTHKDATALEN          DS    F        LENGTH TO TRAILING NULL            02900000
+PGTHKDATA             DS    CL68     SEE pthread_tag_np                 02910000
+PGTHK#LEN             EQU   *-PGTHH                                     02920000
+                      SPACE ,                                           02930000
+** BPXYPGTH End                                                         02940000
+                      SPACE 3                                           02950000
+                      AIF   ('&LIST' EQ 'YES').E411                     02960000
+                      POP   PRINT                                       02970000
+.E411                 ANOP  ,                                           02980000
+         MEND  ,                  Terminating PL/X comment           */ 02990000
+*%PGTHPLS : ;                                                           03000000
+* Declare                                                               03010000
+*  /* = I N P U T = = = = = = = = = = = = = = = = = = = = = = = = = */  03020000
+*       PgthAPtr        Ptr(31),   /* 2nd input parameter           */  03030000
+*   1   PgthA           Bdy(Word)   Based(PgthAPtr),                    03040000
+*    3  PgthAContinue   Char(14) Bdy(Word),  /* PID/THID location */    03050000
+*     5 PgthAPID        Fixed(32), /* Process ID                   */   03060000
+*     5 PgthAThID       Char(8),   /* Thread ID                    */   03070000
+*     5 PgthAAccessPID  Fixed(8),  /* Current/First/Next           */   03080000
+*     5 PgthAAccessThID Fixed(8),  /* Current/First/Next/Last      */   03090000
+*    3  PgthAASID       Fixed(16), /* ASID Filter   (PgthCASID     */   03100000
+*    3  PgthALoginName  Char(8),   /* UserID Filter (PgthCLoginName*/   03110000
+*    3  PgthAFlag1      Bit(16),   /* Operational parameters        */  03120000
+*     5 PgthAProcess     Bit(1),   /*  Set PgthBOffC, include PgthC */  03130000
+*     5 PgthAConTty      Bit(1),   /*  Set PgthBOffD, include PgthD */  03140000
+*     5 PgthAPath        Bit(1),   /*  Set PgthBOffE, include PgthE */  03150000
+*     5 PgthACommand     Bit(1),   /*  Set PgthBOffF, include PgthF */  03160000
+*                                                                       03170000
+*     5 PgthAFileData    Bit(1),   /*  Set PgthBOffG, G & H array   */  03180000
+*     5 PgthAThread      Bit(1),   /*  Set PgthBOffI, I & J chain   */  03190000
+*     5 PgthAPTag        Bit(1),   /*  Set PgthIOffK, Part of J     */  03200000
+*     5 PgthACommandLong Bit(1),   /*  Allow the command/arg portion*/  03210000
+*                                  /*  of PGTHF to fill to 2048 @D5A*/  03220000
+*     4 PgthAFlag1B2    Bit(8),                                                 
+*     5 PgthaThreadFast  Bit(1),   /*  Skip SRB when collecting     */  03230000
+*                                  /*  thread data              @01A*/  03240000
+*     5 PgthaFilePath    Bit(1),   /*  return path name         @D6A*/  03241006
+*     5 PgthAThdSigMask  Bit(1),   /*  Return sigmask in PgthJ  @02A*/  03245006
+*                                                                       03250000
+*       /* PgthAAccessPID and PgthAAccessThID     Allowed for:      */  03260000
+*       Pgth#Next      Fixed   Constant(2),   /*  PID or THID       */  03270000
+*       Pgth#Current   Fixed   Constant(1),   /*  PID or THID       */  03280000
+*       Pgth#First     Fixed   Constant(0),   /*  PID or THID       */  03290000
+*       Pgth#Last      Fixed   Constant(3),   /*  THID only         */  03300000
+*       Pgth#Flag1Mask Bit(16) Constant('FFE0'x), /* allowed    @02C*/  03313996
+*                                                                       03320000
+*  /* = O U T P U T = = = = = = = = = = = = = = = = = = = = = = = = */  03330000
+*                                                                               
+*  /* Any new output fields should be added to the                  */          
+*  /* procinfo REXX exec and rexx header file                       */          
+*  /*    omvs/bpx/rexx/rexxpkg.c  omvs/bpx/rexx/getthent.h          */          
+*                                                                               
+*       PgthBPtr        Ptr(31),   /* 4th parameter                 */  03340000
+*   1   PgthB           Bdy(Word)  Based(PgthBPtr),                     03350000
+*    3  PgthBID         Char(4)  Bdy(Word),                             03360000
+*    3  PgthBContinue   Char(14) Bdy(Word),  /* PID/THID continue */    03370000
+*     5 PgthBPID        Fixed(32), /* Process ID                   */   03380000
+*     5 PgthBThID       Char(8),   /* Thread ID                    */   03390000
+*     5 PgthBAccessPID  Fixed(8),  /* Current/First/Next           */   03400000
+*     5 PgthBAccessThID Fixed(8),  /* Current/First/Next/Last      */   03410000
+*    3  *               Char(2),   /*                              */   03420000
+*    3  PgthBLenUsed    Fixed(31), /* Length of output buffer used */   03430000
+*                                                                       03440000
+*    3  PgthBLimitC     Char(1),   /* PROCESS:   N, A, S           */   03450000
+*    3  PgthBOffC       Fixed(24), /*  Offset of Process area      */   03460000
+*    3  PgthBLimitD     Char(1),   /* CONTTY:    N, A, S, X        */   03470000
+*    3  PgthBOffD       Fixed(24), /*  Offset of ConTty area       */   03480000
+*    3  PgthBLimitE     Char(1),   /* PATH:      N, A, S, X        */   03490000
+*    3  PgthBOffE       Fixed(24), /*  Offset of Path area         */   03500000
+*    3  PgthBLimitF     Char(1),   /* COMMAND:   N, A, S, X        */   03510000
+*    3  PgthBOffF       Fixed(24), /*  Offset of Command area      */   03520000
+*    3  PgthBLimitG     Char(1),   /* FILE DATA: N, A, S, X, V     */   03530000
+*    3  PgthBOffG       Fixed(24), /*  Offset of File Data area    */   03540000
+*    3  PgthBLimitJ     Char(1),   /* THREAD:    N, A, S, X, V     */   03550000
+*    3  PgthBOffJ       Fixed(24), /*  Offset of Thread area       */   03560000
+*                                                                       03570000
+*    3  PgthBX          Char(0)  Bdy(Word),                             03580000
+*                                                                       03590000
+*   /* PgthBLimit.    values                                       */   03600000
+*   Pgth#Vague        char(1) constant("V"), /* changes in progress*/   03610000
+*   Pgth#Storage      char(1) constant("S"), /* Ran out of buffer  */   03620000
+*   Pgth#OK           char(1) constant("A"), /* Got them all       */   03630000
+*   Pgth#NotRequested char(1) constant("N"), /* PgthA.. bit not set*/   03640000
+*   Pgth#NotConnected char(1) constant("X"), /* Ctl block not there*/   03650000
+*                                                                       03660000
+*   /* Pgth.ID     values                                          */   03670000
+*   PgthB#ID       Char(4) Constant("gthb"), /* output header      */   03680000
+*   PgthC#ID       Char(4) Constant("gthc"), /* process            */   03690000
+*   PgthD#ID       Char(4) Constant("gthd"), /* contty             */   03700000
+*   PgthE#ID       Char(4) Constant("gthe"), /* path               */   03710000
+*   PgthF#ID       Char(4) Constant("gthf"), /* command            */   03720000
+*   PgthG#ID       Char(4) Constant("gthg"), /* file data          */   03730000
+*   PgthH#IDr      Char(2) Constant("rd"),   /* root directory     */   03740000
+*   PgthH#IDc      Char(2) Constant("cd"),   /* current directory  */   03750000
+*   PgthH#IDf      Char(2) Constant("fd"),   /* file directory     */   03760000
+*   PgthH#IDv      Char(2) Constant("vd"),   /* vnode directory    */   03770000
+*   PgthH#IDp      Char(1) Constant("p"),    /* r,c,f,v + path @D6A*/   03771006
+*   PgthJ#ID       Char(4) Constant("gthj"), /* thread data        */   03780000
+*                                                                       03790000
+*  /* = P R O C E S S = = = = = = = = = = = = = = = = = = = = = = = */  03800000
+*       PgthCPtr        Ptr(31),   /* = PgthBPtr + PgthBOffC        */  03810000
+*   1   PgthC           Bdy(Word)   Based(PgthCPtr),                    03820000
+*    3  PgthCID         Char(4)  Bdy(Word),                             03830000
+*    3  PgthCFlags           Bit(32),   /* Flags                  */    03840000
+*     5 PgthCflag1           Bit(8),                       /* @D3C*/    03850000
+*      7 PgthCMulProcess      Bit(01),  /* OasbMultiProc          */    03860000
+*      7 PgthCSwap            Bit(01),  /* AscbSwap               */    03870000
+*      7 PgthCTrace           Bit(01),  /* OapbPtTraceMe          */    03880000
+*      7 PgthCStopped         Bit(01),  /* PprpStatusStopped      */    03890000
+*      7 PgthCIncomplete      Bit(01),  /* Not all blocks present */    03900000
+*      7 PgthCZombie          Bit(01),  /* Zombie process     @P3A*/    03910000
+*      7 PgthCBlocking        Bit(01),  /* Shutdown blocking  @D3A*/    03920000
+*      7 PgthCPerm            Bit(01),  /* shutdown permanent @D3A*/    03930000
+*     5 PgthCflag2           Bit(8),                       /* @D3C*/    03940000
+*      7 PgthCMemLType        Bit(01),  /* On   binmult       @D1A*/    03950000
+*                                       /* Off  binary only   @D1A*/    03960000
+*      7 PgthCReSpawn         Bit(01),  /* respawnable process @D3A*/   03970000
+*      7 PgthCUserTraceAct    Bit(01),  /* user syscall trace active    03980000
+*                                                              @D4A*/   03990000
+*     5 PgthCflag3           Bit(8),                        /* @D3C*/   04000000
+*      7 PgthCMemUType        Bit(01),  /* On   binmult       @D1A*/    04010000
+*                                       /* Off  binary only   @D1A*/    04020000
+*    3  PgthCPid             Fixed(31), /* PprpIdsPid             */    04030000
+*    3  PgthCPPid            Fixed(31), /* PprpParentPid          */    04040000
+*    3  PgthCPgPid           Fixed(31), /* PpgpIdsPgid            */    04050000
+*    3  PgthCSid             Fixed(31), /* PprpIdsSsid            */    04060000
+*    3  PgthCFgPid           Fixed(31), /* PprpOIdsFgpgl          */    04070000
+*    3  PgthCEUid            Fixed(31), /* OapbEUid or PprpEndEUid*/    04080000
+*    3  PgthCRUid            Fixed(31), /* OapbRUid or PprpEndRUid*/    04090000
+*    3  PgthCSUid            Fixed(31), /* OapbSUid or PprpEndSUid*/    04100000
+*    3  PgthCEGid            Fixed(31), /* OapbEGid               */    04110000
+*    3  PgthCRGid            Fixed(31), /* OapbRGid               */    04120000
+*    3  PgthCSGid            Fixed(31), /* OapbSGid               */    04130000
+*    3  PgthCTSize           Fixed(31), /* Allocated user storage */       40000
+*                                       /*    >16 MB              */            
+*    3  PgthCSysCallCount    Fixed(32), /* OapbSysCallCount       */    04150000
+*    3  PgthCUserTime        Fixed(32), /* AscbSrbt+math          */    04160000
+*    3  PgthCSysTime         Fixed(32), /* OapbSavedJobTime+math  */    04170000
+*    3  PgthCStartTime       Fixed(32), /* PprpTmDubbed           */    04180000
+*    3  PgthCCntOE           Fixed(16), /* Cnt PprtCalledKernel   */    04190000
+*    3  PgthCCntPTcreated    Fixed(16), /* Cnt PprtPTcreated      */    04200000
+*    3  PgthCCntThreads      Fixed(16), /* Cnt Pprt on Pprp chain */    04210000
+*    3  PgthCASID            Fixed(16), /* AscbASID               */    04220000
+*    3  PgthCJobName         Char(8) Bdy(Word), /* AscbJbnI/S->C8 */    04230000
+*    3  PgthCLoginName   Char(8) Bdy(Word), /* OapbAliasNInfo @P4C*/    04240000
+*                                           /* OapbLoginNInfo @P4C*/    04250000
+*    3  PgthCMEMLIMIT        Fixed(32), /* maximum Memlimit   @D1A*/    04260000
+*      5 PgthCMEMLIMITVAL    Fixed(24) Bdy(Byte),                       04270000
+*                                       /* Hex value          @D1A*/    04280000
+*      5  PgthCMEMLMULT      Char(1),   /* multiplier (K,M,G,T,P)       04290000
+*                                          for memlimit       @D1A*/    04300000
+*    3  PgthCMEMUSAGE        Fixed(32), /* Bytes in use above     */       10000
+*                                       /*    the 2GB Bar         */            
+*      5 PgthCMEMUsageVAL    Fixed(24) Bdy(Byte),                       04320000
+*                                       /* Hex value          @D1A*/    04330000
+*      5  PgthCMEMUMULT      Char(1),   /* multiplier (K,M,G,T,P)       04340000
+*                                          for memlimit       @D1A*/    04350000
+*    3  PgthCUserTimeMics    Bit(64), /* User CPU time in Mics   @D7A*/ 04160000
+*    3  PgthCSysTimeMics     Bit(64), /* System CPU time in Mics @D7A*/ 04170000
+*    3  PgthCStartTime64     Fixed(64)                                  04180000
+*                            Bdy(Word),      /* PprpTmDubbed   @D8A*/   04180000
+*    3  PgthCX          Char(0)  Bdy(Word),                             04360000
+*   /* PgthCMEMUSAGE and MEMLIMIT VALUES                           */   04370000
+*   Pgth#Kilo         char(1) constant("K"), /* Kilobytes      @D1A*/   04380000
+*   Pgth#Mega         char(1) constant("M"), /* Megabytes      @D1A*/   04390000
+*   Pgth#Giga         char(1) constant("G"), /* Gigabytes      @D1A*/   04400000
+*   Pgth#Tera         char(1) constant("T"), /* Terabytes      @D1A*/   04410000
+*   Pgth#Peta         char(1) constant("P"), /* Petabytes      @D1A*/   04420000
+*                                                                       04430000
+*  /* = C O N T T Y   = = = = = = = = = = = = = = = = = = = = = = = */  04440000
+*       PgthDPtr        Ptr(31),     /* = PgthBPtr + PgthBOffD      */  04450000
+*   1   PgthD           Bdy(Word)    Based(PgthDPtr),                   04460000
+*    3  PgthDID         Char(4)      Bdy(Word),                         04470000
+*    3  PgthDLen        Fixed(16),   /* Length of PgthDConTty       */  04480000
+*    3  PgthDConTty     Char(0),     /* string with null            */  04490000
+*                                                                       04500000
+*  /* = P A T H = = = = = = = = = = = = = = = = = = = = = = = = = = */  04510000
+*       PgthEPtr        Ptr(31),     /* = PgthBPtr + PgthBOffE      */  04520000
+*   1   PgthE           Bdy(Word)    Based(PgthEPtr),                   04530000
+*    3  PgthEID         Char(4)      Bdy(Word),                         04540000
+*    3  PgthELen        Fixed(16),   /* Length of PgthEPath         */  04550000
+*    3  PgthEPath       Char(0),     /* string with null            */  04560000
+*                                                                       04570000
+*  /* = C O M M A N D = = = = = = = = = = = = = = = = = = = = = = = */  04580000
+*       PgthFPtr        Ptr(31),     /* = PgthBPtr + PgthBOffF      */  04590000
+*   1   PgthF           Bdy(Word)    Based(PgthFPtr),                   04600000
+*    3  PgthFID         Char(4)      Bdy(Word),                         04610000
+*    3  PgthFLen        Fixed(16),   /* length of PgthFCommand      */  04620000
+*    3  PgthFCommand    Char(0),     /* L1,string,.....,Ln,string   */  04630000
+*                                                                       04640000
+*  /* = F I L E   D A T A = = = = = = = = = = = = = = = = = = = = = */  04650000
+*       PgthGPtr        Ptr(31),     /* = PgthBPtr + PgthBOffG      */  04660000
+*   1   PgthG           Bdy(Word)    Based(PgthGPtr),                   04670000
+*    3  PgthGID         Char(4)      Bdy(Word),                         04680000
+*    3  PgthGLimitH     Char(1),     /* Directories: A, S, V        */  04690000
+*    3  PgthGOffH       Fixed(24),   /*  Offset of 1st PgthH area   */  04700000
+*    3  PgthGCount      Fixed(32),   /* Count of PgthH areas present*/  04710000
+*    3  PgthGMaxVNodeTokens  Fixed(32),     /* SabMaxVdes           */  04720000
+*    3  PgthGVNodeTokenCount Fixed(32),     /* SabVDECount          */  04730000
+*    3  PgthGSerFlags        Fixed(32),     /* SabFlags             */  04740000
+*    3  PgthGServerName Char(32) Bdy(Word), /* NRegsName from v_reg */  04750000
+*    3  PgthGActiveFiles     Fixed(32),  /* Current num of files    */  04760000
+*    3  PgthGMaxFiles        Fixed(32),  /* Max num of files allowed*/  04770000
+*    3  PgthGServerType      Fixed(32),  /* NRegsType from v_reg    */  04780000
+*    3  *               Char(0),     /* location of first PgthH     */  04790000
+*                                                                       04800000
+*       PgthHPtr        Ptr(31),     /* = PgthBPtr + PgthGOffH      */  04810000
+*                                    /* increment by Length(PgthH)  */  04820000
+*   1   PgthH           Bdy(Word)    Based(PgthHPtr),                   04830000
+*    3  PgthHID         Char(2),     /* "rd", "cd", "fd" or "vd"    */  04840000
+*    3  PgthHType       Bit(8),      /* BPXYFTYP see FP_DIR etal.   */  04850000
+*    3  PgthHOpen       Bit(8),      /* BPXYOPNF see O_FLAGS4       */  04860000
+*    3  PgthHINode      Fixed(32),   /* I-Node                      */  04870000
+*    3  PgthHDevNo      Fixed(32),   /* Device number               */  04880000
+*                                                                       04880101
+*   1   PgthHP          Bdy(Word)    Based(PgthHPtr),      /*  8@D6A*/  04880206
+*    2  PgthHx,                      /* pathname info               */  04880305
+*     3 PgthHxFlags     Char(1),     /*                             */  04881105
+*      5 PgthHPathTrunc Bit(1),      /* pathname is truncated       */  04881203
+*     3 *               Char(1),                                        04881307
+*     3 PgthHPathLen    Fixed(15),   /* pathname length             */  04881405
+*    2  PgthHPath       Char(*),     /* pathname                    */  04882005
+*                                                                       04890000
+*  /* = T H R E A D = = = = = = = = = = = = = = = = = = = = = = = = */  04900000
+*       PgthJPrevPtr    Ptr(31),     /*                             */  04910000
+*       PgthJPtr        Ptr(31),     /* = PgthBPtr + PgthBOffJ      */  04920000
+*                                    /* = PgthBPtr + PgthJOffJ      */  04930000
+*   1   PgthJ           Bdy(Word)    Based(PgthJPtr),                   04940000
+*    3  PgthJID         Char(4)      Bdy(Word),                         04950000
+*    3  PgthJLimitJ     Char(1),     /* THREAD NEXT: N, A, S, X, V  */  04960000
+*    3  PgthJOffJ       Fixed(24),   /*  Offset of next thread area */  04970000
+*    3  PgthJLimitK     Char(1),     /* PTAG:        N, A, S, X     */  04980000
+*    3  PgthJOffK       Fixed(24),   /*  Offset of tag              */  04990000
+*    3  PgthJThID       Char(8),     /* Thread ID                   */  05000000
+*    3  PgthJSysCall    Char(4),     /* Current Syscall if InKernel */  05010000
+*    3  PgthJTCB        Ptr(31),     /* TCB address                 */  05020000
+*    3  PgthJTTime      Fixed(32),   /* TcbTTime   in .001 sec units*/  05030000
+*    3  PgthJWTime      Fixed(32),   /* PprtTodAtWait .001 sec units*/  05040000
+*    3  *               Bit(32),     /*  space                  @P1D*/  05050000
+*    3  PgthJSemNum     Fixed(16),   /* PprtWaiterSemNum            */  05060000
+*    3  PgthJSemVal     Fixed(15),   /* PprtWaiterSemVal            */  05070000
+*    3  PgthJLatchWaitPID Fixed(32), /* PprtLatchWaitPID            */  05080000
+*    3  PgthJPenMask    Bit(64),     /* PpstPenMask                 */  05090000
+*    3  PgthJLoginName  Char(8),     /* OtcbAliasNInfo          @P4C*/  05100000
+*                                    /* OtcbLoginNInfo          @P4C*/  05110000
+*    3  *                 UNION,     /*                         @02A*/  05120990
+*     5 PgthJPrevSC (5) Char(4),     /* Previous syscalls       @02C*/  05121980
+*     5 *,                           /*                         @02A*/  05122970
+*      7 *               Char(12),   /*                         @02A*/  05123960
+*      7 PgthJSigMask    Bit(64),    /* PpstSigMask             @02A*/  05124950
+*    3  PgthJStatusChars  Char(5),   /* "....." until set           */  05130000
+*     5 PgthJStatus1    Char(1),     /* Pthread created/Dubbed      */  05140000
+*     5 PgthJStatus2    Char(1),     /* Wait/Running status         */  05150000
+*     5 PgthJStatus3    Char(1),     /* Creation type               */  05160000
+*     5 PgthJStatus4    Char(1),     /* Detached/undetached         */  05170000
+*     5 PgthJStatus5    Char(1),     /* Ptrace held                 */  05180000
+*    3  *               Char(3),                                        05190000
+*    3  PgthJTTimeMics  Bit(64),  /* TCBTTime in microseconds   @D7A*/  05030000
+*    3  PgthJWTimeMics  Bit(64),  /* Wait time in microseconds  @D7A*/  05040000
+*    3  *               Char(0)   Bdy(Word),                            05200000
+*                                                                       05210000
+*   /* Status 1                                                     */  05220000
+*   PgthJ#PthdCreated char(1) constant('J'), /*Pthread created      */  05230000
+*                                                                       05240000
+*   /* Status 2                                                     */  05250000
+*   PgthJ#Msgrcv   char(1) constant('A'), /*IPC msgrcv wait         */  05260000
+*   PgthJ#Msgsnd   char(1) constant('B'), /*IPC msgsnd wait         */  05270000
+*   PgthJ#WaitC    char(1) constant('C'), /*Comm KernelWait         */  05280000
+*   PgthJ#Semop    char(1) constant('D'), /*IPC semop wait          */  05290000
+*   PgthJ#WaitF    char(1) constant('F'), /*File System Kernel Wait */  05300000
+*   PgthJ#MVSPause char(1) constant('G'), /*MVSPause                */  05310000
+*   PgthJ#WaitO    char(1) constant('K'), /*Other Kernel Wait       */  05320000
+*   PgthJ#WaitP    char(1) constant('P'), /*KserPTWaiting #PTrace   */  05330000
+*   PgthJ#Run      char(1) constant('R'), /*Not kernel wait         */  05340000
+*   PgthJ#Sleep    char(1) constant('S'), /*sleep() issued          */  05350000
+*   PgthJ#Child    char(1) constant('W'), /*Waiting for child       */  05360000
+*   PgthJ#Fork     char(1) constant('X'), /*fork new process        */  05370000
+*   PgthJ#MVSWait  char(1) constant('Y'), /*MVS wait                */  05380000
+*                                                                       05390000
+*   /* Status 3                                                     */  05400000
+*   PgthJ#MediumWght char(1) constant('N'), /*Medium weight thread  */  05410000
+*   PgthJ#Asynch   char(1) constant('O'), /*Asynchronous thread     */  05420000
+*   PgthJ#IPT      char(1) constant('U'), /*Initial process thread  */  05430000
+*   PgthJ#Zombie   char(1) constant('Z'), /*Terminated and waiting  */  05440000
+*                                                                       05450000
+*   /* Status 4                                                     */  05460000
+*   PgthJ#Detached char(1) constant('V'), /*Thread is detached      */  05470000
+*                                                                       05480000
+*   /* Status 5                                                     */  05490000
+*   PgthJ#Freeze   char(1) constant('E'), /*Quiesce Freeze          */  05500000
+*                                                                       05510000
+*                                                                       05520000
+*  /* = T H R E A D   T A G   D A T A = = = = = = = = = = = = = = = */  05530000
+*       PgthKPtr        Ptr(31),     /* = PgthBPtr + PgthJOffK      */  05540000
+*   1   PgthK           Bdy(Word)    Based(PgthKPtr),                   05550000
+*    3  PgthKDataLen    Fixed(31),   /* PtagDataLen                 */  05560000
+*    3  PgthKData       Char(68);    /* PtagData, see pthread_tag_np*/  05570000

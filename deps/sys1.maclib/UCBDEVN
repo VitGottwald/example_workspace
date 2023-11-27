@@ -1,0 +1,497 @@
+* %/*                                                                   00000100
+         MACRO                                                          00000200
+&NAME    UCBDEVN  &UCBPTR=,&DEVN=,&NONBASE=NO,&XDEVN=,&FMTSID0=YES @L2C 00000300
+.********************************************************************** 00000400
+.*01* MODULE NAME  -  UCBDEVN                                         * 00000500
+.*                                                                    * 00000600
+.*01* MACRO CALL                                                      * 00000700
+.*         ASSEMBLER-H -                                              * 00000800
+.*    LABEL UCBDEVN   UCBPTR=addr,NONBASE=opt,+DEVN=addr,FMTSID0=opt  * 00000900
+.*                                            +XDEVN=addr         @P5C* 00001000
+.*          PL/AS or PL/S                                             * 00001100
+.*    ?LABEL: UCBDEVN  UCBPTR(variable name)                      @L2C* 00001200
+.*                     NONBASE(option)                                * 00001300
+.*                    +DEVN(variable name)                        @P5C* 00001400
+.*                    +XDEVN(variable name)                       @P5C* 00001500
+.*                     FMTSID0(option)                            @L2A* 00001600
+.*                                                                    * 00001700
+.*01* COPYRIGHT -                                                     * 00001800
+.*    5694-A01                                                    @L2C* 00001900
+.*    THIS MACRO IS "RESTRICTED MATERIALS OF IBM"                     * 00002000
+.*    (C) COPYRIGHT IBM CORP. 1988, 2006                          @P6C* 00002103
+.*    LICENSED MATERIALS - PROPERTY OF IBM                            * 00002200
+.*                                                                    * 00002300
+.*01* STATUS  -  HBB7730                                          @P6C* 00002402
+.*                                                                    * 00002500
+.*01* FUNCTION - UCBDEVN is an IOS service routine which allows       * 00002600
+.*               the caller to obtain the EBCDIC form of a            * 00002700
+.*               device number.                                   @L2C* 00002800
+.*                                                                    * 00002900
+.*01* RESTRICTIONS                                                    * 00003000
+.*     - A UCBCOPY of a bound Pav-Alias will always return the        * 00003100
+.*       device number of the Alias UCB regardless of the             * 00003200
+.*       NONBASE keyword.  This is because UCBBASE cannot be          * 00003300
+.*       relied upon for UCB copies.                              @01A* 00003400
+.*                                                                    * 00003500
+.*01* REGISTER CONVENTIONS -                                          * 00003600
+.*           ENTRY REGISTERS                                          * 00003700
+.*                   0   Used by macro for DEVN requests to pass a    * 00003800
+.*                       Function Code value indicating whether the   * 00003900
+.*                       caller wants the alias device number returned* 00004000
+.*                       for an alias UCB of a parallel access volume.* 00004100
+.*                                                                    * 00004200
+.*                       Used by macro for XDEVN requests to pass a   * 00004300
+.*                       Function Code value indicating this as an    * 00004400
+.*                       XDEVN request.                           @L2C* 00004500
+.*                   1   Used by macro for DEVN requests to pass the  * 00004600
+.*                       UCB common segment address.              @L2C* 00004700
+.*                                                                    * 00004800
+.*                       Used by macro for XDEVN requests to pass the * 00004900
+.*                       caller's device number return area address.  * 00005000
+.*                                                                @L2C* 00005100
+.*                  13   Must point to an 18 word save area.          * 00005200
+.*                  14   Return address.                              * 00005300
+.*                  15   Entry point address.                         * 00005400
+.*                                                                    * 00005500
+.*           EXIT REGISTERS                                           * 00005600
+.*                   1        Will contain the information for the    * 00005700
+.*                            DEVN operand upon return.               * 00005800
+.*                   0,14,15  Destroyed                               * 00005900
+.*                                                                    * 00006000
+.*01* INPUT -                                                         * 00006100
+.*           LABEL  - Optional                                        * 00006200
+.*                                                                    * 00006300
+.*           UCBPTR=  Optional, if not specified, addressability      * 00006400
+.*                    to the UCB will be assumed to be defined        * 00006500
+.*                    via the invoking module. Otherwise, a           * 00006600
+.*                    fullword value which contains the address       * 00006700
+.*                    of the common segment of the UCB which will     * 00006800
+.*                    have its device number converted to EBCDIC.     * 00006900
+.*                    If the UCBPTR points to an alias UCB of a       * 00007000
+.*                    parallel access volume, then UCBDEVN returns    * 00007100
+.*                    the base device number in printable EBCDIC      * 00007200
+.*                    (unless NONBASE=YES is specified, OR, the       * 00007300
+.*                    input UCB is a UCB Copy)                    @01C* 00007400
+.*                                                                    * 00007500
+.*           DEVN=    Four character field that is to contain the     * 00007600
+.*                    EBCDIC form of the UCB name upon return.        * 00007700
+.*                    DEVN is mutually exclusive with the XDEVN   @L2A* 00007800
+.*                    keyword.                                    @L2A* 00007900
+.*                                                                    * 00008000
+.*           XDEVN=   Ten character field that will contain the   @L2A* 00008100
+.*                    EBCDIC form of the UCB name.  The string    @L3C* 00008200
+.*                    that is returned is a logical device number @L3C* 00008300
+.*                    composed of 4 or more hex digits.           @L3C* 00008400
+.*                    XDEVN is mutually exclusive with the DEVN   @L3C* 00008500
+.*                    keyword.                                    @L3C* 00008600
+.*                                                                    * 00008700
+.*           NONBASE= Optional, if set to YES, then UCBDEVN returns   * 00008800
+.*                    the alias device number when the input UCB is   * 00008900
+.*                    an alias UCB of a parallel access volume.       * 00009000
+.*                    Else, the base device number is returned.       * 00009100
+.*                    Note: If a copy of a Pav-Alias UCB is passed    * 00009200
+.*                    as input then the alias device number is        * 00009300
+.*                    returned regardless of this parameter       @01C* 00009400
+.*                                                                    * 00009500
+.*           FMTSID0= * This keyword is for BCP use only. *       @L4C* 00009600
+.*                                                                    * 00009700
+.*01* OUTPUT -                                                        * 00009800
+.*           DEVN  -  Contains the four EBCDIC character device   @L2C* 00009900
+.*                    number                                      @L2A* 00010000
+.*                                                                @L2A* 00010100
+.*           XDEVN -  Contains the variable sized EBCDIC device   @L2A* 00010200
+.*                    number as indicated in the return length:   @L2A* 00010300
+.*                                                                @L2A* 00010400
+.*                     Offset Length   Description                @L2A* 00010500
+.*                    +0      1        Length of text             @L2A* 00010600
+.*                    +1      =< 9     Returned UCB name text     @L2A* 00010700
+.*                                                                @L2A* 00010800
+.*                    Note: The UCB name text is a logical device     * 00010900
+.*                          number where applicable.              @L4C* 00011000
+.*                                                                    * 00011100
+.*                                                                    * 00011200
+.*                                                                    * 00011300
+.*01* DEPENDENCIES -  None                                            * 00011400
+.*                                                                    * 00011500
+.*01* ATTRIBUTES - A bilingual executable macro.                      * 00011600
+.*                                                                    * 00011700
+.*01* RESTRICTIONS -  FOR PL/AS PROGRAMS:                             * 00011800
+.*                       - The UCBPTR if specified, must be PTR(31)   * 00011900
+.*                       - The variable specified in DEVN must be @L2C* 00012000
+.*                         CHAR(4).                               @L2C* 00012100
+.*                       - The variable specified in XDEVN must   @L2A* 00012200
+.*                         be CHAR(10).                           @L2A* 00012300
+.*                                                                    * 00012400
+.*01* MODULE TYPE  -  MACRO                                           * 00012500
+.*                                                                    * 00012600
+.*01* PROCESSOR    -  ASSEMBLER-H AND PL/AS or PL/S                   * 00012700
+.*                                                                    * 00012800
+.*01* NOTES - None                                                    * 00012900
+.*                                                                    * 00013000
+.*         THE FOLLOWING MACROS ARE REQUIRED:                         * 00013100
+.*                PSA                                                 * 00013200
+.*                EPILOG (necessary only in PL/AS or PL/S)            * 00013300
+.*                                                                    * 00013400
+.*         Registers 14, 15, 0, and 1 will be used by this macro      * 00013500
+.*         and the service routine.                                   * 00013600
+.*         All other registers will be maintained across the          * 00013700
+.*         interface                                                  * 00013800
+.*                                                                    * 00013900
+.*01* EXTERNAL CLASSIFICATION:                                    @L4C* 00014000
+.*                                                                    * 00014100
+.*02* GUPI: BASE                                                  @L4A* 00014200
+.*                                                                    * 00014300
+.*02* NONE: FIELDS                                                @L4A* 00014400
+.*          FMTSID0                                               @L4A* 00014500
+.*                                                                    * 00014600
+.*01* END OF EXTERNAL CLASSIFICATION                              @P3A* 00014700
+.*                                                                    * 00014800
+.*01* CHANGE ACTIVITY -                                               * 00014900
+.*    $MAC(UCBDEVN) COMP(SC1C3): EBCDIC device number conversion.     * 00015000
+.*    $L0=XDEVNUM HBB3310 850909 PDLJ: EBCDIC device number conversion* 00015100
+.*    $L1=PAVS    HBB5520 940214 PDLP: PAV support - Add NONBASE      * 00015200
+.*                                     keyword for an alias           * 00015300
+.*    $L2=SCHSET  HBB7720 040315 PDWV: Subchannel set support     @L2A* 00015400
+.*    $L3=SCHSET  HBB7720 040315 PDON: Remove "-" from subchannel set * 00015500
+.*                                     id qualification           @L3A* 00015600
+.*    $L4=SCHSET  HBB7720 040331 PDON: Classify the FMTSID0 keyword   * 00015700
+.*                                     as BCP internal use only.  @L4A* 00015800
+.*                                                                    * 00015900
+.*    $P1=PC41744 HBB3310 871110 PDLC: Correct load of CVT address    * 00016000
+.*    $P2=PN71652 HBB5520 941020 PDLC: Change BASSM to CALL in PL/X   * 00016100
+.*                                     expansion (to avoid compiler   * 00016200
+.*                                     problem in PL/AS and certain   * 00016300
+.*                                     levels of PL/X)            @P2A* 00016400
+.*    $P3=PN71743 HBB5520 941020 PDLP: Add External Classification    * 00016500
+.*                                     in the PROLOG              @P3A* 00016600
+.*    $P4=ME00775 HBB7720 040528 PDSC: Remove blank lines         @P4A* 00016700
+.*    $P5=ME00970 HBB7720 040614 PDSC: Remove double quotes and       * 00016800
+.*                                     change default settings    @P5A* 00016900
+.*    $P6=ME03666 HBB7730 050628 PDMD: Add assem comment to pl/x  @P6A* 00017001
+.*                                                                    * 00017100
+.*    $01=OW37980 HBB6603 990531 PDNO: Dynamic PAV Support        @01A* 00017200
+.*                                                                    * 00017300
+.********************************************************************** 00017400
+.*                                                                      00017500
+         LCLC  &UCBREG,&DEVNREG                                         00017600
+         LCLC  &LABEL                                              @L2C 00017700
+         LCLC  &XDEVNLN                                            @L2C 00017800
+.*                                                                      00017900
+&LABEL   SETC  '&NAME'                     SET UP LABEL                 00018000
+&UCBREG  SETC  '1'                         REGISTER FOR &UCBPTR         00018100
+&DEVNREG SETC  '1'                         REGISTER FOR &DEVN           00018200
+&XDEVNLN SETC  '10'                        XDEVN AREA LENGTH       @L2A 00018300
+.*                                                                      00018400
+.********************************************************************** 00018500
+.* Validate that either the &DEVN or &XDEVN parameter was specified,  * 00018600
+.* but not both.                                                      * 00018700
+.********************************************************************** 00018800
+.*                                                                      00018900
+         AIF   ('&DEVN' EQ '' AND '&XDEVN' EQ '').ERR01            @L2A 00019000
+         AIF   ('&DEVN' NE '' AND '&XDEVN' NE '').ERR02            @L2A 00019100
+.*                                                                      00019200
+.********************************************************************** 00019300
+.* Validate &NONBASE as either YES or NO (default).                   * 00019400
+.********************************************************************** 00019500
+.*                                                                      00019600
+         AIF   ('&NONBASE' NE 'YES' AND '&NONBASE' NE 'NO').ERR03  @L2A 00019700
+.*                                                                      00019800
+         AIF   ('&XDEVN' NE '').XDEVN01    PROCESS XDEVN REQUEST   @L2A 00019900
+.*                                                                      00020000
+.********************************************************************** 00020100
+.* Process DEVN request functions. Call IOSVDEVN for EBCDIC device    * 00020200
+.* number as follows:                                                 * 00020300
+.*                                                                    * 00020400
+.*  R0 = Function Code 0, Request Base  Device Number (NONBASE=NO)    * 00020500
+.*     = Function Code 1, Request Alias Device Number (NONBASE=YES)   * 00020600
+.*                                                                    * 00020700
+.*  R1 = UCB address                                                  * 00020800
+.*                                                                    * 00020900
+.********************************************************************** 00021000
+.*                                                                      00021100
+.DEVN01  ANOP  ,                                                   @L2A 00021200
+         AIF   ('&NONBASE(1)' EQ 'YES').DEVN02                     @L2C 00021300
+&LABEL   SLR   0,0                         SET FLAG INDICATING THAT    *00021400
+                                           CALLER WANTS BASE DEVICE    *00021500
+                                           NUMBER RETURNED IF UCB      *00021600
+                                           IS ALIAS UCB                *00021700
+                                                                   @L2C 00021800
+         AGO   .DEVN03                     CHECK UCB POINTER       @L2A 00021900
+.*                                                                      00022000
+.DEVN02  ANOP  ,                                                   @L2A 00022100
+&LABEL   LA    0,1                         SET FLAG INDICATING THAT    *00022200
+                                           CALLER WANTS ALIAS DEVICE   *00022300
+                                           NUMBER RETURNED IF UCB      *00022400
+                                           IS ALIAS UCB                *00022500
+                                                                   @L1A 00022600
+.*                                                                      00022700
+.DEVN03  ANOP  ,                                                   @L2C 00022800
+         AIF   ('&UCBPTR' NE '').DEVN04                            @L2A 00022900
+         LA    1,UCBOB                     GET UCB ADDRESS              00023000
+         AGO   .PROCESS                                            @L2A 00023100
+.*                                                                      00023200
+.DEVN04  ANOP  ,                                                   @L2C 00023300
+         L     &UCBREG,&UCBPTR             LOAD UCB ADDRESS             00023400
+         AGO   .PROCESS                                            @L2A 00023500
+.*                                                                      00023600
+.********************************************************************** 00023700
+.* Process XDEVN request functions. Call IOSVDEVN for the EBCIDIC     * 00023800
+.* subchannel-set qualified device number as follows:                 * 00023900
+.*                                                                    * 00024000
+.*  R0 = Function Code 2                                              * 00024100
+.*                                                                    * 00024200
+.*  R1 = Address of the the XDEVN return area                         * 00024300
+.*       (the UCB address is passed in the first word of XDEVN        * 00024400
+.*        and XDEVN options byte at offset 4).                        * 00024500
+.*                                                                @L2A* 00024600
+.********************************************************************** 00024700
+.*                                                                      00024800
+.XDEVN01 ANOP  ,                                                   @L2A 00024900
+         LCLB  &SID0                       FMTSID option flag      @L2A 00025000
+&SID0    SETB  1                           Assume FMTSID0=YES      @L2A 00025100
+.*                                                                      00025200
+         LCLB  &NBAS                       NONBASE option flag     @L2A 00025300
+&NBAS    SETB  0                           SET FLAG INDICATING THAT    *00025400
+                                           CALLER WANTS BASE DEVICE    *00025500
+                                           NUMBER RETURNED IF UCB      *00025600
+                                           IS ALIAS UCB (NONBASE=NO)    00025700
+.*                                                                 @L2A 00025800
+.********************************************************************** 00025900
+.* Validate &FMTSID0 as either YES (default) or NO.                   * 00026000
+.********************************************************************** 00026100
+.*                                                                      00026200
+         AIF   ('&FMTSID0' NE 'YES' AND '&FMTSID0' NE 'NO').ERR04  @L2A 00026300
+.*                                                                      00026400
+&LABEL   LA    0,2                         SET XDEVN FUNCTION CODE @L2A 00026500
+.*                                                                      00026600
+         AIF   ('&NONBASE(1)' EQ 'NO').XDEVN02                     @L2A 00026700
+.*                                                                      00026800
+&NBAS    SETB  1                           SET FLAG INDICATING THAT    *00026900
+                                           CALLER WANTS ALIAS DEVICE   *00027000
+                                           NUMBER RETURNED IF UCB      *00027100
+                                           IS ALIAS UCB (NONBASE=YES)  *00027200
+                                                                   @L2A 00027300
+.XDEVN02 ANOP  ,                                                   @L2A 00027400
+         LA    1,&XDEVN                    ADDRESS OF RETURN AREA  @L2A 00027500
+         XC    0(&XDEVNLN,1),0(1)          CLEAR THE RETURN AREA   @L2A 00027600
+.*                                                                      00027700
+         AIF   ('&UCBPTR' NE '').XDEVN03                           @L2A 00027800
+         LA    15,UCBOB                    GET UCB ADDRESS              00027900
+         AGO   .XDEVN04                                            @L2A 00028000
+.*                                                                      00028100
+.XDEVN03 ANOP  ,                                                   @L2A 00028200
+         L     15,&UCBPTR                  LOAD UCB ADDRESS        @L2C 00028300
+.*                                                                      00028400
+.XDEVN04 ANOP  ,                                                   @L2A 00028500
+         STCM  15,B'1111',0(1)             PASS IN RETURN AREA     @L2A 00028600
+.*                                                                      00028700
+         AIF   ('&FMTSID0(1)' EQ 'YES').XDEVN05                    @L2A 00028800
+&SID0    SETB  0                           SID0 NOT REQUESTED      @L2A 00028900
+.*                                                                      00029000
+.XDEVN05 ANOP  ,                                                        00029100
+         MVI   4(1),B'&NBAS.&SID0.000000'  SET XDEVN Options       @L2A 00029200
+.*                                                                      00029300
+         AGO   .PROCESS                                            @L2A 00029400
+.*                                                                      00029500
+.********************************************************************** 00029600
+.* Call IOSVDEVN to process the requested function.                   * 00029700
+.* IOSVDEVN returns as follows:                                       * 00029800
+.*                                                                    * 00029900
+.*  DEVN Requests:  R1 contains the 4 character device number in      * 00030000
+.*                  EBCDIC (UCBDEVN stores the device number in the   * 00030100
+.*                  caller's return area)                             * 00030200
+.*                                                                    * 00030300
+.*  XDEVN Requests: The callers return area is built with the EBCDIC  * 00030400
+.*                  subchannel-set qualified device number            * 00030500
+.*                                                                    * 00030600
+.********************************************************************** 00030700
+.*                                                                      00030800
+.PROCESS ANOP  ,                                                   @L2C 00030900
+         L     15,16(0,0)                  GET CVT POINTER         @P1C 00031000
+         L     15,1052(0,15)               GET IOSVDEVN POINTER         00031100
+         BASSM 14,15                       EBCDIC UCB DEVICE NUMBER     00031200
+.*                                                                      00031300
+         AIF   ('&DEVN' EQ '').ALLDONE     DEVN not specified      @L2A 00031400
+         STCM  &DEVNREG,B'1111',&DEVN      STORE EBCDIC UCB NAME        00031500
+         AGO   .ALLDONE                                            @L2A 00031600
+.*                                                                      00031700
+.********************************************************************** 00031800
+.* Issue error MNOTEs and terminate processing.                       * 00031900
+.********************************************************************** 00032000
+.*                                                                      00032100
+.ERR01   ANOP  ,                                                   @L2A 00032200
+         MNOTE 8,'EITHER DEVN OR XDEVN PARAMETER IS REQUIRED.'     @L2A 00032300
+         AGO   .END                                                @L2A 00032400
+.*                                                                      00032500
+.ERR02   ANOP  ,                                                   @L2A 00032600
+         MNOTE 8,'DEVN AND XDEVN ARE MUTUALLY EXCLUSIVE.'          @L2A 00032700
+         AGO   .END                                                @L2A 00032800
+.*                                                                      00032900
+.ERR03   ANOP  ,                                                   @L2A 00033000
+         MNOTE 8,'NONBASE MUST BE EITHER YES OR NO.'               @L2A 00033100
+         AGO   .END                                                @L2A 00033200
+.*                                                                      00033300
+.ERR04   ANOP  ,                                                   @L2A 00033400
+         MNOTE 8,'FMTSID0 MUST BE EITHER YES OR NO.'               @L2A 00033500
+         AGO   .END                                                @L2A 00033600
+.*                                                                      00033700
+.ALLDONE MEXIT                                                          00033800
+.*                                                                      00033900
+.END     MEND                                                           00034000
+         EJECT                                                          00034100
+*        */                                                             00034201
+*UCBDEVN:                                                               00034301
+*  MACRO                                                                00034401
+*  KEYS(UCBPTR,DEVN,NONBASE,XDEVN,FMTSID0);  /*                  @P5C*/ 00034501
+*  /*  EXTERNAL VARIABLES                                            */ 00034601
+*  DCL  EHAREGS  CHAR   EXT;       /* REGS TO BE DCLD BY EPILOG      */ 00034701
+*  DCL  EHAMAPS  CHAR   EXT;       /* AREAS TO BE DCLD BY EPILOG     */ 00034801
+*  /*  INTERNAL VARIABLES                                            */ 00034901
+*  DCL  ERR      FIXED;            /* FLAG FOR ERROR FOUND           */ 00035001
+*  DCL  ERRMSG   CHAR;             /* ERROR MESSAGE TO PRINT         */ 00035101
+*  DCL  GPR0     CHAR;             /* REG 0  MUST BE RESPECIFIED @L1A*/ 00035201
+*  DCL  GPR1     CHAR;             /* REG 1  MUST BE RESPECIFIED     */ 00035301
+*  DCL  GPR14    CHAR;             /* REG 14 MUST BE RESPECIFIED     */ 00035401
+*  DCL  GPR15    CHAR;             /* REG 15 MUST BE RESPECIFIED     */ 00035501
+*  DCL  INDENT   FIXED;            /* INDENT VALUE FOR LISTING       */ 00035601
+*  DCL  IMACRO   CHAR;             /* MACRO PARAMETERS               */ 00035701
+*  DCL  XNONBASE CHAR;             /* MACRO PARAMETERS           @P5A*/ 00035801
+*  DCL  XFMTSID0 CHAR;             /* MACRO PARAMETERS           @P5A*/ 00035901
+* @SPACE(1);                                                            00036001
+*  IMACRO=' ?'!!MACLABEL!!MACNAME!!MACLIST!!' '!!MACKEYS!!' ';          00036101
+*  GPR0  =  ' GPR00F';             /* REG 0  MUST BE RESPECIFIED     */ 00036201
+*  GPR1  =  ',GPR01F';             /* REG 1  MUST BE RESPECIFIED     */ 00036301
+*  GPR14 =  ',GPR14F';             /* REG 14 MUST BE RESPECIFIED     */ 00036401
+*  GPR15 =  ',GPR15F';             /* REG 15 MUST BE RESPECIFIED     */ 00036501
+*  ERR = 0;                        /* ERROR SEVERITY                 */ 00036601
+*  IF (MACCOL > 42) THEN                                                00036701
+*     INDENT=MACLMAR+3;            /* ENSURE BAL GEN'D ON ONE LINE   */ 00036801
+*  ELSE INDENT=MACCOL+2;           /* INDENT TWO COLUMNS FOR FORMAT  */ 00036901
+* @SPACE(1);                                                            00037001
+*  IF MACLABEL^='' THEN            /* GENERATE MACLABEL              */ 00037101
+*     ANS(MACLABEL)  COL(MACLMAR);                                      00037201
+*  ANS('DO; '!! COMMENT(IMACRO)) COL(MACCOL); /* START CODE & LIST      00037301
+*                                                MACRO PARAMETERS*/     00037401
+*  IF NUMBER(MACLIST) > 0 THEN DO;        /* CHECK FOR POSITIONALS   */ 00037501
+*    ERRMSG = 'A POSITIONAL PARAMETER HAS BEEN SUPPLIED, NONE EXIST.';  00037601
+*    ERR = 8;                                                           00037701
+*    ANS MSG(ERRMSG);                                                   00037801
+*    ANS (COMMENT(ERRMSG)) COL(INDENT);                                 00037901
+*    END;                                                               00038001
+*  IF DEVN = '' & XDEVN = '' THEN DO;  /* Output area required   @L2C*/ 00038101
+*     ERRMSG ='EITHER DEVN OR XDEVN PARAMETER IS REQUIRED.';            00038201
+*     ERR = 8;                                                          00038301
+*     ANS MSG(ERRMSG);                                                  00038401
+*     ANS(COMMENT(ERRMSG)) COL(INDENT);                                 00038501
+*     END;                                                              00038601
+*  IF DEVN^= '' & XDEVN^= '' THEN DO;  /* Only 1 output area allowed    00038701
+*                                                                @L2C*/ 00038801
+*     ERRMSG ='DEVN AND XDEVN ARE MUTUALLY EXCLUSIVE.';      /*  @L2A*/ 00038901
+*     ERR = 8;                                               /*  @L2A*/ 00039001
+*     ANS MSG(ERRMSG);                                       /*  @L2A*/ 00039101
+*     ANS(COMMENT(ERRMSG)) COL(INDENT);                      /*  @L2A*/ 00039201
+*     END;                                                   /*  @L2A*/ 00039301
+*  XNONBASE = 'NO';                    /* Copy value             @P5A*/ 00039401
+*  IF NONBASE(1) ^= '' &                                                00039501
+*     NONBASE(1) ^= 'YES' &                                             00039601
+*     NONBASE(1) ^= 'NO'  THEN DO;     /* Must be either YES or NO      00039701
+*                                                                @P5C*/ 00039801
+*     ERRMSG ='NONBASE MUST BE EITHER YES OR NO.';           /*  @L2A*/ 00039901
+*     ERR = 8;                                               /*  @L2A*/ 00040001
+*     ANS MSG(ERRMSG);                                       /*  @L2A*/ 00040101
+*     ANS(COMMENT(ERRMSG)) COL(INDENT);                      /*  @L2A*/ 00040201
+*     END;                                                   /*  @L2A*/ 00040301
+*  ELSE IF NONBASE(1) = 'YES' THEN                                      00040401
+*   XNONBASE = 'YES';                  /* set value              @P5A*/ 00040501
+*  XFMTSID0 = 'YES';                   /* set default            @P5A*/ 00040601
+*  IF XDEVN(1)   ^= '' THEN                                             00040701
+*   DO;                                                      /*  @P5C*/ 00040801
+*    IF FMTSID0(1) ^= '' &                                              00040901
+*       FMTSID0(1) ^= 'YES' &                                           00041001
+*       FMTSID0(1) ^= 'NO'  THEN DO;     /* Must be either YES or NO    00041101
+*                                                                @P5C*/ 00041201
+*     ERRMSG ='FMTSID0 MUST BE EITHER YES OR NO.';           /*  @L2A*/ 00041301
+*     ERR = 8;                                               /*  @L2A*/ 00041401
+*     ANS MSG(ERRMSG);                                       /*  @L2A*/ 00041501
+*     ANS(COMMENT(ERRMSG)) COL(INDENT);                      /*  @L2A*/ 00041601
+*     END;                                                   /*  @L2A*/ 00041701
+*    ELSE IF FMTSID0(1) = 'NO' THEN                                     00041801
+*     XFMTSID0 = 'NO';                 /* set value              @P5A*/ 00041901
+*   END;                                                     /*  @P5C*/ 00042001
+*   @SPACE;                                                             00042101
+*IF ERR = 0  THEN                  /* NO PARAMETER ERRORS?           */ 00042201
+*   DO;                                                                 00042301
+*/*                 DECLARE CVT ACCESS VARIABLES                     */ 00042401
+*IF INDEX(EHAMAPS,'XM@')=0 THEN    /*                                */ 00042501
+*   EHAMAPS=EHAMAPS!!'XM@';        /*  NO, ADD TO EHAMAPS            */ 00042601
+*/*                 DECLARE REGISTERS IF NECESSARY                   */ 00042701
+*IF INDEX(EHAREGS,'00F')=0 THEN    /* HAS REG0 BEEN DECLARED         */ 00042801
+*   EHAREGS=EHAREGS!!'00F';        /*  NO, ADD TO EHAREGS            */ 00042901
+*IF INDEX(EHAREGS,'01F')=0 THEN    /* HAS REG1 BEEN DECLARED         */ 00043001
+*   EHAREGS=EHAREGS!!'01F';        /*  NO, ADD TO EHAREGS            */ 00043101
+*IF INDEX(EHAREGS,'14F')=0 THEN    /* HAS REG14 BEEN DECLARED        */ 00043201
+*   EHAREGS=EHAREGS!!'14F';        /*  NO, ADD TO EHAREGS            */ 00043301
+*IF INDEX(EHAREGS,'15F')=0 THEN    /* HAS REG15 BEEN DECLARED        */ 00043401
+*   EHAREGS=EHAREGS!!'15F';        /*  NO, ADD TO EHAREGS            */ 00043501
+*                                                                       00043601
+*/*                 PRODUCE PL/AS-PL/S CODE                          */ 00043701
+*ANS('RFY('!!GPR0!!GPR1!!GPR15!!') RSTD; ') COL(INDENT);       /*@P2C*/ 00043801
+*IF DEVN ^= '' THEN DO;            /* DEVN requested             @L2A*/ 00043901
+*IF XNONBASE = 'NO' THEN                                                00044001
+* ANS('GPR00F=0; '!!                                                    00044101
+*   COMMENT(' REG0 = 0, CALLER WANTS BASE DEVICE NUMBER'))              00044201
+*                                                COL(INDENT);  /*@P5C*/ 00044301
+*ELSE                                                                   00044401
+* ANS('GPR00F=1; '    !!                                                00044501
+*   COMMENT(' REG0 = 1, CALLER WANTS ALIAS DEVICE NUMBER'))             00044601
+*                                                COL(INDENT);           00044701
+*IF UCBPTR(1) = '' THEN            /*                            @P5C*/ 00044801
+*ANS('GPR01F=ADDR(UCBOB); '    !!                                       00044901
+*   COMMENT(' REG1 = UCB ADDRESS '))     COL(INDENT);                   00045001
+*ELSE                                                                   00045101
+*ANS('GPR01F='!!UCBPTR(1)!!'; '    !!                                   00045201
+*   COMMENT(' REG1 = UCB ADDRESS '))     COL(INDENT);                   00045301
+*END;                                                                   00045401
+*                                                                       00045501
+*ELSE DO;                          /* XDEVN requested            @L2A*/ 00045601
+* ANS('GPR00F=2; '!!                                                    00045701
+*   COMMENT(' REG0 = XDEVN FUNCTION CODE '))   COL(INDENT);    /*@L2A*/ 00045801
+*                                                                       00045901
+* ANS('GPR01F=ADDR('!!XDEVN(1)!!');  '    !!                            00046001
+*   COMMENT(' REG1 = RETURN AREA ADDRESS '))   COL(INDENT);    /*@P5C*/ 00046101
+*                                                                       00046201
+* ANS(XDEVN(1) !!'(1:10) = ''00''X; '       !!                          00046301
+*   COMMENT(' CLEAR RETURN AREA '))   COL(INDENT);             /*@P5C*/ 00046401
+*                                                                       00046501
+* IF UCBPTR(1) = '' THEN                                       /*@P5C*/ 00046601
+*  ANS('GPR15F=ADDR(UCBOB); '    !!                                     00046701
+*   COMMENT(' REG15 = ADDRESS OF UCB ')) COL(INDENT);          /*@L2A*/ 00046801
+* ELSE                                                                  00046901
+*  ANS('GPR15F=' !!UCBPTR(1)!!'; '    !!                                00047001
+*   COMMENT(' REG15 = ADDRESS OF UCB ')) COL(INDENT);          /*@L2A*/ 00047101
+*                                                                       00047201
+* ANS(XDEVN(1) !!'(1:4)=GPR15F; '    !!                                 00047301
+*   COMMENT(' PASS UCB ADDRESS IN RETURN AREA ')) COL(INDENT); /*@L2A*/ 00047401
+*                                                                       00047501
+* IF XNONBASE = 'YES' THEN                                              00047601
+*  ANS(XDEVN(1) !!'(5:5) = '!! XDEVN(1) !!'(5:5) ! ''80''X; ' !!        00047701
+*   COMMENT(' NONBASE=YES OPTION '))  COL(INDENT);             /*@P5C*/ 00047801
+*                                                                       00047901
+* IF XFMTSID0 = 'YES' THEN                                              00048001
+*  ANS(XDEVN(1) !!'(5:5) = '!! XDEVN(1) !!'(5:5) ! ''40''X; ' !!        00048101
+*   COMMENT(' FMTSID0=YES OPTION '))  COL(INDENT);             /*@P5C*/ 00048201
+*                                                                       00048301
+*END;                                                                   00048401
+*                                                                       00048501
+*ANS('CALL (XM@CVT+1052)->I031P->I31ANY;'         !!                    00048601
+*   COMMENT(' CALL CONVERT DEVICE NUMBER ROUTINE ')) COL(INDENT); /*    00048701
+*                                     Change from BASSM to CALL  @P2C*/ 00048801
+*IF DEVN ^= '' THEN                /* DEVN requested             @L2A*/ 00048901
+* ANS(DEVN(1) !!'=GPR01F; '    !!                                       00049001
+*   COMMENT(' STORE EBCDIC UCB NAME '))              COL(INDENT);       00049101
+*ANS('RFY('!!GPR0!!GPR1!!GPR15!!') UNRSTD; ')  COL(INDENT);    /*@P2C*/ 00049201
+*END;                                                          /*@L2C*/ 00049301
+*ANS('END; '!!COMMENT(IMACRO))  COL(MACCOL); /* END CODE & LIST         00049401
+*                                               MACRO PARAMETERS    */  00049501
+*RETURN;                           /* RETURN SUCCESSFUL             */  00049601
+*%END UCBDEVN;                                                          00049701

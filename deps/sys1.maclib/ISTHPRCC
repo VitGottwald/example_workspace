@@ -1,0 +1,438 @@
+#ifndef __isthprcc                                                              
+#define __isthprcc 1                                                            
+                                                                                
+ /********************************************************************/         
+ /*                                                                  */         
+ /* CONTROL BLOCK NAME: ISTHPRCC                                     */         
+ /*                                                                  */         
+ /* DESCRIPTIVE NAME:   NMI HPR Connection Mapping                   */         
+ /*                                                                  */         
+ /* Copyright: Licensed Materials - Property of IBM                  */         
+ /*            5694-A01 (C) Copyright IBM Corp. 2003, 2004           */         
+ /*            All rights reserved.                                  */         
+ /*            US Government Users Restricted Rights -               */         
+ /*            Use, duplication or disclosure restricted by          */         
+ /*            GSA ADP Schedule Contract with IBM Corp.              */         
+ /*            See IBM Copyright Instructions.                       */         
+ /*                                                                  */         
+ /* FUNCTION: Maps the record formats returned in response to        */         
+ /*           an Network Management HPR Connection request. The      */         
+ /*           records that can be returned are:                      */         
+ /*             (1) HPR Connection Global Record (one)               */         
+ /*             (2) HPR Connection Specific Record (one per HPR      */         
+ /*                 connection being reported)                       */         
+ /*                                                                  */         
+ /* STORAGE USED FOR CONTROL BLOCK:                                  */         
+ /*                                                                  */         
+ /*    ALLOCATED BY:                                                 */         
+ /*                                                                  */         
+ /*    FREED BY:                                                     */         
+ /*                                                                  */         
+ /*    POINTED TO BY:                                                */         
+ /*                                                                  */         
+ /*    TYPE:                                                         */         
+ /*                                                                  */         
+ /* ALIGNMENT:                                                       */         
+ /*       This control block MUST be on a DWORD boundary.            */         
+ /*                                                                  */         
+ /* OPERATING SYSTEM SPECIFICS:                                      */         
+ /*                                                                  */         
+ /* NOTES: None                                                      */         
+ /*                                                                  */         
+ /* SERIALIZATION CONCERNS:                                          */         
+ /*                                                                  */         
+ /* LIST RECOMPILE MODULES:                                          */         
+ /*                                                                  */         
+ /* CHANGE ACTIVITY:                                                 */         
+ /*                                                                  */         
+ /* $MAC(ISTHPRCC),COMP(MGMTSVC),PROD(VTAM): NMI HPR Connection      */         
+ /*                                          Mapping                 */         
+ /*                                                                  */         
+ /* Flag Reason   Release  Date   Origin    Description              */         
+ /* ---- -------- -------- ------ --------  ------------------------ */         
+ /* $Q0= R16EEMGT CSV1R5   030311 WELSH   : SYSEEHPR service         */         
+ /* $Q1= D132446  R16EEMGT 030403 GIERLACH: Code review changes      */         
+ /* $Q2= D132493  R16EEMGT 030416 GIERLACH: Fix COS processing       */         
+ /* $Q3= D132554  R16EEMGT 030505 SMOONEN : Eyecatchers, sequence #s */         
+ /* $  = D132928  X16BASE  031013 RKunkel : Fix copyright statements */         
+ /* $A1= OA31685  HVT61B0  100125 kunkel  : Document progressive mode*/         
+ /*                                         ARB                      */         
+ /* $A2= OA37942  HVT61C0  111102 kunkel  : Report 4-Bit Pathswitch  */         
+ /*                                         reason to NMI            */         
+ /* $A3= OA52128  HVT6210  170221 kunkel  : Document HPRConnDS_State */         
+ /*                                         values                   */         
+ /********************************************************************/         
+                                                                                
+#include <isteehnc.h>                                                           
+                                                                                
+#ifdef __cplusplus                                                              
+      extern "C" {                                                              
+#endif                                                                          
+                                                                                
+#pragma pack(1)                     /* Align structures at bytes     */         
+                                                                                
+/*********************************************************************/         
+/* HPR Connection Global record                                      */         
+/*********************************************************************/         
+                                                                                
+ typedef struct {                                                               
+   unsigned int      HPRConnG_Eye;  /* HPRConn EyeCatcher (HPRG) @Q3C*/         
+   unsigned int      HPRConnG_Len;  /* Overall length of this record */         
+   char              HPRConnG_RsvÝ2¨; /* Reserved                    */         
+   unsigned short    HPRConnG_NumTriplets; /* Number of triplets                
+                                       defined for this record       */         
+   EEHNMRecordTriplet HPRConnG_Triplet; /* Only one triplet                     
+                                       defined for this record       */         
+ } HPRConnGlobal;                   /* HPR Connection Global Data               
+                                       record                        */         
+                                                                                
+/*********************************************************************/         
+/* HPR Connection Global Data section                                */         
+/*********************************************************************/         
+ typedef struct {                                                               
+   struct {                                                                     
+     char            HPRConnGD_CPNetIdÝ8¨; /* NETID                  */         
+     char            HPRConnGD_CPNameÝ8¨; /* CPNAME                  */         
+   } HPRConnGD_Endpoint_Name;       /* Node name of this VTAM        */         
+ } HPRConnGlobalData;               /* HPR Connection Global Data               
+                                       section                       */         
+                                                                                
+/*********************************************************************/         
+/* HPR Connection Specific Data record                               */         
+/*********************************************************************/         
+ typedef struct {                                                               
+   unsigned int      HPRConnD_Eye;  /* HPRConn EyeCatcher (HPRC) @Q3C*/         
+   unsigned int      HPRConnD_Len;  /* Overall length of this record */         
+   char              HPRConnD_RsvÝ2¨; /* Reserved                    */         
+   unsigned short    HPRConnD_NumTriplets; /* Number of triplets                
+                                       defined for this record       */         
+   EEHNMRecordTriplet HPRConnD_StTriplet; /* First triplet                      
+                                       points to static data section */         
+   EEHNMRecordTriplet HPRConnD_CVTriplet; /* Second triplet                     
+                                       points to RSCV data section   */         
+   EEHNMRecordTriplet HPRConnD_PSTriplet; /* Third triplet                      
+                                       points to pathswitch data (only          
+                                       present if at least one switch           
+                                       has occurred)                 */         
+ } HPRConnData;                     /* HPR Connection Specific Data             
+                                       record                        */         
+                                                                                
+/*********************************************************************/         
+/* HPR Connection Specific Data Section                              */         
+/*********************************************************************/         
+ typedef struct {                                                               
+   char              HPRConnDS_NameÝ8¨; /* RTP PU Name               */         
+                                                                                
+   struct {                                                                     
+     char            HPRConnDS_CPNetIdÝ8¨; /* NETID - destination    */         
+     char            HPRConnDS_CPNameÝ8¨; /* CPNAME - destination    */         
+   } HPRConnDS_FQ_Partner_Name;     /* FullyQualified Partner CPName */         
+                                                                                
+   char              HPRConnDS_Local_NCB_PUNameÝ8¨; /* Physical NCB             
+                                       PU Name                       */         
+   struct {                                                                     
+     char            HPRConnDS_First_Hop_CPNetIdÝ8¨; /* NETID        */         
+     char            HPRConnDS_First_Hop_CPNameÝ8¨; /* CPNAME        */         
+   } HPRConnDS_First_Hop;           /* First Hop CPName              */         
+                                                                                
+   struct {                                                                     
+     struct {                                                                   
+       unsigned int  HPRConnDS_Routing_Mode : 3; /* Routing Mode     */         
+       unsigned int  HPRConnDS_Rsv1 : 2; /* Reserved                 */         
+       unsigned int  HPRConnDS_TPF : 2; /* Transmission Priority     */         
+       unsigned int  HPRConnDS_Rsv2 : 9; /* Reserved                 */         
+     } HPRConnDS_NET_HEAD_BIT;      /* Net header overlay            */         
+   } HPRConnDS_NET_Header;          /* NLH header                    */         
+                                                                                
+   struct {                                                                     
+     unsigned int    HPRConnDS_ARB_Algorithm : 2; /* ARB Algorithm              
+                                          '00'B - Original                      
+                                          '01'B - Responsive Mode               
+                                          '10'B - Progressive Mode              
+                                                                 @A1C*/         
+     unsigned int    HPRConnDS_ARB_Mode : 2; /* ARB Pacing Mode                 
+                                          '00'B - Green mode                    
+                                          '01'B - Yellow mode                   
+                                          '10'B - Red mode           */         
+     unsigned int    HPRConnDS_Role : 2; /* Passive or Active                   
+                                          '10'B - Active                        
+                                          '01'B - Passive            */         
+     unsigned int    HPRConnDS_MNPS : 1; /* RTP connection is being             
+                                       used by an MNPS application   */         
+     unsigned int    HPRConnDS_DYNLU : 1; /* DYNLU support indicator */         
+     unsigned int    HPRConnDS_XNETALS : 1; /* XNETALS support                  
+                                       indicator                     */         
+     unsigned int    HPRConnDS_Rsv3 : 7; /* Reserved                 */         
+   } HPRConnDS_Flags;               /* Informational flags           */         
+                                                                                
+   unsigned char     HPRConnDS_State; /* RTP Connection State                   
+                                         See constants below     @A3C*/         
+   char              HPRConnDS_COS_OriginalÝ8¨; /* Original COS  @Q2C*/         
+   char              HPRConnDS_Rsv5Ý3¨; /* Reserved              @Q2A*/         
+                                                                                
+   struct {                                                                     
+     unsigned long long HPRConnDS_Data_Bytes_Sent;  /* Number of                
+                                       data bytes sent over this                
+                                       RTP connection.               */         
+                                                                                
+     unsigned long long HPRConnDS_Total_Bytes_Sent;  /* Total number            
+                                       of bytes sent over this RTP              
+                                       connection. This includes data           
+                                       bytes along with NLH, THDR and           
+                                       FID5                          */         
+                                                                                
+     unsigned long long HPRConnDS_NLPOut;    /* Count of NLPs sent              
+                                       outbound                      */         
+                                                                                
+     unsigned short  HPRConnDS_Largest_NLPOut;/* Largest NLP sent    */         
+     unsigned short  HPRConnDS_Num_Rexmitted_NLPS; /* Number of                 
+                                       retransmitted NLPs            */         
+   } HPRConnDS_Data_Transfer_Info_OutBound; /* OutBound data transfer           
+                                       information                   */         
+                                                                                
+   struct {                                                                     
+     unsigned long long HPRConnDS_Data_Bytes_Rcv;  /* Number of data            
+                                       bytes received over this RTP             
+                                       connection.                   */         
+                                                                                
+     unsigned long long HPRConnDS_Total_Bytes_Rcv;  /* Total number             
+                                       of bytes received over this RTP          
+                                       connection.  This includes data          
+                                       bytes along with NLH, THDR and           
+                                       FID5                          */         
+                                                                                
+     unsigned long long HPRConnDS_NLPIn;    /* Count of NLPs received           
+                                       inbound                       */         
+                                                                                
+     unsigned short  HPRConnDS_Largest_NLPIN; /* Largest NLP received*/         
+     unsigned short  HPRConnDS_Rsv4; /* Reserved                     */         
+   } HPRConnDS_Data_Transfer_Info_InBound;  /* InBound data transfer            
+                                       information                   */         
+                                                                                
+   struct {                                                                     
+     unsigned int    HPRConnDS_Initial_Send_Rate; /* Initial send               
+                                       Rate                          */         
+     unsigned int    HPRConnDS_Allowed_Send_Rate; /* Allowed Send               
+                                       Rate                          */         
+     /****************************************************************/         
+     /* The next five threshholds are valid only if                  */         
+     /* HPRConnDS_ARB_Algorithm indicates "ARB Responsive mode" or   */         
+     /* "ARB Progressive mode" is being used.                    @A1C*/         
+     /****************************************************************/         
+     unsigned int    HPRConnDS_Maximum_Send_Rate; /* Highwater mark for         
+                                       HPRConnDS_Actual_Send_Rate@Q1M*/         
+     unsigned int    HPRConnDS_Actual_Send_Rate; /* Actual Send Rate            
+                                                                 @Q1M*/         
+     int             HPRConnDS_ARB2_RCVR_THRESHOLD; /* Current                  
+                                       receiver threshold                       
+                                       (value in microsecs)          */         
+     int             HPRConnDS_ARB2_RCVR_THRESHOLD_MIN; /* Min                  
+                                       receiver threshold                       
+                                       (value in microsecs)          */         
+     int             HPRConnDS_ARB2_RCVR_THRESHOLD_MAX; /* Max receiver         
+                                       receiver threshold                       
+                                       (value in microsecs)          */         
+   } HPRConnDS_ARB_Info;            /* ARB Information               */         
+                                                                                
+   struct {                                                                     
+     unsigned int    HPRConnDS_Num_NLPs_On_Pending_Sends_Q; /* Number           
+                                    of NLPs on RPNCB_PENDING_SENDS_Q */         
+     unsigned int    HPRConnDS_Num_NLPs_On_OOSQ; /* Number of NLPs on           
+                                       the RPN_OutOfSeq_Msg_Q        */         
+     unsigned int    HPRConnDS_Num_NLPs_On_In_Segments_Q; /* Number             
+                                       of NLPS on contained within the          
+                                       RPN_RCV_Segments_DaPtr        */         
+     struct {                                                                   
+       unsigned int  HPRConnDS_NLPs_On_Wait_For_Ack_Q; /* Number of             
+                                       NLPs on RPNCB_WAIT_FOR_ACK_Q  */         
+       unsigned int  HPRConnDS_Max_Num_NLPs_On_Wait_For_Ack_Q; /* High          
+                                       water mark for the number of             
+                                       NLPs on RPNCB_WAIT_FOR_ACK_Q  */         
+       unsigned long long HPRConnDS_Max_Num_NLPs_On_Wait_TOD; /* TOD            
+                                       clock of high water mark for             
+                                       number of NLPs on                        
+                                       RPNCB_WAIT_FOR_ACK_Q          */         
+     } HPRConnDS_Wait_For_Ack_Q_Info;                                           
+                                                                                
+   } HPRConnDS_Queue_Info;                                                      
+                                                                                
+   struct {                                                                     
+     int             HPRConnDS_Smooth_Deviation; /* Responsive mode             
+                                       ARB or Progressive mode ARB              
+                                       smoothing deviation.      @A1C*/         
+     unsigned int    HPRConnDS_SRTT; /* Smoothed roundtrip time in ms*/         
+     unsigned int    HPRConnDS_Liveness_Time; /* Liveness time length           
+                                       in seconds                    */         
+   } HPRConnDS_Timer_Info;                                                      
+                                                                                
+   unsigned int      HPRConnDS_LULU_Session_Count; /* Active LU-LU              
+                                       sessions using this RTP                  
+                                       connection                    */         
+   unsigned long long HPRConnDS_Activation_TOD; /* TOD HPR Pipe                 
+                                       activated                     */         
+   unsigned long long HPRConnDS_Local_TCID;      /* Local TCID       */         
+   unsigned long long HPRConnDS_Remote_TCID;     /* Remote TCID      */         
+                                                                                
+   unsigned char   HPRConnDS_Local_NCE_Len;  /* Local NCE length     */         
+   char            HPRConnDS_Local_NCEÝ8¨;   /* Local NCE            */         
+                                                                                
+   unsigned char   HPRConnDS_NCE_ID_LEN; /* Remote NCEID length     */          
+   char            HPRConnDS_NCE_IDÝ8¨;  /* Remote NCEID            */          
+                                                                                
+   unsigned char   HPRConnDS_Local_ANR_LEN; /* Local ANR length      */         
+   char            HPRConnDS_Local_ANRÝ8¨;  /* Local ANR label                  
+                                       outbound                      */         
+                                                                                
+ } HPRConnSpecificData;             /* HPR Connection Specific Data             
+                                       section                       */         
+                                                                                
+ /********************************************************************/         
+ /* Mapping for the HPR Connection Pathswitch Data. This section     */         
+ /* will only be supplied if a pathswitch had occurred in the life   */         
+ /* of the HPR connection being reported.                            */         
+ /********************************************************************/         
+                                                                                
+ typedef struct {                                                               
+   unsigned long long HPRConnDP_TOD_Last_Pathswitch; /* TOD when                
+                                       last path switch was initiated*/         
+   struct {                                                                     
+     unsigned int    HPRConnDP_In_PS : 1; /* RTP pipe in currently in           
+                                       the process of pathswitching             
+                                       '1'B - Pipe is pathswitching             
+                                       '0'B - Pipe is not switching  */         
+     unsigned int    HPRConnDP_Last_PS_Reason : 4; /* Last Path                 
+                                       Switch Reason                            
+                                       See constants below                      
+                                                            @Q1C @A2C*/         
+     unsigned int    HPRConnDP_Rsv : 3; /* Reserved              @A2C*/         
+   } HPRConnDP_PS_Flags;            /* Path Switch Flags             */         
+                                                                                
+   char              HPRConnPathSwitchData_Rsvd;   /* Reserved       */         
+   unsigned short    HPRConnDP_Cnt_PS_Initiated_Rem; /* Number of Path          
+                                       switches initiated by the                
+                                       remote RTP partner            */         
+   unsigned short    HPRConnDP_Cnt_PS_Initiated_Loc; /* Total number            
+                                       of path switches initiated by            
+                                       this node                     */         
+   unsigned short    HPRConnDP_Cnt_PS_Due_To_Failure; /* Number of              
+                                      Path switches initiated by this           
+                                      node due to errors (i.e.,                 
+                                      TGINOP, short response time               
+                                      retries, or no NCB)            */         
+   unsigned short    HPRConnDP_Cnt_PS_Due_To_PSRETRY; /* Number of              
+                                       Path switches initiated by this          
+                                       node due to PSRETRY.          */         
+ } HPRConnPathSwitchData;         /* HPR Connection Pathswitch data             
+                                       section                       */         
+                                                                                
+ /********************************************************************/         
+ /* Eyecatcher constants for HPR Connection records                  */         
+ /********************************************************************/         
+ const unsigned int HPRConnG_ID                                                 
+   = 0xC8D7D9C7;                  /* HPR connection global                      
+                                     record 'HPRG'               @Q3C*/         
+ const unsigned int HPRConnD_ID                                                 
+   = 0xC8D7D9C3;                  /* HPR connection global                      
+                                     record 'HPRC'               @Q3C*/         
+                                                                                
+ /********************************************************************/         
+ /* Constants for Triplet counts for the various records             */         
+ /********************************************************************/         
+ const int HPRConnG_TripletCnt = 1; /* HPR connection global                    
+                                       record has one triplet        */         
+ const int HPRConnD_TripletCnt = 3; /* HPR conn specific                        
+                                       record has three triplets     */         
+                                                                                
+ /********************************************************************/         
+ /* Constants for ARB Algorithm                                      */         
+ /********************************************************************/         
+                                                                                
+ const int HPRConnDS_ARB_Original = 0; /* ARB original mode          */         
+ const int HPRConnDS_ARB_Responsive = 1; /* ARB responsive mode      */         
+ const int HPRConnDS_ARB_Progressive = 2; /* ARB progressive mode               
+                                                                 @A1A*/         
+                                                                                
+ /********************************************************************/         
+ /* Constants for ARB Mode                                           */         
+ /********************************************************************/         
+ const int HPRConnDS_ARB_GreenMode = 0; /* Green                     */         
+ const int HPRConnDS_ARB_YellowMode = 1; /* Yellow                   */         
+ const int HPRConnDS_ARB_RedMode = 2; /* Red                         */         
+                                                                                
+ /********************************************************************/         
+ /* Constants for Endpoint Role                                      */         
+ /********************************************************************/         
+ const int HPRConnDS_Role_Active = 2; /* Active, or the node that               
+                                         setup the pipe              */         
+ const int HPRConnDS_Role_Passive = 1; /* Passive, or the partner               
+                                       endpoint that was told to set            
+                                       up the pipe                   */         
+                                                                                
+ /********************************************************************/         
+ /* Constants for Pathswitch reason codes : HPRConnDP_Last_PS_Reason */         
+ /********************************************************************/         
+ const int HPRConnDP_PS_XMIT = 1;   /* Pathswitch initiated for                 
+                                       transmission stall recovery              
+                                                                 @A2A*/         
+ const int HPRConnDP_PS_TGINOP = 2; /* TG INOP condition was detected           
+                                                                 @A2C*/         
+ const int HPRConnDP_PS_SRTRetry = 4; /* Short request timer                    
+                                       expiration                @A2C*/         
+ const int HPRConnDP_PS_NoNCB = 6;  /* No NCB was available to use              
+                                                                 @A2C*/         
+ const int HPRConnDP_PS_Modify = 8; /* Operator issued pathswitch               
+                                       request                   @A2C*/         
+ const int HPRConnDP_PS_AutoSwtch = 10; /* Pathswitch driven due to             
+                                       automatic retry timer     @A2C*/         
+ const int HPRConnDP_PS_Partner = 12; /* Partner initiated last                 
+                                       switch               @Q1A @A2C*/         
+ const int HPRConnDP_PS_MNPS = 14;  /* Pathswitch initiated for MNPS            
+                                       endpoint recovery         @A2A*/         
+                                                                                
+ /********************************************************************/         
+ /* Constants for RTP Connection State : HPRConnDS_State         @A3A*/         
+ /********************************************************************/         
+ const int HPRConnDS_Initial = 0;   /* INITIAL - Initial state at               
+                                       RTP startup time.         @A3A*/         
+ const int HPRConnDS_ALS_PENDING = 10; /* ALS_PENDING - RTP is waiting          
+                                       for adjacent link station                
+                                       processing.               @A3A*/         
+ const int HPRConnDS_ALS_ASSIGNED = 15; /* ALS_ASSIGNED - Adjacent link         
+                                       station processing is                    
+                                       complete.                 @A3A*/         
+ const int HPRConnDS_OPENED = 20;   /* OPENED - Initial state for the           
+                                       RTP active partner after                 
+                                       startup.                  @A3A*/         
+ const int HPRConnDS_CALLING = 30;  /* CALLING- RTP active partner              
+                                       sending connection setup to              
+                                       the passive RTP partner.  @A3A*/         
+ const int HPRConnDS_LISTENING = 40; /* LISTENING - Initial state for           
+                                       the passive RTP partner after            
+                                       startup.                  @A3A*/         
+ const int HPRConnDS_CONNECTED = 50; /* CONNECTED - RTP is active.              
+                                                                 @A3A*/         
+ const int HPRConnDS_GONE = 60;     /* GONE - RTP has completed                 
+                                       cleanup processing.       @A3A*/         
+ const int HPRConnDS_DISCONNECT = 70; /* DISCONNECT - RTP is performing         
+                                       disconnect processing.    @A3A*/         
+ const int HPRConnDS_PENDING_ACT = 80; /* PENDING_ACT - RTP is waiting          
+                                       for activation to complete.              
+                                                                 @A3A*/         
+ const int HPRConnDS_PENDING_INACT = 90; /* PENDING_INACT - RTP is              
+                                       waiting for deactivation to              
+                                       complete.                 @A3A*/         
+ const int HPRConnDS_RECOVERY = 100; /* MNPS RECOVERY - Multinode               
+                                       persistent session recovery is           
+                                       in progress.              @A3A*/         
+ const int HPRConnDS_PENDING_TAKEOVER = 110; /* MNPS PENDING TAKEOVER -         
+                                       Multinode persistent session             
+                                       planned takeover is in                   
+                                       progress.                 @A3A*/         
+#ifdef __cplusplus                                                              
+      }   /* extern "C" */                                                      
+#endif                                                                          
+                                                                                
+#pragma pack(reset)                 /* Return to prior alignment     */         
+                                                                                
+#endif   /* __isthprcc */                                                       
+                                                                                

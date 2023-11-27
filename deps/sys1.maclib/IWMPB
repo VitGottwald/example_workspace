@@ -1,0 +1,1163 @@
+*                                                                       00010092
+*        %              /*                                              00020092
+         MACRO                                                          00030092
+         IWMPB    ,        */                                           00040092
+* IWMPB10 : ;                                                           00050092
+*/* START OF SPECIFICATIONS ******************************************* 00060092
+*                                                                       00070092
+* ***PROPRIETARY_STATEMENT********************************************* 00080092
+***01* PROPRIETARY STATEMENT=                                         * 00090092
+*                                                                     * 00100092
+*   LICENSED MATERIALS - PROPERTY OF IBM                              * 00110092
+*   5650-ZOS COPYRIGHT IBM CORP. 1993, 2013                           * 00120099
+*                                                                     * 00130092
+*   STATUS= HBB7790                                                   * 00140092
+*                                                                     * 00150092
+*  **END_OF_PROPRIETARY_STATEMENT*************************************/ 00160092
+*/*                                                                     00170092
+* EXTERNAL CLASSIFICATION:                                              00180092
+* DMTI: BASE                                                            00190092
+* GUPI: INCLUDE                                                         00200092
+* END OF EXTERNAL CLASSIFICATION:                                       00210092
+*                                                                       00220092
+* MACRO NAME: IWMPB                                                     00230092
+*                                                                       00240092
+* DESCRIPTIVE NAME: Performance Block for IWM Work Manager and          00250092
+*                   Delay Monitoring Services                           00260092
+*                                                                       00270092
+* DSECT NAME: PB                                                        00280092
+*                                                                       00290092
+* COMPONENT: Workload Manager (SCWLM)                                   00300092
+*                                                                       00310092
+* FUNCTION: Provides a mapping of the data area for users of IWM        00320092
+*           services and exits.                                         00330092
+*                                                                       00340092
+* METHOD-OF-ACCESS:                                                     00350092
+*                                                                       00360092
+*   PLAS: %INCLUDE SYSLIB(IWMPB)                                        00370092
+*   ASM:  IWMPB                                                         00380092
+*                                                                       00390092
+* POINTED-TO-BY: PBDE_PBPTR                                             00400092
+*                                                                       00410092
+* CREATED-BY: IWMMCREA service routine                                  00420092
+*                                                                       00430092
+* DELETED-BY: IWMMDELE service routine                                  00440092
+*                                                                       00450092
+* SIZE: 1152 bytes                                          @ME25584C   00460099
+*                                                                       00470092
+* EYE-CATCHER: PB  (padded on the right with two blanks)                00480092
+*  OFFSET:   0                                                          00490092
+*  LENGTH:   4                                                          00500092
+*                                                                       00510092
+* STORAGE-ATTRIBUTES:                                                   00520092
+*                                                                       00530092
+*   ALLOCATION-METHOD: STORAGE OBTAIN                                   00540092
+*                                                                       00550092
+*   SUBPOOL/DATASPACE: Subpool 228 when key 0-7                         00560092
+*                      Subpool 230 when key 8-F (and page-fixed)        00570092
+*                                                                       00580092
+*   KEY: Specified on IWMMCREA                                          00590092
+*                                                                       00600092
+*   FREQUENCY: One per successful invocation of IWMMCREA                00610092
+*                                                                       00620092
+* SERIALIZATION: Responsibility of the user of the monitoring token     00630092
+*                returned by IWMMCREA                                   00640092
+*                                                                       00650092
+* DEPENDENCIES: SRM sampling code uses an instruction which can only    00660092
+*               address 256 bytes.                                      00670092
+*               If the performance block grows larger than 256 bytes,   00680092
+*               IRASASRV will need to be recoded.                       00690092
+*                                                                       00700092
+* NOTES: - If the length of PB_CLEAR changes, then the macros IWMMRELA  00710092
+*          and IWMMINIT may need to change. The generated code for      00711092
+*          clearing out PB_CLEAR does not handle lengths greater than   00712092
+*          256 bytes. When adding code in IWMMRELA to clear out         00713092
+*          PB_CLEAR, ensure that IWMX2REL's dynamic area is not used.   00714092
+*                                                                       00715092
+*        - Also note that currently only the content of the first 256   00716092
+*          Bytes can be used during PB sampling (IRASASRV). The         00717092
+*          remaining part of the PB is not copied over to the           00718092
+*          sampling routine.                                   @OA22607 00719092
+*                                                                       00720092
+*        - PBs must be at least allocated on a quadword boundary cause  00730092
+*          some EWLM fields are updated with CDSG instructions. Due     00740092
+*          to performance reasons PBs will be allocated on a boundary   00750092
+*          of 256 Bytes to reduce cache misses.                @OA22607 00760092
+*                                                                       00770092
+*---------------------------------------------------------------------- 00780092
+*                                                                       00790092
+* CHANGE-ACTIVITY:                                                      00800092
+*                                                                       00810092
+*   $L0=WLMI     HBB5510  920309  PD16:  Workload Manager I             00820092
+*   $P1=PIG7002  HBB5510  920420  PD16:  SourceLU                       00830092
+*   $P2=PIG7009  HBB5510  921102  PD16:  PB_CLEAR length                00840092
+*   $L1=WLMI     HBB5510  930503  PDD0:  Workload Manager I             00850092
+*   $T1=PIG5048  HBB5510  940117  PDD0:  OW01260 Fix Prolog             00860092
+*   $WLMPBPM     HBB6603  950213  PD16:  New waiting states and         00870092
+*                                        size change 200 -> 224         00880092
+*   $WLMPENH     HBB6603  951201  PD16:  New Latch waiting state        00890092
+*   OW26040      HBB6603  970403  PDSN:  Add length field in header     00900092
+*   $PWA0230     JBB6607  980619  PDKN:  Add warning in Notes section   00910092
+*                                        of prolog                      00920092
+*   $TTRACE      JBB6609  980904  PDDA:  Tak Chin                       00930092
+*                                        Transaction Trace              00940092
+*   $WLMPAPC     HBB7705  001203  3241PB:  Peter Baeuerle               00950092
+*                                          Changes for                  00960092
+*                                          Application contexts:        00970092
+*                                          New Action and Waiting       00980092
+*                                          States, New Flags            00990092
+*   $WLMPPBS     HBB7707  011113  3241AB:  Armin Buechler               01000092
+*                                          PB State Reporting           01010092
+*                                          New PB Waiting States        01020092
+*   $PYV0343     HBB7707  020131  3241AB:  Armin Buechler               01030092
+*                                          Copyright Statement          01040092
+*                                          correction                   01050092
+*   $OW54806     HBB7707  020606  3241AB:  Armin Buechler               01060092
+*                                          Fix too long state names     01070092
+*   $WLMPERS     HBB7730  050222  3241MB:  Miklos Berenyi               01071092
+*                                          EWLM support                 01072092
+*   $WLMPDBM     HBB7730  051215  3241AA   Adrian Alvarez Diez          01073092
+*                                          Buffer Pool Management GA    01073192
+*                                          support                      01073292
+*   $LEWLMQ      HBB7740  060420  3241KK:  Karl-Heinz Klameth           01073392
+*                                          Message Model Support        01073492
+*   $ME07386     HBB7740  060815  3241BH:  Bill Heisser                 01073592
+*                                          Licensed material only       01073692
+*   $OA22607     HBB7750  071115  3241GB   Georg Bosch                  01073792
+*                                          Update comments to remember  01073892
+*                                          only first 256 Bytes can be  01073992
+*                                          accessed in sampling         01074092
+*   $OA38477     HBB7780  120126  3241IS:  WLM API for subsystems to    01074192
+*                                          identify work provider and   01074292
+*                                          consumer                     01074392
+*   $LPBABV      HBB7790  120307  3241AH:  Andreas Henicke              01074492
+*                                          PB above 2G                  01074592
+*                         121018  3241DW:  Dieter Wellerdiek            01074699
+*                                          Unused variables deleted     01074799
+*   $ME24619     HBB7790  121029  3241AH:  Andreas Henicke              01074899
+*                                          No BP delay samples          01074999
+*   $ME25584     HBB7790  130131  3241DW:  Dieter Wellerdiek            01075099
+*                                          Rearrange SA and workarea    01075199
+*   $OA41985     HBB7790  130131  3241DW:  Dieter Wellerdiek            01075299
+*                                          Comment changed              01075399
+*                                                                       01075499
+*END OF SPECIFICATIONS ***********************************************/ 01075599
+*%      /*                                                              01075699
+*                                                                       01075799
+PB       DSECT                                                          01075899
+         DS    0D                                                       01076092
+PB_CREATE     DS   CL32     Space reserved for Create attributes        01077092
+         ORG PB_CREATE                                                  01078092
+PB_ID_VERSION DS   CL5      Space for id and version information        01079092
+         ORG PB_ID_VERSION                                              01080092
+PB_ID         DS   CL4      Space for id                                01090092
+PB_ID_CONST   EQU  C'PB  '  Performance block eye catcher constant      01100092
+PB_VERSION    DS   BL1      Space for version information               01110092
+PB_VERSION1   EQU  1        Performance block version 1. 1=HBB5510,     01120092
+*                           HBB5520                            @WLMPBPM 01130092
+PB_VERSION2   EQU  2        Performance block version 2. 2=HBB6603.     01140092
+*                                                              @WLMPBPM 01150092
+PB_VERSION3   EQU  3        Performance block version 3. 3=JBB6609.     01160092
+*                                                              @TTRACE  01170092
+PB_VERSION4   EQU  4        Performance block version 4. 4=HBB7705.     01180092
+*                                                              @WLMPAPC 01190092
+PB_VERSION5   EQU  5        Performance block version 5. 4=HBB7707.     01200092
+*                                                              @WLMPPBS 01210092
+PB_VERSION6   EQU  6        Performance block version 6. 6=HBB7730 or   01220092
+*                           HBB7720 with APAR OA12935          @WLMPERS 01230092
+PB_VERSION7   EQU  7        Performance block version 7. 7=HBB7740      01240092
+*                                                              @LEWLMQ  01250092
+PB_VERSION8   EQU  8        Performance block version 8. 8=HBB7790      01260092
+*                                               64 Bit Support @LPBABVA 01270092
+PB_CURRENT_VERSION EQU  8   Performance block current version  @LPBABVC 01280092
+PB_FLAGS      DS   BL1      Flag Area                          @WLMPAPC 01290092
+PB_FLAGS_MASK  EQU PB_REPORT_ONLY+PB_ASSOCIATE                 @WLMPAPC 01300092
+*                           Mask for PB Flags                  @WLMPAPC 01310092
+PB_REPORT_ONLY EQU B'10000000' This is a report only PB        @WLMPAPC 01320092
+PB_ASSOCIATE   EQU B'01000000' This PB is associated with      @WLMPAPC 01330092
+*                           an enclave or an address space     @WLMPAPC 01340092
+PB_EWLM_ENABLED        EQU B'00100000'                         @WLMPERS 01350092
+PB_EWLM_PARENT_ENABLED EQU B'00010000'                         @WLMPERS 01360092
+PB_EWLM_EWLM_YES       EQU B'00001000'                         @WLMPERS 01370092
+PB_BPMGMT_ONLY EQU B'00000100' This is a BP mgmt only PB       @WLMPDBM 01371092
+*                                                                       01372092
+PB_NEW_LENGTH DS   BL2      Length of PB_CLEAR. See Notes section in    01373092
+*                           prolog if you are changing the length of    01374092
+*                           PB_CLEAR                           @PWA0230 01375092
+PB_SUBSYS_TYPE DS   CL4     Subsystem type                              01376092
+PB_SUBSYSNM   DS   CL8      Subsystem name                              01377092
+PB_MIRROR_PTR DS   AL4      PB Mirror pointer                      @L1A 01378092
+         ORG PB_MIRROR_PTR                                         @L1A 01379092
+PB_MIRROR_TKN DS   BL4      Token for control information               01380092
+PB_RSVD0018   DS   CL8      Reserved space                              01390092
+PB_CLEAR_FLD  DS   0CL1     Origin of area to be cleared for reuse @P2A 01400092
+         ORG PB_CLEAR_FLD                                               01410092
+PB_OWNER_DATA DS   BL4      Data specified by user/owner                01420092
+PB_OWNER_TKN  DS   BL4      Token specified by user/owner               01430092
+              DS   0D       PB_ARRTIME should be on a dwd boundary      01440092
+PB_ARRTIME    DS   BL8      Arrival time for work request               01450092
+              DS   0D       PB_EXSTARTTIME should be on a dwd boundary  01460092
+PB_EXSTARTTIME    DS   BL8      Execution start time for work request   01470092
+PB_DU_ASCB    DS   AL4      Address of ASCB associated with the         01480092
+*                           dispatchable unit serving the work request  01490092
+PB_DU         DS   AL4      Address of TCB associated with the          01500092
+*                           dispatchable unit serving the work request  01510092
+*                           or 1 signifying an SRB                      01520092
+PB_DU_SRB        EQU 1      DU is associated with an SRB                01530092
+PB_SRB_SAMEDU_NO EQU 1      DU is associated with an SRB distinct from  01540092
+*                           the parent                                  01550092
+PB_SRB_SAMEDU_YES EQU 3     DU is associated with same SRB as parent    01560092
+*                                                                       01570092
+PB_RSVD0040   DS   CL1      Reserved space                              01580092
+PB_STATE      DS   BL1      State of the work request                   01590092
+PB_STATE_FREE    EQU  X'00' State is free - PB not associated with a    01600092
+*                           work request                                01610092
+PB_STATE_ACTIVE  EQU  X'01' State is active - work request associated   01620092
+*                           with the PB is active (running on a CP)     01630092
+PB_STATE_ACTIVE_SUBSYS  EQU  X'01'                        @WLMPAPC      01640092
+*                           State is active - subsys work request       01650092
+*                           with the PB is active (running on a CP)     01660092
+*                           - Equivalent to old active state            01670092
+PB_STATE_READY   EQU  X'02' State is ready - work request associated    01680092
+*                           with the PB is ready (could run on a CP     01690092
+*                           if another program were not running)        01700092
+PB_STATE_IDLE    EQU  X'03' State is idle - no work request is          01710092
+*                           available to the work manager that it is    01720092
+*                           allowed to run                              01730092
+PB_STATE_ACTIVE_APPL  EQU  X'04'                           @OW54806     01740092
+*                           State is active - application work          01750092
+*                           with the PB is active                       01760092
+PB_STATE_WAITING_SSL_THREAD      EQU  X'E1'                @WLMPAPC     01770092
+*                           State is waiting on an SSL Thread           01780092
+PB_STATE_WAITING_REG_THREAD    EQU  X'E2'                  @OW54806     01790092
+*                           State is waiting on a regular Thread        01800092
+PB_STATE_WAITING_REG_TO_WRKTB  EQU  X'E3'                  @OW54806     01810092
+*                           State is waiting for a registration to      01820092
+*                           worktable                                   01830092
+PB_STATE_WAITING_TYPE1           EQU  X'D1'                @WLMPPBS     01840092
+*                           Waiting state for resource TYPE 1           01850092
+PB_STATE_WAITING_TYPE2           EQU  X'D2'                @WLMPPBS     01860092
+*                           Waiting state for resource TYPE 2           01870092
+PB_STATE_WAITING_TYPE3           EQU  X'D3'                @WLMPPBS     01880092
+*                           Waiting state for resource TYPE 3           01890092
+PB_STATE_WAITING_TYPE4           EQU  X'D4'                @WLMPPBS     01900092
+*                           Waiting state for resource TYPE 4           01910092
+PB_STATE_WAITING_TYPE5           EQU  X'D5'                @WLMPPBS     01920092
+*                           Waiting state for resource TYPE 5           01930092
+PB_STATE_WAITING_TYPE6           EQU  X'D6'                @WLMPPBS     01940092
+*                           Waiting state for resource TYPE 6           01950092
+PB_STATE_WAITING_TYPE7           EQU  X'D7'                @WLMPPBS     01960092
+*                           Waiting state for resource TYPE 7           01970092
+PB_STATE_WAITING_TYPE8           EQU  X'D8'                @WLMPPBS     01980092
+*                           Waiting state for resource TYPE 8           01990092
+PB_STATE_WAITING_TYPE9           EQU  X'D9'                @WLMPPBS     02000092
+*                           Waiting state for resource TYPE 9           02010092
+PB_STATE_WAITING_TYPE10          EQU  X'DA'                @WLMPPBS     02020092
+*                           Waiting state for resource TYPE 10          02030092
+PB_STATE_WAITING_TYPE11          EQU  X'DB'                @WLMPPBS     02040092
+*                           Waiting state for resource TYPE 11          02050092
+PB_STATE_WAITING_TYPE12          EQU  X'DC'                @WLMPPBS     02060092
+*                           Waiting state for resource TYPE 12          02070092
+PB_STATE_WAITING_TYPE13          EQU  X'DD'                @WLMPPBS     02080092
+*                           Waiting state for resource TYPE 13          02090092
+PB_STATE_WAITING_TYPE14          EQU  X'DE'                @WLMPPBS     02100092
+*                           Waiting state for resource TYPE 14          02110092
+PB_STATE_WAITING_TYPE15          EQU  X'DF'                @WLMPPBS     02120092
+*                           Waiting state for resource TYPE 15          02130092
+PB_STATE_WAITING_BUFFER_POOL_IO EQU  X'F1'                  @WLMPBPM    02140092
+*                           State is waiting on an IO due to a          02150092
+*                           buffer pool miss                            02160092
+PB_STATE_WAITING_BUFFER_POOL_CF EQU  X'F2'                  @WLMPBPM    02170092
+*                           State is waiting on an CF access due to a   02180092
+*                           buffer pool miss                            02190092
+PB_STATE_WAITING_BUFFER_POOL_CF_IO EQU  X'F3'               @WLMPBPM    02200092
+*                           State is waiting on an IO due to a          02210092
+*                           buffer pool miss and a CF miss              02220092
+PB_STATE_WAITING_CF_IO EQU  X'F4'                          @WLMPBPM     02230092
+*                           State is waiting on an IO due to a          02240092
+*                           CF miss                                     02250092
+PB_STATE_WAITING_DISTRIB   EQU  X'F5'                                   02260092
+*                           State is waiting on a distributed request   02270092
+PB_STATE_WAITING_TIMER     EQU  X'F6'                                   02280092
+*                           State is waiting on a timer                 02290092
+PB_STATE_WAITING_LATCH     EQU  X'F7'                                   02300092
+*                           State is waiting on a latch     @WLMPENH    02310092
+PB_STATE_WAITING_CONV      EQU  X'F8'                                   02320092
+*                           State is waiting on a conversation          02330092
+PB_STATE_WAITING_SESS_LOCALMVS EQU     X'F9'                            02340092
+*                           State is waiting to establish a session     02350092
+*                           somewhere in the same MVS image             02360092
+PB_STATE_WAITING_SESS_SYSPLEX EQU     X'FA'                             02370092
+*                           State is waiting to establish a session     02380092
+*                           somewhere in the sysplex                    02390092
+PB_STATE_WAITING_SESS_NETWORK EQU     X'FB'                             02400092
+*                           State is waiting to establish a session     02410092
+*                           somewhere in the network                    02420092
+PB_STATE_WAITING_OTHER_PRODUCT EQU  X'FC'                               02430092
+*                           State is waiting on another product         02440092
+PB_STATE_WAITING_MISC EQU  X'FD' State is waiting on some unidentified  02450092
+*                           resource, possibly one of the other defined 02460092
+*                           waiting conditions                          02470092
+PB_STATE_WAITING_LOCK EQU  X'FE' State is waiting on one or more locks  02480092
+PB_STATE_WAITING_IO EQU  X'FF' State is waiting on I/O or some          02490092
+*                           activity associated with an I/O request     02500092
+PB_WORKDEF    DS   BL1      Flags associated with the work request      02510092
+PB_INIT          EQU  B'10000000'  Initialize used for work environment 02520092
+PB_FROM_LOCALMVS EQU  B'01000000'  CONTINUATION(YES) FROM(LOCALMVS)     02530092
+PB_FROM_SYSPLEX  EQU  B'00100000'  CONTINUATION(YES) FROM(SYSPLEX)      02540092
+PB_FROM_NETWORK  EQU  B'00010000'  CONTINUATION(YES) FROM(NETWORK)      02550092
+PB_FROM_NONE     EQU  B'00001000'  CONTINUATION(YES) FROM(NONE)         02560092
+PB_SCOPE_SHARED  EQU  B'00000100'  Initialize SCOPE(SHARED) work rqst   02570092
+*                                                                       02580092
+*                EQU  B'00000010'  RESERVED                             02590092
+*                                                                       02600092
+PB_RELATE        EQU  B'00000001'  Relate used for work environment     02610092
+*                                                                       02620092
+PB_SWITCH_INFO     DS   BL1          Switch Continuation Information    02630092
+PB_SWITCH_LOCALMVS EQU  X'01'        Switch WHERE(LOCALMVS)             02640092
+PB_SWITCH_SYSPLEX  EQU  X'02'        Switch WHERE(SYSPLEX)              02650092
+PB_SWITCH_NETWORK  EQU  X'03'        Switch WHERE(NETWORK)              02660092
+*                                                                       02670092
+PB_MONENV_INFO     DS   BL1          Information about the mon. env.    02680092
+PB_DURATION         EQU  PB_DURATION_EXECUTION+PB_DURATION_BEGIN_TO_END 02690092
+*                        Mask for all duration options.                 02700092
+*********************************************************************** 02710092
+*                                                                       02720092
+*                        WARNING: PB_DURATION must be updated           02730092
+*                          whenever a new duration value is added.      02740092
+*                                                                       02750092
+*********************************************************************** 02760092
+PB_DURATION_BEGIN_TO_END EQU  B'10000000' DURATION(BEGIN_TO_END)        02770092
+PB_DURATION_EXECUTION    EQU  B'01000000' DURATION(EXECUTION)           02780092
+*                                                                       02790092
+PB_RSVD0045   DS   CL3      Reserved space                              02800092
+*                                                                       02810092
+PB_PARENT_MONTKN  DS   BL4  Token for the parent monitoring environment 02820092
+PB_PARENT_MONTKN_HIBIT EQU X'80000000'  Hi order bit of token     @L1A  02830092
+         ORG PB_PARENT_MONTKN+2                                         02840092
+PB_PARENT_HOME_ASID  DS   H        ASID for Parent when parent is an    02850092
+*                                  address space                        02860092
+         ORG PB_PARENT_MONTKN                                @ME24619A  02861099
+PB_PARENT_MONPTR  DS   AL4      Pointer to the parent        @ME24619A  02862099
+*                               monitoring environment       @ME24619A  02863099
+PB_PARENT_MIRROR_PTR DS   AL4      PB Parent mirror token pointer @L1A  02870092
+         ORG PB_PARENT_MIRROR_PTR                                 @L1A  02880092
+PB_PARENT_MIRROR_TKN DS   BL4      Token for parent control information 02890092
+*                                                                       02900092
+                  AGO .PB0050                                           02910092
+* Offset is hex 50 here                                                 02920092
+.PB0050           ANOP                                                  02930092
+PB_DEP_MONTKN     DS   BL4  Token for the dependent monitoring          02940092
+*                           environment related to this environment     02950092
+PB_DEP_MONTKN_HIBIT EQU X'80000000'  Hi Order bit of token        @L1A  02960092
+         ORG PB_DEP_MONTKN                                   @ME24619A  02960199
+PB_DEP_MONPTR     DS   AL4      Pointer to the dependent monitoring     02961099
+*                               environment related to this environment 02962099
+*                                                            @ME24619A  02963099
+PB_DEP_MIRROR_PTR DS   AL4      PB Dependent mirror token pointer @L1A  02970092
+         ORG PB_DEP_MIRROR_PTR                                    @L1A  02980092
+PB_DEP_MIRROR_TKN DS   BL4      Token for dependent environment control 02990092
+*                               information                             03000092
+PB_SC_TKN     DS       BL4  Service class token for the work request    03010092
+PB_ABNORMAL_FLAGS  DS  BL4  Abnormal flags                   @L1C       03020092
+PB_ABNORMAL_LOCALMVS EQU X'00000001'  Abnormality only affects current  03030092
+*                                     MVS image              @L1A       03040092
+PB_ABNORMAL_SYSPLEX  EQU X'00000002'  Abnormality affects all MVS       03050092
+*                                     images in the sysplex  @L1A       03060092
+                  AGO .PB0060                                           03070092
+* Offset is hex 60 here                                                 03080092
+.PB0060           ANOP                                                  03090092
+PB_WORK_ATTRIBUTES DS  CL52 Attributes associated with the work request 03100092
+         ORG PB_WORK_ATTRIBUTES                                         03110092
+PB_USERID     DS       CL8  Userid associated with the work request     03120092
+         ORG PB_WORK_ATTRIBUTES+8                                       03130092
+PB_TRXNAME    DS       CL8  Transaction name associated with the work   03140092
+*                           request                                     03150092
+                  AGO .PB0070                                           03160092
+* Offset is hex 70 here                                                 03170092
+.PB0070           ANOP                                                  03180092
+         ORG PB_WORK_ATTRIBUTES+16                                      03190092
+PB_TRXCLASS   DS       CL8  Transaction class associated with the work  03200092
+*                           request                                     03210092
+         ORG PB_WORK_ATTRIBUTES+24                                      03220092
+PB_RSVD0078   DS       CL8  Reserved space                              03230092
+                  AGO .PB0080                                           03240092
+* Offset is hex 80 here                                                 03250092
+.PB0080           ANOP                                                  03260092
+         ORG PB_WORK_ATTRIBUTES+32                                      03270092
+PB_SOURCELU   DS       CL17 Source LU name associated with the work     03280092
+*                           request                                @P1C 03290092
+                  AGO .PB0091                                           03300092
+* Offset is hex 91 here                                                 03310092
+.PB0091           ANOP                                                  03320092
+         ORG PB_WORK_ATTRIBUTES+49                                      03330092
+PB_RSVD0091   DS       BL3  Reserved space                              03340092
+                  AGO .PB0094                                           03350092
+* Offset is hex 94 here                                                 03360092
+.PB0094           ANOP                                                  03370092
+PB_LU62TKN_FMT DS       BL1  Format of the LU62 token                   03380092
+PB_LU62FMT_LU_NO_CC_27 EQU X'01'                                        03390092
+*                              The LU6.2 token associated with the      03400092
+*                              work request is a fixed length token of  03410092
+*                              27 bytes with no conversation correlator 03420092
+*                              (not even its length byte).  The LU name 03430092
+*                              may be 1-17 bytes.  Bytes at the end of  03440092
+*                              the token are padded with hexadecimal    03450092
+*                              zeros, if necessary, to form a full 27   03460092
+*                              bytes.                                   03470092
+PB_LU62FMT_FULL_LU_NO_CC_27 EQU X'02'                                   03480092
+*                              The LU6.2 token associated with the      03490092
+*                              work request is a fully qualified LU     03500092
+*                              name (17 bytes), but no conversation     03510092
+*                              correlator (not even its length byte) is 03520092
+*                              provided.  This format is architected to 03530092
+*                              be 27 bytes long.                        03540092
+PB_LU62FMT_FULL_LU_0_CC_28  EQU X'03'                                   03550092
+*                              The LU6.2 token associated with the      03560092
+*                              work request is a fully qualified LU     03570092
+*                              name (17 bytes), and the conversation    03580092
+*                              correlator length byte is present and    03590092
+*                              has the value 0.  This format is         03600092
+*                              architected to be 28 bytes long.         03610092
+PB_LU62FMT_FULL_LU_CC_36 EQU X'04'                                      03620092
+*                              The LU6.2 token associated with the      03630092
+*                              work request is a fully qualified LU     03640092
+*                              name (17 bytes), and the conversation    03650092
+*                              correlator is provided with a length of  03660092
+*                              8 (maximum allowed).   This format is    03670092
+*                              architected to be 36 bytes long.         03680092
+PB_LU62FMT_OTHER             EQU X'00'                                  03690092
+*                              The LU6.2 token associated with the      03700092
+*                              work request contains self-defining      03710092
+*                              length fields.                           03720092
+PB_MAX_LU62TKN_LEN           EQU 36                                     03730092
+*                              Maximum length of an                     03740092
+*                              LU6.2 token (in decimal).                03750092
+PB_RSVD0095   DS       BL1  Reserved space                    @WLMPAPC  03760092
+              DS   0H       PB_AS_ID should be on a hwrd boundary       03770092
+PB_AS_ID      DS       BL2  Address space id                  @WLMPAPC  03780092
+                  AGO .PB0098                                           03790092
+* Offset is hex 98 here                                                 03800092
+.PB0098           ANOP                                                  03810092
+PB_LU62TKN    DS       CL36 LU 6.2 token associated with the work       03820092
+*                           request                                     03830092
+PB_RSVD00BC   DS       BL4  Reserved space                              03840092
+                  AGO .PB00C0                                           03850092
+* Offset is hex C0 here                                                 03860092
+.PB00C0           ANOP                                                  03870092
+*                                                                       03880092
+PB_ETOKEN     DS       CL8  Enclave token                     @WLMPAPC  03890092
+                  AGO .PB00C8                                           03900092
+* Offset is hex C8 here (next byte past the PB, so length is C8 hex)    03910092
+.PB00C8           ANOP                                                  03920092
+*                                                                       03930092
+PB_BP_RESTKN  DS       CL8  Buffer Pool resouce token                   03940092
+*                           associated with the work                    03950092
+*                           request                          @WLMPBPM   03960092
+PB_CF_RESTKN  DS       CL8  Coupling Facility Structure                 03970092
+*                           resouce token associated                    03980092
+*                           with the work request            @WLMPBPM   03990092
+                  AGO .PB00D8                                           04000092
+* Offset is hex D8 here                                                 04010092
+.PB00D8           ANOP                                                  04020092
+*                                                                       04030092
+PB_TRANS_TTOKEN DS     CL32 Transaction Trace Token          @TTRACE    04040092
+                  AGO .PB00F8                                           04050092
+* Offset is hex F8 here                                                 04060092
+.PB00F8           ANOP                                                  04070092
+*                                                                       04080092
+PB_FROM_SUBSYSNM DS    CL8  Subsystem name from where the request came  04090092
+*                           in                                 @OA38477 04100092
+                  AGO .PB0100                                           04110092
+* Offset is hex 100 here                                       @LPBABVC 04120092
+.PB0100           ANOP                                                  04130092
+*********************************************************************** 04140092
+*                                                                       04150092
+*  Any fields added prior to PB_CLEAR_LEN (and after PB_CLEAR_FLD)      04160092
+*  will be cleared by Initialize/Relate, while fields added after       04170092
+*  PB_CLEAR_LEN will NOT be cleared. If you are changing the length     04180092
+*  of PB_CLEAR, then read the Notes section in the prolog.  @PWA0230    04190092
+*                                                                       04191092
+*********************************************************************** 04192092
+*                                                                       04193092
+* PB_CLEAR_LEN EQU   *-PB_CLEAR_FLD - Length of section cleared   @P2A  04194092
+*          ORG PB_CLEAR_FLD                                             04195092
+* PB_CLEAR      DS   CL(PB_CLEAR_LEN) Area to be cleared for reuse      04196092
+*                                                                       04197092
+*********************************************************************** 04198092
+*                                                                       04199092
+*  PB Data Extension for EWLM (another 216 Bytes)             @OA41985C 04199199
+*  This section is not eligible for sampling in IRASASRV      @OA41985C 04199299
+*                                                                       04220092
+*********************************************************************** 04230092
+PB_EWLM_DATA               DS  CL256                           @WLMPERS 04240092
+                           ORG PB_EWLM_DATA                    @WLMPERS 04241092
+PB_EWLM_PARENTCORRELATOR   DS  CL64                            @WLMPERS 04242092
+*                                                              @WLMPERS 04243092
+PB_EWLM_CURRENTCORRELATOR  DS  CL64                            @WLMPERS 04244092
+*                                                                       04245092
+PB_EWLM_BLOCK_QUADWORD     DS 0CL16                            @WLMPERS 04246092
+*                             4 words on QuadWord boundary     @WLMPERS 04247092
+*                             updated using CDSG               @WLMPERS 04248092
+PB_EWLM_LASTBLOCKTIMESTART DS CL8                              @WLMPERS 04249092
+*                             Time in STCK format when the PB  @WLMPERS 04250092
+*                             was started to be blocked due    @WLMPERS 04251092
+*                             to the invocation of IWMMSWCH    @WLMPERS 04252092
+*                             or IWMMXFER FUNCTION=CONTINUE    @WLMPERS 04252192
+PB_EWLM_TOTALBLOCKTIME     DS CL7                              @WLMPERS 04252292
+*                             Accumulated total block time     @WLMPERS 04252392
+*                             for this PB. Value is expressed  @WLMPERS 04252492
+*                             in MicroSeconds, and should      @WLMPERS 04252592
+*                             be treated as an unsigned number @WLMPERS 04252692
+*                             of 7 Bytes                       @WLMPERS 04252792
+PB_EWLM_BLOCKCOUNT         DS X                                @WLMPERS 04252892
+*                             Number of times                  @WLMPERS 04252992
+*                             this PB (work request) is        @WLMPERS 04253092
+*                             blocked. Incremented for         @WLMPERS 04253192
+*                             each block, decremented upon     @WLMPERS 04253292
+*                             each unblocking operation        @WLMPERS 04253392
+PB_EWLM_XFER_START_TIME    DS CL8                              @WLMPERS 04253492
+PB_EWLM_WORKREQ_STA        DS F                                @WLMPERS 04253592
+*                                                                       04253692
+PB_EWLM_REQUEST            DS AL1                              @WLMPERS 04253792
+PB_EWLM_REQUEST_XFER_CONTINUE_NOSWITCH  EQU 1                  @WLMPERS 04253892
+PB_EWLM_REQUEST_XFER_CONTINUE_SECONDARY EQU 2                  @WLMPERS 04253992
+PB_EWLM_REQUEST_XFER_RETURN_NOSWITCH    EQU 3                  @WLMPERS 04254092
+PB_EWLM_REQUEST_XFER_RETURN_SECONDARY   EQU 4                  @WLMPERS 04254192
+PB_EWLM_REQUEST_RELA_CREATE_NOSWITCH    EQU 11                 @WLMPERS 04254292
+PB_EWLM_REQUEST_RELA_CREATE_SECONDARY   EQU 12                 @WLMPERS 04254392
+PB_EWLM_REQUEST_RELA_CREATE_HOME        EQU 13                 @WLMPERS 04254492
+PB_EWLM_REQUEST_RELA_DELETE             EQU 14                 @WLMPERS 04254592
+PB_EWLM_REQUEST_INIT_RESET_PACORR       EQU 21                 @WLMPERS 04254692
+PB_EWLM_REQUEST_INIT_RESET_PACTKN       EQU 22                 @WLMPERS 04254792
+PB_EWLM_REQUEST_SWITCH_CONTINUE         EQU 31                 @WLMPERS 04254892
+PB_EWLM_REQUEST_SWITCH_RETURN           EQU 32                 @WLMPERS 04254992
+PB_EWLM_REQUEST_IWM4MSTR                EQU 41                 @LPBABVC 04255092
+PB_EWLM_REQUEST_IWM4MUPD                EQU 51                 @LPBABVC 04255192
+PB_EWLM_REQUEST_IWM4MSTO                EQU 61                 @LPBABVC 04255294
+PB_EWLM_REQUEST_IWM4MCHS_UNBLOCK        EQU 71                 @LEWLMQ  04255392
+PB_EWLM_REQUEST_IWM4MCHS_BLOCK          EQU 72                 @LEWLMQ  04255492
+PB_EWLM_REQUEST_IWM4MCHS_BLOCK_ASYNC    EQU 73                 @LEWLMQ  04255592
+PB_EWLM_REQUEST_IWMMSTRT   EQU PB_EWLM_REQUEST_IWM4MSTR        @LPBABVA 04255692
+PB_EWLM_REQUEST_IWMMUPD    EQU PB_EWLM_REQUEST_IWM4MUPD        @LPBABVA 04255792
+PB_EWLM_REQUEST_IWMMSTOP   EQU PB_EWLM_REQUEST_IWM4MSTO        @LPBABVA 04255894
+PB_RSVD019D                DS CL3                              @WLMPERS 04255992
+PB_EWLM_CUM_RESPTIME       DS CL8                              @WLMPERS 04256092
+PB_EWLM_CUM_QUEUETIME      DS CL8                              @WLMPERS 04256192
+PB_EWLM_PARMLIST           DS AL4                              @LEWLMQ  04256292
+PB_RSVD01B4                DS CL4                              @LEWLMQ  04256392
+PB_EWLM_MQ_P_CORR  DS  CL20      topology of parent correlator @LEWLMQ  04256492
+         ORG PB_EWLM_MQ_P_CORR                                 @LEWLMQ  04256592
+PB_EWLM_MQ_P_APPLENV_ID    DS CL8                              @LEWLMQ  04256692
+         ORG PB_EWLM_MQ_P_CORR+8                               @LEWLMQ  04256792
+PB_EWLM_MQ_P_APPLINST_ID   DS CL8                              @LEWLMQ  04256892
+         ORG PB_EWLM_MQ_P_CORR+16                              @LEWLMQ  04256992
+PB_EWLM_MQ_P_PARENT_SYS_ID DS BL2                              @LEWLMQ  04257092
+         ORG PB_EWLM_MQ_P_CORR+18                              @LEWLMQ  04257192
+                           DS BL2    reserved                  @LEWLMQ  04257292
+PB_RSVD01CC                DS CL4                              @LPBABVC 04257399
+PB_RSVD01D4                DS CL8                              @LPBABVC 04257499
+PB_EWLM_DATA_END           DS 0X                               @WLMPERS 04257599
+*********************************************************************** 04257699
+*                                                                       04257799
+*  PB Extension for 64-Bit Support (40 Bytes)                 @OA41985C 04257899
+*  This section is eligible for sampling in IRASASRV           @LPBABVA 04258099
+*                                                                       04258199
+*********************************************************************** 04258299
+PBX                        DS  CL40                            @LPBABVC 04258399
+                           ORG PBX                             @LPBABVA 04258599
+PBX_DEP_MONTKN             DS  BL8                             @LPBABVA 04259699
+                           ORG PBX_DEP_MONTKN                  @LPBABVA 04259799
+PBX_DEP_MONPTR             DS  AD                              @LPBABVA 04259899
+PBX_PARENT_MONTKN          DS  BL8                             @LPBABVA 04259999
+                           ORG PBX_PARENT_MONTKN               @LPBABVA 04260099
+PBX_PARENT_MONPTR          DS  AD                              @LPBABVA 04260199
+PBX_MIRROR_TKN             DS  BL8                             @LPBABVA 04260299
+                           ORG PBX_MIRROR_TKN                  @LPBABVA 04260399
+PBX_MIRROR_PTR             DS  AD                              @LPBABVA 04260499
+PBX_PARENT_MIRROR_TKN      DS  BL8                             @LPBABVA 04260599
+                           ORG PBX_PARENT_MIRROR_TKN           @LPBABVA 04260699
+PBX_PARENT_MIRROR_PTR      DS  AD                              @LPBABVA 04260799
+PBX_DEP_MIRROR_TKN         DS  BL8                             @LPBABVA 04260899
+                           ORG PBX_DEP_MIRROR_TKN              @LPBABVA 04260999
+PBX_DEP_MIRROR_PTR         DS  AD                              @LPBABVA 04261099
+PBX_END                    DS  0X                              @LPBABVA 04261499
+                           ORG ,                               @LPBABVA 04261599
+*                                                            5@ME25584D 04262399
+*                                                                       04263192
+*  This section is not eligible for sampling in IRASASRV       @OA22607 04263292
+*                                                                       04263392
+PB_EWLM_MQ_PROCESSING_AREA DS CL256                            @LEWLMQ  04263492
+                           ORG PB_EWLM_MQ_PROCESSING_AREA      @LEWLMQ  04263592
+PB_EWLM_MQ_ARRIVALTIME     DS CL8                              @LEWLMQ  04263692
+PB_EWLM_MQ_STARTTIME       DS CL8                              @LEWLMQ  04263792
+PB_EWLM_MQ_CURRCORR        DS CL64                             @LEWLMQ  04263892
+PB_EWLM_MQ_PARCORR         DS CL64                             @LEWLMQ  04263992
+PB_EWLM_MQ_BLOCK_QUADWORD  DS CL16                             @LEWLMQ  04264092
+PB_EWLM_MQ_MSGS_SENT       DS F                                @LEWLMQ  04264192
+PB_EWLM_MQ_MSGS_RECEIVED   DS F                                @LEWLMQ  04264292
+PB_EWLM_MQ_ASYNC_BLOCKED   DS F                                @LEWLMQ  04264392
+PB_EWLM_MQ_TOTAL_BLOCKED   DS F                                @LEWLMQ  04264492
+PB_EWLM_MQ_FLAGS           DS F                                @LEWLMQ  04264592
+PB_EWLM_MQ_CORR_RECEIVED   DS F                                @LEWLMQ  04264692
+PB_EWLM_MQ_C               DS CL72                             @LEWLMQ  04264792
+                           ORG                                          04264892
+PB_EWLM_MQ_PROCESSING_END  DS 0X                               @LEWLMQ  04265092
+                  ORG ,                                        @LPBABVA 04267698
+*********************************************************************** 04267799
+*                                                                       04267899
+*  PB Extension Workarea for EWLM (another 384 Bytes)                   04267999
+*  This section is not eligible for sampling in IRASASRV                04268099
+*                                                                       04268199
+**************************************************************@ME25584A 04268299
+PB_EWLM_WORK               DS CL384                           @ME25584A 04268399
+PB_EWLM_WORK_END           DS 0X                              @ME25584A 04268599
+*                                                                       04268692
+*                                                                       04268792
+            MEND                                                        04268892
+* */ IWMPB20: ;                                                         04268992
+*                                                                       04269092
+*                                                                       04269192
+*   DECLARE                                                             04269292
+*     1    PB BASED BDY(DWORD),     /* Performance block             */ 04269392
+*      2    PB_CREATE CHAR(32) BDY(DWORD), /* space reserved for        04269492
+*                                      create                    @L1C*/ 04270092
+*       3    PB_ID_VERSION CHAR(5), /* Space for id and version info */ 04280092
+*           5   PB_ID CHAR(4),      /* Space for id                     04290092
+*                                      ++VERIFY                         04300092
+*                                      SEVERITY(VerifyRc_Bad)           04310092
+*                                      VALID((LIST,Pb_Id_Const))        04320092
+*                                      ERRCODE(BadPbID)                 04330092
+*                                      TYPE(IPCSEVR)                    04340092
+*                                      DESIGN('Verify the PB ID Tag')   04350092
+*                                                                    */ 04360092
+*           5   PB_VERSION BIT(8),  /* Space for version information    04370092
+*                                      ++VERIFY                         04380092
+*                                      SEVERITY(VerifyRc_Bad)           04390092
+*                                      VALID((RANGE,1,*))               04400092
+*                                      ERRCODE(BadPb_Version)           04410092
+*                                      TYPE(IPCSEVR)                    04420092
+*                                      DESIGN('Verify the PB version    04430092
+*                                      number')                      */ 04440092
+*       3    PB_FLAGS    CHAR(1),   /* Flag Area             @WLMPAPC*/ 04450092
+*           5   PB_REPORT_ONLY    BIT(1), /* This is a report only      04460092
+*                                            PB, if set.     @WLMPAPC*/ 04470092
+*           5   PB_ASSOCIATE      Bit(1), /* This PB is associated with 04480092
+*                                          an AS or enclave  @WLMPAPC*/ 04490092
+*           5   PB_EWLM_ENABLED   BIT(1), /*                            04500092
+*                                                            @WLMPERS*/ 04510092
+*           5   PB_EWLM_PARENT_ENABLED BIT(1),/*                        04520092
+*                                                            @WLMPERS*/ 04530092
+*           5   PB_EWLM_EWLM_YES  BIT(1), /*                            04540092
+*                                                            @WLMPERS*/ 04550092
+*           5   PB_BPMGMT_ONLY    BIT(1), /* This is a BP mgmt only     04560092
+*                                            PB, if set.     @WLMPDBM*/ 04570092
+*           5   *        BIT(2),          /*                 @WLMPDBM*/ 04580092
+*       3    PB_NEW_LENGTH FIXED(15), /* Length of PB_CLEAR  @OW26040*/ 04590092
+*       3    PB_SUBSYS_TYPE CHAR(4),/* Subsystem type                */ 04600092
+*       3    PB_SUBSYSNM CHAR(8),   /* Subsystem name                */ 04610092
+*       3    PB_MIRROR_PTR PTR(31) BDY(WORD), /*                 @L1A*/ 04620092
+*           5   PB_MIRROR_TKN BIT(32), /* Token for control             04630092
+*                                         information            @L1C*/ 04640092
+*       3    PB_RSVD0018 CHAR(8),   /* Reserved space                */ 04650092
+*      2    PB_CLEAR,               /* Area to be cleared for reuse.    04660092
+*                                      If the length of PB_CLEAR is     04670092
+*                                      changing, read the Notes section 04680092
+*                                      in the prolog.        @PWA0230*/ 04690092
+*       3    PB_OWNER_DATA BIT(32),  /* Data specified by owner/user */ 04700092
+*       3    PB_OWNER_TKN BIT(32),  /* Token specified by owner/user */ 04710092
+*       3    PB_ARRTIME BIT(64) BDY(DWORD), /* Arrival time for         04720092
+*                                      work request */                  04730092
+*       3    PB_EXSTARTTIME BIT(64) BDY(DWORD), /* Execution start      04740092
+*                                      time for work request.        */ 04750092
+*       3    PB_DU_ASCB PTR(31),  /* Address of ASCB associated with    04760092
+*                                    the dispatchable unit serving the  04770092
+*                                    work request attributes.        */ 04780092
+*       3    PB_DU     PTR(31),   /* Address of TCB associated with     04790092
+*                                    the dispatchable unit serving the  04800092
+*                                    work request attributes or         04810092
+*                                    1 signifying an SRB             */ 04820092
+*       3    PB_RSVD0040 BIT(8),  /* Reserved space                  */ 04830092
+*       3    PB_STATE BIT(8),     /* State of the work request       */ 04840092
+*       3    PB_WORKDEF BIT(8),         /* Work definition flags    */  04850092
+*           5   PB_INIT BIT(1),         /* Initialize used for work     04860092
+*                                          environment               */ 04870092
+*           5   PB_FROM_LOCALMVS BIT(1),/* INITIALIZE CONTINUATION(YES) 04880092
+*                                           FROM(LOCALMVS) specified */ 04890092
+*           5   PB_FROM_SYSPLEX  BIT(1),/* INITIALIZE CONTINUATION(YES) 04900092
+*                                           FROM(SYSPLEX) specified */  04910092
+*           5   PB_FROM_NETWORK  BIT(1),/* INITIALIZE CONTINUATION(YES) 04920092
+*                                           FROM(NETWORK) specified */  04930092
+*           5   PB_FROM_NONE    BIT(1), /* INITIALIZE CONTINUATION(YES) 04940092
+*                                           FROM(NONE)    specified */  04950092
+*           5   PB_SCOPE_SHARED BIT(1), /* SCOPE(SHARED) work request*/ 04960092
+*           5   *               BIT(1), /* Reserved                  */ 04970092
+*           5   PB_RELATE BIT(1),       /* Relate used for work         04980092
+*                                          environment               */ 04990092
+*       3    PB_SWITCH_INFO BIT(8),   /* Switch Continuation Info */    05000092
+*       3    PB_MONENV_INFO BIT(8),   /* Information about the          05010092
+*                                        monitoring environment.     */ 05020092
+*           5 PB_DURATION,            /* Collection of Duration options 05030092
+*                                        specified on INITIALIZE.    */ 05040092
+*               7 PB_DURATION_BEGIN_TO_END BIT(1), /* INITIALIZE        05050092
+*                                        DURATION(BEGIN_TO_END)         05060092
+*                                        specified                   */ 05070092
+*               7 PB_DURATION_EXECUTION BIT(1), /* INITIALIZE           05080092
+*                                       DURATION(EXECUTION) specified*/ 05090092
+*       3    PB_RSVD0045 CHAR(3), /* Reserved space                  */ 05100092
+*       3    PB_PARENT_MONPTR PTR(31),                   /* @ME24619A*/ 05101099
+*           5    PB_PARENT_MONTKN BIT(32), /* Token for the parent      05110099
+*                                             monitoring environment */ 05120099
+*               7   *         BIT(16),                                  05130099
+*                 9  PB_PARENT_MONTKN_HIBIT BIT(1),           /* @L1A*/ 05140099
+*               7   PB_PARENT_HOME_ASID BIT(16), /* ASID                05150099
+*                                         for parent when               05151099
+*                                         parent is an address space */ 05160099
+*       3    PB_PARENT_MIRROR_PTR PTR(31), /*                    @L1A*/ 05170092
+*           5   PB_PARENT_MIRROR_TKN BIT(32), /* Token for parent       05180092
+*                                            control information @L1C*/ 05190092
+*       3    PB_DEP_MONPTR PTR(31),                      /* @ME24619A*/ 05191099
+*           5    PB_DEP_MONTKN BIT(32), /* Token for the dependent      05200099
+*                                      monitoring environment related   05210092
+*                                      to this environment              05220099
+*                                                           @ME24619C*/ 05221099
+*               7   PB_DEP_MONTKN_HIBIT BIT(1),          /* @ME24619C*/ 05230099
+*       3    PB_DEP_MIRROR_PTR PTR(31), /*                       @L1A*/ 05240092
+*           5   PB_DEP_MIRROR_TKN BIT(32), /* Token for dependent       05250092
+*                                environment control information @L1C*/ 05260092
+*       3    PB_SC_TKN BIT(32),        /* Service class token for the   05270092
+*                                         work request               */ 05280092
+*       3    PB_ABNORMAL_FLAGS BIT(32), /* Abnormal condition flags     05290092
+*                                                                @L1C*/ 05300092
+*           5   *   BIT(30),            /* Reserved bits         @L1C*/ 05310092
+*           5   PB_ABNORMAL_SYSPLEX  BIT(1), /* abnormality affects all 05320092
+*                                         MVS images in sysplex  @L1A*/ 05330092
+*           5   PB_ABNORMAL_LOCALMVS BIT(1),  /* abnormality restricted 05340092
+*                                         to current MVS image   @L1A*/ 05350092
+*       3    PB_WORK_ATTRIBUTES,       /* Attributes associated with    05360092
+*                                         the work request. These must  05370092
+*                                         be character (EBCDIC).     */ 05380092
+*           5   PB_USERID CHAR(8),       /* Userid associated with the  05390092
+*                                         work request               */ 05400092
+*           5   PB_TRXNAME CHAR(8),     /* Transaction name associated  05410092
+*                                         with the work request      */ 05420092
+*           5   PB_TRXCLASS CHAR(8),    /* Transaction class associated 05430092
+*                                         with the work request      */ 05440092
+*           5   PB_RSVD0078 CHAR(8),    /* Enclave token     @WLMPAPC*/ 05450092
+*           5   PB_SOURCELU CHAR(17),   /* Source LU name associated    05460092
+*                                         with the work request  @P1C*/ 05470092
+*           5   PB_RSVD0091 CHAR(3),    /* Reserved space            */ 05480092
+*       3    PB_LU62TKN_FMT BIT(8),    /* Format of the LU6.2 token  */ 05490092
+*       3    PB_RSVD0095 CHAR(1),      /* Reserved space      @WLMPAC*/ 05500092
+*       3    PB_AS_ID    BIT(16) BDY(HWORD),                            05510092
+*                                       /* Address space id  @WLMPAPC*/ 05520092
+*       3    PB_LU62TKN CHAR(36),      /* LU 6.2 token associated       05530092
+*                                         with the work request      */ 05540092
+*       3    PB_RSVD00BC CHAR(4),      /* Reserved space             */ 05550092
+*       3    PB_ETOKEN   CHAR(8),      /* Enclave token     @WLMPAPC*/  05560092
+*       3    PB_BP_RESTKN CHAR(8),     /* Buffer Pool resouce token     05570092
+*                                         associated with the work      05580092
+*                                         request            @WLMPBPM*/ 05590092
+*       3    PB_CF_RESTKN CHAR(8),     /* Coupling Facility Structure   05600092
+*                                         resouce token associated      05610092
+*                                         with the work request         05620092
+*                                                            @WLMPBPM*/ 05630092
+*       3    PB_TRANS_TTOKEN CHAR(32), /* Transaction Trace Token       05640092
+*                                                             @TTRACE*/ 05650092
+*       3    PB_FROM_SUBSYSNM CHAR(8), /* Subsystem name from where the 05660092
+*                                         request came in    @OA38477*/ 05670092
+*                                                                       05680092
+*      /*------------------------------------------------------------*/ 05692092
+*      /* PB Data Extension for EWLM (another 216 Bytes)    @OA41985C*/ 05693099
+*      /* This section is not eligible for sampling in IRASASRV      */ 05694099
+*      /*                                                   @OA41985C*/ 05695099
+*      /*------------------------------------------------------------*/ 05710092
+*      2     PB_EWLM_DATA   BDY(DWORD),                    /*@WLMPERS*/ 05720092
+*                                                                       05730092
+*       3    PB_EWLM_PARENTCORRELATOR  CHAR(64) BDY(DWORD),/*@WLMPERS*/ 05731092
+*                                                                       05732092
+*       3    PB_EWLM_CURRENTCORRELATOR CHAR(64) BDY(DWORD),/*@WLMPERS*/ 05733092
+*                                                                       05734092
+*       3    PB_EWLM_BLOCK_QUADWORD CHAR(16) BDY(DWORD),/* 4 words on   05735092
+*                                         QUADWORD boundary that are    05736092
+*                                         updated using CDSG @WLMPERS*/ 05737092
+*         5  PB_EWLM_LASTBLOCKTIMESTART CHAR(8),/* Time when the PB     05738092
+*                                         was started to be blocked due 05739092
+*                                         to the invocation of IWMMSWCH 05739192
+*                                         or IWMMXFER FUNCTION=CONTINUE 05739292
+*                                         (STCK format)      @WLMPERS*/ 05739392
+*         5  PB_EWLM_TOTALBLOCKTIME     CHAR(7), /* Accumulated total   05739492
+*                                         block time for this PB. Value 05739592
+*                                         is in MicroSeconds, and       05739692
+*                                         should be better expressed    05739792
+*                                         as FIXED(56).      @WLMPERS*/ 05739892
+*         5  PB_EWLM_BLOCKCOUNT         FIXED(8),/* Number of times     05739992
+*                                         this PB (work request) is     05740092
+*                                         blocked. Incremented for      05740192
+*                                         each block, decremented upon  05740292
+*                                         unblock.           @WLMPERS*/ 05740392
+*       3    PB_EWLM_XFER_START_TIME    CHAR(8), /*                     05740492
+*                                                            @WLMPERS*/ 05740592
+*       3    PB_EWLM_WORKREQ_STA       FIXED(31),/*                     05740692
+*                                                            @WLMPERS*/ 05740792
+*       3    PB_EWLM_REQUEST           FIXED(8), /*                     05740892
+*                                                            @WLMPERS*/ 05740992
+*       3    PB_RSVD019D               CHAR(3),  /*          @WLMPERS*/ 05741092
+*       3    PB_EWLM_CUM_RESPTIME      CHAR(8),  /*          @WLMPERS*/ 05741192
+*       3    PB_EWLM_CUM_QUEUETIME     CHAR(8),  /*          @WLMPERS*/ 05741292
+*       3    PB_EWLM_PARMLIST          PTR(31),  /*          @LEWLMQ */ 05741392
+*       3    PB_RSVD01B4               CHAR(4),  /*          @LEWLMQ */ 05741492
+*       3    PB_EWLM_MQ_P_CORR         BDY(DWORD), /* topology infos    05741592
+*                                   from parent correlator   @LEWLMQ */ 05741692
+*         5  PB_EWLM_MQ_P_APPLENV_ID   CHAR(8),  /*          @LEWLMQ */ 05741792
+*         5  PB_EWLM_MQ_P_APPLINST_ID  CHAR(8),  /*          @LEWLMQ */ 05741892
+*         5  PB_EWLM_MQ_P_PARENT_SYS_ID FIXED(15), /*        @LEWLMQ */ 05741992
+*         5  *                         CHAR(2),  /*          @LEWLMQ */ 05742092
+*       3    PB_RSVD01CC               CHAR(4),  /*          @LPBABVC*/ 05742199
+*       3    PB_RSVD01D4               CHAR(8),  /*          @LPBABVC*/ 05742299
+*      /*------------------------------------------------------------*/ 05742399
+*      /* PB Extension 64 Bit Support                        @LPBABVA*/ 05742499
+*      /* Eligible for sampling in IRASASRV                  @LPBABVA*/ 05742599
+*      /*------------------------------------------------------------*/ 05742699
+*      2     PBX CHAR(40) BDY(DWORD),                     /* @LPBABVC*/ 05742799
+*       3    * UNION BDY(DWORD),                          /* @LPBABVA*/ 05742899
+*         5    PBX_DEP_MONTKN BIT(64),                    /* @LPBABVA*/ 05743699
+*         5    PBX_DEP_MONPTR PTR(64),                    /* @LPBABVA*/ 05743799
+*       3    * UNION BDY(DWORD),                          /* @LPBABVA*/ 05744099
+*         5    PBX_PARENT_MONTKN BIT(64),                 /* @LPBABVA*/ 05744199
+*         5    PBX_PARENT_MONPTR PTR(64),                 /* @LPBABVA*/ 05744299
+*       3    * UNION BDY(DWORD),                          /* @LPBABVA*/ 05744399
+*         5  PBX_MIRROR_TKN BIT(64),                      /* @LPBABVA*/ 05744499
+*         5  PBX_MIRROR_PTR PTR(64),                      /* @LPBABVA*/ 05744599
+*       3    * UNION BDY(DWORD),                          /* @LPBABVA*/ 05744699
+*         5  PBX_PARENT_MIRROR_TKN BIT(64),               /* @LPBABVA*/ 05744799
+*         5  PBX_PARENT_MIRROR_PTR PTR(64),               /* @LPBABVA*/ 05744899
+*       3    * UNION BDY(DWORD),                          /* @LPBABVA*/ 05745299
+*         5    PBX_DEP_MIRROR_TKN BIT(64),                /* @LPBABVA*/ 05745399
+*         5    PBX_DEP_MIRROR_PTR PTR(64),                /* @LPBABVA*/ 05745499
+*                                                                       05745899
+*                                                       /* 6@ME25584D*/ 05745999
+*      /*------------------------------------------------------------*/ 05748492
+*      /* ASYNC Data, not eligible for sampling in IRASASRV  @OA22607*/ 05748692
+*      /*------------------------------------------------------------*/ 05748792
+*      2     PB_EWLM_MQ_PROCESSING_AREA BDY(DWORD), /* 256   @LEWLMQ */ 05748892
+*       3    PB_EWLM_MQ_ARRIVALTIME    BIT(64) BDY(DWORD), /*@LEWLMQ */ 05748992
+*       3    PB_EWLM_MQ_STARTTIME      BIT(64) BDY(DWORD), /*@LEWLMQ */ 05749092
+*       3    PB_EWLM_MQ_CURRCORR       CHAR(64) BDY(DWORD),/*           05749192
+*                           current correlator from IWMMSTRT @LEWLMQ */ 05749292
+*       3    PB_EWLM_MQ_PARCORR        CHAR(64) BDY(DWORD),/*           05749392
+*                            parent correlator from IWMMSTRT @LEWLMQ */ 05749492
+*       3    PB_EWLM_MQ_BLOCK_QUADWORD CHAR(16) BDY(DWORD), /*          05749592
+*                                      blocking working area @LEWLMQ */ 05749692
+*         5  PB_EWLM_MQ_LASTBLOCKTIMESTART CHAR(8), /*       @LEWLMQ */ 05749792
+*         5  PB_EWLM_MQ_TOTALBLOCKTIME CHAR(7),  /*          @LEWLMQ */ 05749892
+*         5  PB_EWLM_MQ_BLOCKCOUNT     FIXED(8), /*          @LEWLMQ */ 05749992
+*       3    PB_EWLM_MQ_MSGS_SENT      FIXED(31),/*  counter @LEWLMQ */ 05750092
+*       3    PB_EWLM_MQ_MSGS_RECEIVED  FIXED(31),/*  counter @LEWLMQ */ 05750192
+*       3    PB_EWLM_MQ_ASYNC_BLOCKED  FIXED(31),/*  counter @LEWLMQ */ 05750292
+*       3    PB_EWLM_MQ_TOTAL_BLOCKED  FIXED(31),/*  counter @LEWLMQ */ 05750392
+*       3    PB_EWLM_MQ_FLAGS          BIT(32),  /*          @LEWLMQ */ 05750492
+*         5  PB_EWLM_MQ_F_PARENT_ASYNC_FLOW   BIT(1), /*     @LEWLMQ */ 05750592
+*         5  PB_EWLM_MQ_F_INDEPENDENT         BIT(1), /*     @LEWLMQ */ 05750692
+*         5  PB_EWLM_MQ_F_TRAN_STARTED_BY_MSG BIT(1), /*     @LEWLMQ */ 05750792
+*         5  PB_EWLM_MQ_F_END_OF_FLOW         BIT(1), /*     @LEWLMQ */ 05750892
+*       3    PB_EWLM_MQ_CORR_RECEIVED  FIXED(31),/*          @LEWLMQ */ 05750992
+*       3    PB_EWLM_MQ_C              CHAR(72),         /* @ME25584C*/ 05751099
+*                                                                       05751198
+*      /*------------------------------------------------------------*/ 05752099
+*      /* PB Workarea Extension for EWLM                             */ 05753099
+*      /* Not eligible for sampling in IRASASRV                      */ 05753199
+*      /*                                                            */ 05753299
+*      /* Note: This has alwasys to be the last area in the CB, so   */ 05753399
+*      /* we can expand the dynamic area in if needed in some        */ 05753499
+*      /* EWLM modules                                               */ 05753599
+*      /*---------------------------------------------------@ME25584A*/ 05753699
+*      2     PB_EWLM_WORK  CHAR(384) UNION BDY(DWORD),   /* @ME25584A*/ 05753799
+*       3    PB_EWLM_WORK_COMMON CHAR(384) BDY(DWORD),   /* @ME25584A*/ 05753899
+*        5    PB_EWLM_F4SAAR            CHAR(216),       /* @ME25584A*/ 05753999
+*        5    PB_EWLM_WORKING_AREA      CHAR(168),       /* @ME25584A*/ 05754099
+*                                                                       05754199
+*       3    PB_EWLM_WORK_RPE    CHAR(256) BDY(DWORD),   /* @ME25584A*/ 05754299
+*        5    PB_EWLM_F4SA_RPE          CHAR(144),       /* @ME25584A*/ 05754399
+*        5    PB_EWLM_WORKING_AREA_RPE  CHAR(112);       /* @ME25584A*/ 05754499
+*                                                                       05754599
+*         /* Constants associated with PB_ID_VERSION */                 05754699
+*                                                                       05754799
+* DCL PB_ID_CONST                                                       05754899
+*   CHAR(4) CONSTANT('PB  ');       /* Performance block eye catcher */ 05755092
+*                                                                       05756092
+* DCL PB_VERSION1                                                       05757092
+*   FIXED(8) CONSTANT(1);           /* Performance block version 1.     05758092
+*                                      1=HBB5510, HBB5520    @WLMPBPM*/ 05759092
+* DCL PB_VERSION2                                                       05760092
+*   FIXED(8) CONSTANT(2);           /* Performance block version 2.     05770092
+*                                      2=HBB6603.            @WLMPBPM*/ 05780092
+* DCL PB_VERSION3                                                       05790092
+*   FIXED(8) CONSTANT(3);           /* Performance block version 3.     05800092
+*                                      3=JBB6609.             @TTRACE*/ 05810092
+*                                                                       05820092
+* DCL PB_VERSION4                                                       05830092
+*   FIXED(8) CONSTANT(4);           /* Performance block version 4.     05840092
+*                                      4=HBB7705.            @WLMPAPC*/ 05850092
+*                                                                       05860092
+* DCL PB_VERSION5                                                       05870092
+*   FIXED(8) CONSTANT(5);           /* Performance block version 5.     05880092
+*                                      5=HBB7707.            @WLMPPBS*/ 05890092
+* DCL PB_VERSION6                                                       05900092
+*   FIXED(8) CONSTANT(6);           /* Performance block version 6.     05910092
+*                                      6=HBB7730 or HBB7720 with        05920092
+*                                      APAR OA12935          @WLMPERS*/ 05930092
+* DCL PB_VERSION7                                                       05940092
+*   FIXED(8) CONSTANT(7);           /* Performance block version 7.     05950092
+*                                      with HBB7740          @LEWLMQ */ 05960092
+* DCL PB_VERSION8                                                       05961092
+*   FIXED(8) CONSTANT(8);           /* Performance block version 8.     05962092
+*                                      with HBB7790 - 64 Bit Support    05963092
+*                                                            @LPBABVA*/ 05964092
+* DCL PB_CURRENT_VERSION                                                05965092
+*   FIXED(8) CONSTANT(PB_VERSION8); /* Performance block current        05966092
+*                                      version               @LPBABVC*/ 05967092
+*                                                                       05968092
+*                                                                       05969092
+*         /* Constants associated with PB_DU           */               05970092
+*                                                                       05980092
+* DCL PB_DU_SRB                                                         05990092
+*   BIT(32) CONSTANT('00000001'X); /* The DU associated with the work   06000092
+*                                     request is an SRB              */ 06010092
+* DCL PB_SRB_SAMEDU_NO                                                  06020092
+*   BIT(32) CONSTANT('00000001'X); /* The DU associated with the work   06030092
+*                                     request is an SRB distinct from   06040092
+*                                     the parent environment.        */ 06050092
+* DCL PB_SRB_SAMEDU_YES                                                 06060092
+*   BIT(32) CONSTANT('00000003'X); /* The DU associated with the work   06070092
+*                                     request is the same SRB as        06080092
+*                                     the parent environment.        */ 06090092
+*                                                                       06100092
+*         /* Constants associated with PB_STATE        */               06110092
+*                                                                       06120092
+* DCL PB_STATE_FREE                                                     06130092
+*   BIT(8) CONSTANT('00'X); /* State is free - PB not associated with   06140092
+*                           a work request                           */ 06150092
+* DCL PB_STATE_ACTIVE                                                   06160092
+*   BIT(8) CONSTANT('01'X); /* State is active - work request           06170092
+*                           associated                               */ 06180092
+* DCL PB_STATE_ACTIVE_SUBSYS                                            06190092
+*   BIT(8) CONSTANT('01'X); /* State is active - work request           06200092
+*                           associated  with  subsystem.                06210092
+*                           Equivalent to old active state. @WLMPAPC */ 06220092
+* DCL PB_STATE_READY                                                    06230092
+*   BIT(8) CONSTANT('02'X); /* State is ready - work request            06240092
+*                           associated with the PB is ready (could run  06250092
+*                           on a CP if another program were not         06260092
+*                           running)                                 */ 06270092
+* DCL PB_STATE_IDLE                                                     06280092
+*   BIT(8) CONSTANT('03'X); /* State is idle - no work request is       06290092
+*                           available to the work manager that it is    06300092
+*                           allowed to run                           */ 06310092
+* DCL PB_STATE_ACTIVE_APPL                                              06320092
+*   BIT(8) CONSTANT('04'X); /* State is active - work request           06330092
+*                           associated with application     @OW54806 */ 06340092
+* DCL PB_STATE_WAITING_SSL_THREAD                                       06350092
+*   BIT(8) CONSTANT('E1'X); /* Wait state for SSL Thread                06360092
+*                                                           @WLMPAPC */ 06370092
+* DCL PB_STATE_WAITING_REG_THREAD                                       06380092
+*   BIT(8) CONSTANT('E2'X); /* Wait state for regular Thread            06390092
+*                                                           @OW54806 */ 06400092
+* DCL PB_STATE_WAITING_REG_TO_WRKTB                                     06410092
+*   BIT(8) CONSTANT('E3'X); /* Wait state for Registration to           06420092
+*                              worktable                    @OW54806 */ 06430092
+* DCL PB_STATE_WAITING_TYPE1                                            06440092
+*   BIT(8) CONSTANT('D1'X); /* Wait state for resource TYPE1 @WLMPPBS*/ 06450092
+* DCL PB_STATE_WAITING_TYPE2                                            06460092
+*   BIT(8) CONSTANT('D2'X); /* Wait state for resource TYPE2 @WLMPPBS*/ 06470092
+* DCL PB_STATE_WAITING_TYPE3                                            06480092
+*   BIT(8) CONSTANT('D3'X); /* Wait state for resource TYPE3 @WLMPPBS*/ 06490092
+* DCL PB_STATE_WAITING_TYPE4                                            06500092
+*   BIT(8) CONSTANT('D4'X); /* Wait state for resource TYPE4 @WLMPPBS*/ 06510092
+* DCL PB_STATE_WAITING_TYPE5                                            06520092
+*   BIT(8) CONSTANT('D5'X); /* Wait state for resource TYPE5 @WLMPPBS*/ 06530092
+* DCL PB_STATE_WAITING_TYPE6                                            06540092
+*   BIT(8) CONSTANT('D6'X); /* Wait state for resource TYPE6 @WLMPPBS*/ 06550092
+* DCL PB_STATE_WAITING_TYPE7                                            06560092
+*   BIT(8) CONSTANT('D7'X); /* Wait state for resource TYPE7 @WLMPPBS*/ 06570092
+* DCL PB_STATE_WAITING_TYPE8                                            06580092
+*   BIT(8) CONSTANT('D8'X); /* Wait state for resource TYPE8 @WLMPPBS*/ 06590092
+* DCL PB_STATE_WAITING_TYPE9                                            06600092
+*   BIT(8) CONSTANT('D9'X); /* Wait state for resource TYPE9 @WLMPPBS*/ 06610092
+* DCL PB_STATE_WAITING_TYPE10                                           06620092
+*   BIT(8) CONSTANT('DA'X); /* Wait state for resource TYPE10@WLMPPBS*/ 06630092
+* DCL PB_STATE_WAITING_TYPE11                                           06640092
+*   BIT(8) CONSTANT('DB'X); /* Wait state for resource TYPE11@WLMPPBS*/ 06650092
+* DCL PB_STATE_WAITING_TYPE12                                           06660092
+*   BIT(8) CONSTANT('DC'X); /* Wait state for resource TYPE12@WLMPPBS*/ 06670092
+* DCL PB_STATE_WAITING_TYPE13                                           06680092
+*   BIT(8) CONSTANT('DD'X); /* Wait state for resource TYPE13@WLMPPBS*/ 06690092
+* DCL PB_STATE_WAITING_TYPE14                                           06700092
+*   BIT(8) CONSTANT('DE'X); /* Wait state for resource TYPE14@WLMPPBS*/ 06710092
+* DCL PB_STATE_WAITING_TYPE15                                           06720092
+*   BIT(8) CONSTANT('DF'X); /* Wait state for resource TYPE15@WLMPPBS*/ 06730092
+* DCL PB_STATE_WAITING_BUFFER_POOL_IO                                   06740092
+*   BIT(8) CONSTANT('F1'X); /* State is waiting on an IO due to a       06750092
+*                             buffer pool miss              @WLMPBPM */ 06760092
+* DCL PB_STATE_WAITING_BUFFER_POOL_CF                                   06770092
+*   BIT(8) CONSTANT('F2'X); /* State is waiting on an CF access due to  06780092
+*                           a buffer pool miss              @WLMPBPM */ 06790092
+* DCL PB_STATE_WAITING_BUFFER_POOL_CF_IO                                06800092
+*   BIT(8) CONSTANT('F3'X); /* State is waiting on an IO due to a       06810092
+*                           buffer pool miss and a CF miss  @WLMPBPM */ 06820092
+* DCL PB_STATE_WAITING_CF_IO                                            06830092
+*   BIT(8) CONSTANT('F4'X); /* State is waiting on an IO due to a       06840092
+*                              CF miss                      @WLMPBPM */ 06850092
+* DCL PB_STATE_WAITING_DISTRIB                                          06860092
+*   BIT(8) CONSTANT('F5'X); /* State is waiting on a                    06870092
+*                           distributed request                      */ 06880092
+* DCL PB_STATE_WAITING_TIMER                                            06890092
+*   BIT(8) CONSTANT('F6'X); /* State is waiting on a timer           */ 06900092
+* DCL PB_STATE_WAITING_LATCH                                            06910092
+*   BIT(8) CONSTANT('F7'X); /* State is waiting on a latch.  @WLMPENH*/ 06920092
+*                                                                       06930092
+* DCL PB_STATE_WAITING_CONV                                             06940092
+*   BIT(8) CONSTANT('F8'X); /* State is waiting on a conversation */    06950092
+*                                                                       06960092
+* DCL PB_STATE_WAITING_SESS_LOCALMVS                                    06970092
+*   BIT(8) CONSTANT('F9'X); /* State is waiting to establish a session  06980092
+*                           somewhere in the same MVS image          */ 06990092
+*                                                                       07000092
+* DCL PB_STATE_WAITING_SESS_SYSPLEX                                     07010092
+*   BIT(8) CONSTANT('FA'X); /* State is waiting to establish a session  07020092
+*                           somewhere in the sysplex                 */ 07030092
+*                                                                       07040092
+* DCL PB_STATE_WAITING_SESS_NETWORK                                     07050092
+*   BIT(8) CONSTANT('FB'X); /* State is waiting to establish a session  07060092
+*                           somewhere in the network                 */ 07070092
+*                                                                       07080092
+* DCL PB_STATE_WAITING_OTHER_PRODUCT                                    07090092
+*   BIT(8) CONSTANT('FC'X); /* State is waiting on another product */   07100092
+*                                                                       07110092
+* DCL PB_STATE_WAITING_MISC                                             07120092
+*   BIT(8) CONSTANT('FD'X); /* State is waiting on some unidentified    07130092
+*                           resource, possibly one of the other defined 07140092
+*                           waiting conditions                       */ 07150092
+* DCL PB_STATE_WAITING_LOCK                                             07160092
+*   BIT(8) CONSTANT('FE'X); /* State is waiting on one or more  locks*/ 07170092
+*                                                                       07180092
+* DCL PB_STATE_WAITING_IO                                               07190092
+*   BIT(8) CONSTANT('FF'X); /* State is waiting on I/O or some          07200092
+*                           activity associated with an I/O request  */ 07210092
+*                                                                       07220092
+*         /* Constants associated with PB_SWITCH_INFO  */               07230092
+*                                                                       07240092
+* DCL PB_SWITCH_LOCALMVS                                                07250092
+*   BIT(8) CONSTANT('01'X);         /*  Switch WHERE(LOCALMVS)       */ 07260092
+* DCL PB_SWITCH_SYSPLEX                                                 07270092
+*   BIT(8) CONSTANT('02'X);         /*  Switch WHERE(SYSPLEX)        */ 07280092
+* DCL PB_SWITCH_NETWORK                                                 07290092
+*   BIT(8) CONSTANT('03'X);         /*  Switch WHERE(NETWORK)        */ 07300092
+*                                                                       07310092
+*         /* Constants associated with PB_LU62TKN_FMT  */               07320092
+*                                                                       07330092
+* DCL PB_LU62FMT_LU_NO_CC_27                                            07340092
+*   BIT(8) CONSTANT('01'X); /* The LU6.2 token associated with the      07350092
+*                              work request is a fixed length token of  07360092
+*                              27 bytes with no conversation correlator 07370092
+*                              (not even its length byte).  The LU name 07380092
+*                              may be 1-17 bytes.  Bytes at the end of  07390092
+*                              the token are padded with hexadecimal    07400092
+*                              zeros, if necessary, to form a full 27   07410092
+*                              bytes.                                */ 07420092
+* DCL PB_LU62FMT_FULL_LU_NO_CC_27                                       07430092
+*   BIT(8) CONSTANT('02'X); /* The LU6.2 token associated with the      07440092
+*                              work request is a fully qualified LUname 07450092
+*                              (17 bytes), but no conversation          07460092
+*                              correlator (not even its length byte) is 07470092
+*                              provided.  This format is architected to 07480092
+*                              be 27 bytes long.                     */ 07490092
+* DCL PB_LU62FMT_FULL_LU_0_CC_28                                        07500092
+*   BIT(8) CONSTANT('03'X); /* The LU6.2 token associated with the      07510092
+*                              work request is a fully qualified LUname 07520092
+*                              (17 bytes), and the conversation         07530092
+*                              correlator length byte is present and    07540092
+*                              has value 0.  This format is architected 07550092
+*                              to be 28 bytes long.                 */  07560092
+* DCL PB_LU62FMT_FULL_LU_CC_36                                          07570092
+*   BIT(8) CONSTANT('04'X); /* The LU6.2 token associated with the      07580092
+*                              work request is a fully qualified LU     07590092
+*                              name (17 bytes), and the conversation    07600092
+*                              correlator is provided with a length of  07610092
+*                              8 (maximum allowed).   This format is    07620092
+*                              architected to be 36 bytes long.     */  07630092
+* DCL PB_LU62FMT_OTHER                                                  07640092
+*   BIT(8) CONSTANT('00'X); /* The LU6.2 token associated with the      07650092
+*                              work request contains self-defining      07660092
+*                              length fields.                       */  07670092
+*                                                                       07680092
+*         /* Constants associated with PB_LU62TKN      */               07690092
+*                                                                       07700092
+* DCL PB_MAX_LU62TKN_LEN                                                07710092
+*   FIXED(8) CONSTANT(36); /*  Maximum length byte of an                07720092
+*                              LU6.2 token (in decimal).            */  07730092
+*/********************************************************************  07740092
+*   Savage constants for Recovery Element Verifiers (EVR) and IPCS      07750092
+*   scan routine reason codes.  See the IPCS Scan routine IWMZ2VPB      07760092
+*   for explanations.                                                   07770092
+*********************************************************************/  07780092
+* DCL                                                                   07790092
+*   BadPbId                 Fixed(32)  Constant(1),                     07800092
+*   BadPb_Version           Fixed(32)  Constant(2);                     07810092
+*                                                                       07820092
+*  /* Maximum number of parent correlators received after IWMMSTRT      07830092
+*                                                             @LEWLMQ*/ 07840092
+* DECLARE PB_MQ_MAX_CORR_RCVD CONSTANT(3) FIXED(8);         /*@LEWLMQ*/ 07850092
+*                                                                       07860092
+*  /* Function codes associated with EWLM service routines @WLMPERS */  07870092
+* DECLARE(                                                              07871092
+*   PB_EWLM_REQUEST_XFER_CONTINUE_NOSWITCH  CONSTANT(1)    /*@WLMPERS*/ 07872092
+*  ,PB_EWLM_REQUEST_XFER_CONTINUE_SECONDARY CONSTANT(2)    /*@WLMPERS*/ 07872192
+*  ,PB_EWLM_REQUEST_XFER_RETURN_NOSWITCH    CONSTANT(3)    /*@WLMPERS*/ 07872292
+*  ,PB_EWLM_REQUEST_XFER_RETURN_SECONDARY   CONSTANT(4)    /*@WLMPERS*/ 07872392
+*                                                                       07872492
+*  ,PB_EWLM_REQUEST_RELA_CREATE_NOSWITCH    CONSTANT(11)   /*@WLMPERS*/ 07872592
+*  ,PB_EWLM_REQUEST_RELA_CREATE_SECONDARY   CONSTANT(12)   /*@WLMPERS*/ 07872692
+*  ,PB_EWLM_REQUEST_RELA_CREATE_HOME        CONSTANT(13)   /*@WLMPERS*/ 07872792
+*  ,PB_EWLM_REQUEST_RELA_DELETE             CONSTANT(14)   /*@WLMPERS*/ 07872892
+*                                                                       07872992
+*  ,PB_EWLM_REQUEST_INIT_RESET_PACORR       CONSTANT(21)   /*@WLMPERS*/ 07873092
+*  ,PB_EWLM_REQUEST_INIT_RESET_PACTKN       CONSTANT(22)   /*@WLMPERS*/ 07874092
+*                                                                       07874192
+*  ,PB_EWLM_REQUEST_SWITCH_CONTINUE         CONSTANT(31)   /*@WLMPERS*/ 07874292
+*  ,PB_EWLM_REQUEST_SWITCH_RETURN           CONSTANT(32)   /*@WLMPERS*/ 07874392
+*                                                                       07874492
+*  ,PB_EWLM_REQUEST_IWMMSTRT                CONSTANT(41)   /*@LEWLMQ */ 07874592
+*  ,PB_EWLM_REQUEST_IWM4MSTR                CONSTANT(41)   /*@LPBABVA*/ 07874692
+*  ,PB_EWLM_REQUEST_IWMMUPD                 CONSTANT(51)   /*@LEWLMQ */ 07874792
+*  ,PB_EWLM_REQUEST_IWM4MUPD                CONSTANT(51)   /*@LPBABVA*/ 07874892
+*  ,PB_EWLM_REQUEST_IWMMSTOP                CONSTANT(61)   /*@LEWLMQ */ 07874992
+*  ,PB_EWLM_REQUEST_IWM4MSTO                CONSTANT(61)   /*@LPBABVA*/ 07875092
+*                                                                       07875192
+*  ,PB_EWLM_REQUEST_IWM4MCHS_UNBLOCK        CONSTANT(71)   /*@LEWLMQ */ 07875292
+*  ,PB_EWLM_REQUEST_IWM4MCHS_BLOCK          CONSTANT(72)   /*@LEWLMQ */ 07875392
+*  ,PB_EWLM_REQUEST_IWM4MCHS_BLOCK_ASYNC    CONSTANT(73)   /*@LEWLMQ */ 07875492
+*        ) FIXED(8);                                                    07875592
+*                                                                       07875692
+*/********************************************************************  07875792
+*                                                                       07875892
+*   The following declaration ensures that the length of a PB           07875992
+*   is always a multiple of 256, which is necessary to ensure that      07876092
+*   PBs always start on boundaries of 256 Bytes to improve storage      07877092
+*   performance when accessing PBs.                                     07878092
+*   Note that a PB at least has to be on QUADWORD boundary because      07879092
+*   PB_EWLM_BLOCK(_MQ)_QUADWORD mybe updated using CDSG.                07880092
+*   Thus the second and third check ensures, that the OFFSETs of        07890092
+*   all quadwords is also on QWORD boundary. If any of the above        07891092
+*   conditions is not true, a compile time error will result. @OA22607  07892092
+*                                                                       07893092
+**********************************************************************/ 07894092
+* DCL                                                                   07895092
+*   PB_LENGTH_CHECK FIXED(32)                                           07896092
+*     CONSTANT(LENGTH(PB)-(((LENGTH(PB)+127)/128)*128)), /* @ME25584C*/ 07896199
+*   PB_OFFSET_CHECK2 FIXED(32)                                          07898092
+*     CONSTANT(OFFSET(PB.PB_EWLM_BLOCK_QUADWORD) -                      07899092
+*     (((OFFSET(PB.PB_EWLM_BLOCK_QUADWORD)+15)/16)*16)), /*  @WLMPERS*/ 07900092
+*   PB_OFFSET_CHECK3 FIXED(32)                                          07910092
+*     CONSTANT(OFFSET(PB.PB_EWLM_MQ_BLOCK_QUADWORD) -                   07920092
+*     (((OFFSET(PB.PB_EWLM_MQ_BLOCK_QUADWORD)+15)/16)*16)); /*@LEWLMQ*/ 07930092

@@ -1,0 +1,472 @@
+*/*********************************************************************         
+*                                                                               
+* $MAC(IGGENC) COMP(28414):                                                     
+*                                                                               
+* MACRO NAME: IGGENC                                                            
+*                                                                               
+* DESCRIPTION: Bilingual executable macro to call the access method             
+*              encryption callable service.                                     
+*                                                                               
+* STATUS: z/OS 2.5 DFSMS                                                        
+*                                                                               
+* PROPRIETARY V3 STATEMENT                                                      
+* Licensed Materials - Property of IBM                                          
+* "Restricted Materials of IBM"                                                 
+* 5650-ZOS                                                                      
+* Copyright IBM Corp. 2021                                                      
+* END PROPRIETARY V3 STATEMENT                                                  
+*                                                                               
+* FUNCTION: Build the parameter list for the access method                      
+*           encryption service and call it.                                     
+*                                                                               
+* INVOCATION FORMAT:                                                            
+*    I means input, O means output, X means invalid.                            
+*                  CONNECT DECRYPT                                              
+*                      ENCRYPT  DISCONNECT                                      
+*    IGGENC function, I   I   I   I  Positional.  Required only on list         
+*                                      and standard forms. Must be              
+*                                      ENCRYPT or DECRYPT. Mixed case.          
+*         BLKIDLIST=  X   I   I   X  List of eight-byte block ids (5)           
+*         BUFCOUNT=   X   I   I   X  Halfword count of buffers                  
+*         BUFLENLIST= X   I   I   X  List of words containing                   
+*                                      data length (7)                          
+*         DCB=        I   I   I   I  DCB for encrypted data set (4)             
+*         ENCRYPTA=   I   X   X   X                                             
+*         INBUFLIST=  X   I   I   X  List of Input buffers (6)                  
+*         MF=         I   I   I   I  L, (E,xxxx), (E,xxxx,COMPLETE),            
+*                                      (M,xxxx) or (M,xxxx,COMPLETE)            
+*         OPTIONS=    I   I   I   I  Eight-byte options block (1)               
+*         OUTBUFLIST= X   O   O   X  List of output buffers,                    
+*                                      optional (8)                             
+*         RETCODE=    O   O   O   O  Return code (four bytes, 2)                
+*         RSNCODE=    O   O   O   O  Reason code (eight bytes, 3)               
+*         TCBAddr=    I   X   X   X  Word pointing to TCB Address               
+*         TOKEN=      O   I   I   I  Encryption Token Area                      
+*      The positional parameter, "function" is required only for                
+*      the standard and list forms.                                             
+*                                                                               
+* LOGIC: The parameter list consists only of addresses.  This allows            
+*      the function to be called from almost any language.                      
+*        If RMODE64=YES on the SYSSTATE macro is not in effect, this            
+*      macro generates the form of the parameter list where each                
+*      address is four bytes.  If RMODE64=YES is in effect, then                
+*      each address is eight bytes.                                             
+*                                                                               
+*                                                                               
+* NOTES:                                                                        
+*                                                                               
+*   DEPENDENCIES: None                                                          
+*   RESTRICTIONS: None                                                          
+*                                                                               
+* MACRO:                                                                        
+*                                                                               
+*   PROCESSOR: Assembler and PL/X                                               
+*   DISTRIBUTION LIBRARY: AMACLIB                                               
+*   ATTRIBUTES: executable                                                      
+*                                                                               
+* LINKAGE:                                                                      
+*                                                                               
+* CHANGE ACTIVITY                                                               
+*$=Encrypt,HDZ2240,2020/04/26,TUCJRB: Basic & large format encrypt @L0A         
+*$01=W394273,HDZ2250,2020/11/12,TUCJRB:                            @01A         
+*  1) Remove R14 & R15 variables                                   @01A         
+*  2) Missing '&' for Macro Format (MF) and Temp variables         @01A         
+*                                                                               
+***********************************************************************         
+         MACRO                                                                  
+&Label   IGGENC &Function,     Requested function, first positional    *        
+               &BlkIdList=,    5  List of eight-byte block ids         *        
+               &BufCount=,     8  Number of buffers                    *        
+               &BufLenList=,   7  List of buffer lengths               *        
+               &DCB=,          4  DCB for encrypted data set           *        
+               &ENCRYPTA=,     5  ENCRYPTA Catalog information         *        
+               &InBufList=,    6  List of input data buffers           *        
+               &MF=,              Macro format                         *        
+               &Options=,      1  Options (IGGENCOpts)                 *        
+               &OutBufList=,   9  List of output buffers (optional)    *        
+               &RetCode=,      2  Return code (four bytes)             *        
+               &RsnCode=,      3  Reason code (eight bytes)            *        
+               &TCBAddr=,      6  Word pointing to TCB address         *        
+               &Token=         4  Encryption token                              
+                                                                                
+         GBLC  &SYSAM64    Global variable set by SYSSTATE macro                
+         LCLC  &Lab        Label to expand at beginning                         
+         LCLB  &In64                                                            
+         LCLC  &MFType     "S", "E", "L" or "M"                                 
+         LCLC  &FuncCode   Function code (C, E, D or I)                         
+         LCLC  &FuncNum    Function decimal number                              
+         LCLA  &ParmLen    Length of parameter list                             
+         LCLC  &KeyArray   Array describing valid keywords                      
+         LCLB  &Err                                                             
+.*    Define two macros that act as subroutines in this macro.                  
+.* If the keyword value is null, this macro does nothing.                       
+.* If it specifies a register, it generates a store instruction.                
+.* If it is not a register, it generates an instruction only for                
+.* the modify or execute form because the standard form already                 
+.* generated DC.                                                                
+.*    these inner macros do not inherit local symbols from the outer            
+.* macro.                                                                       
+         PUSH PRINT,NoPrint                                                     
+         PRINT OFF,NoPrint    Don't print the inner macros                      
+         MACRO                                                                  
+         IGGENCSubST &Keyword,&ST,&AL,&Num,&MFType                              
+&AN      SETA  &Num+1      Save absolute number of parameter                    
+         AIF   ('&Keyword' EQ '').Mend                                          
+         AIF   ('&Keyword'(1,1) EQ '(').GotReg                                  
+         AIF   ('&MFType' EQ 'S').MEnd   Go if standard form                    
+.* Use fancy technique to set a variable in the remark.                         
+         LA    0,&Keyword                                                       
+&Temp    SETC  '&Num*&AL.(,1)           Store address of parameter &AN'         
+         &ST   0,&Temp                                                          
+         AGO   .Mend                                                            
+.GotReg  ANOP                                                                   
+&Temp    SETC  '&Keyword'(2,K'&Keyword-2)  Remove parentheses                   
+&Temp    SETC  '&Temp,&Num*&AL.(,1) Set address of parameter &AN'               
+         &ST   &Temp                                                            
+.MEnd    MEND                                                                   
+                                                                                
+         MACRO                                                                  
+&Label   IGGENCSubDC &Keyword,&A                                                
+         AIF   ('&Keyword' EQ '').Later         Go if null value                
+         AIF   ('&Keyword'(1,1) EQ '(').Later   Go if register form             
+&Label   DC    &A.(&Keyword)       Address of a parameter                       
+         MEXIT                                                                  
+.Later   ANOP                                                                   
+&Label   DC    &A.(0)              Address to be set later                      
+.Mend    MEND                                                                   
+         POP   PRINT,NoPrint                                                    
+                                                                                
+.*    The characters in &KeyArray have these meanings:                          
+.* R=Required, O=optional, I=Invalid.                                           
+.*    The positions in the string identify the parameter:                       
+.* 1. Function (positional) Required for standard & list forms                  
+.* 2. BlkIdList=   List of 8-byte prefixes                                      
+.* 3. BufCount=    Number of buffers                                            
+.* 4. BufLenList=  List of buffer lengths                                       
+.* 5. DCB=         DCB for encrypted data set                                   
+.* 6. ENCRYPTA=    ENCRYPTA Catalog Cell                                        
+.* 7. InBufList=   List of input buffers                                        
+.* 8. Options=     Options (IGGENCOpts)                                         
+.* 9. OutBufList=  List of output buffers (optional)                            
+.* 10. Retcode=    Return code (four bytes)                                     
+.* 11. RsnCode=    Reason code (eight bytes)                                    
+.* 12. TCBAddr=    Address pointing to word containing TCB address              
+.* 13. Token=      Encryption token                                             
+.*    MF is not in the list because it governs the list content.                
+                                                                                
+&Lab     SETC  '&Label'  Assume we will expand this label                       
+&FuncCode SETC 'C'     Assume CONNECT                                           
+&FuncNum SETC '1'      Assume CONNECT                                           
+&ParmLen SETA  6       Assume number of parameters for CONNECT                  
+         AIF   ('CONNECT' EQ Upper('&Function')).TestAM                         
+&ParmLen SETA  9       Assume number of parameters for ENCRYPT/DECRYPT          
+&FuncCode SETC 'E'     Assume ENCRYPT                                           
+&FuncNum SETC '2'      Assume ENCRYPT                                           
+         AIF   ('ENCRYPT' EQ Upper('&Function')).TestAM                         
+&FuncCode SETC 'D'     Assume DECRYPT                                           
+&FuncNum SETC '3'      Assume DECRYPT                                           
+         AIF   ('DECRYPT' EQ Upper('&Function')).TestAM                         
+&FuncCode SETC 'I'     Assume DISCONNECT                                        
+&FuncNum SETC '4'      Assume DISCONNECT                                        
+&ParmLen SETA  4       Assume number of parameters for DISCONNECT               
+         AIF   ('DISCONNECT' EQ Upper('&Function')).TestAM                      
+&FuncCode SETC ''      Remember FUNCTION not coded                              
+         AIF   ('&Function' EQ '').TestAM                                       
+         MNOTE 8,'&Function is an invalid first positional parameter (f*        
+               unction)'                                                        
+         MEXIT                                                                  
+                                                                                
+&ParmLen SETA  0       Set number of parameters                                 
+.TestAM  SYSSTATE TEST     Test how macros are to expand                        
+&ST      SETC  'ST'        Assume ST mnemonic to set an address                 
+&L       SETC  'L'         Assume L mnemonic to load a word                     
+&A       SETC  'A'         Assume four-byte addresses                           
+&AL      SETA  4           Assume four-byte addresses                           
+&ParmLen SETA  4*&ParmLen  Set length of parameter list                         
+&CNOP    SETC  '0,4'       To align to word boundary                            
+         AIF   ('&SYSAM64' NE 'YES').Not64      Go if not AMODE64=YES           
+&In64    SETB  1           Remember to expand 64-bit version                    
+&ST      SETC  'STG'       Remember mnemonic to set an address                  
+&L       SETC  'LLGT'      Remember mnemonic to load double word                
+&A       SETC  'AD'        Remember eight-byte addresses                        
+&AL      SETA  8           Remember eight-byte addresses                        
+&ParmLen SETA  2*&ParmLen  Set length of parameter list                         
+&CNOP    SETC  '4,8'       To align to middle of doubleword boundary            
+.Not64   ANOP                                                                   
+                                                                                
+.*  Handle the various values for MF, macro format.                             
+         AIF   ('M' NE Upper('&MF(1)')).TestMFE   Go if not modify form         
+&MFType  SETC  'M'              Remember modify form                            
+         AGO   .MFType3                                                         
+                                                                                
+.TestMFE AIF   ('E' NE Upper('&MF(1)')).TestMFS   Branch if not execute         
+&MFType  SETC  'E'                      Remember execute form                   
+.MFType3 ANOP                                                                   
+&KeyArray SETC 'OIIIOOIOIOOOO'          Assume execute connect form             
+         AIF   ('&FuncCode' EQ 'C').TMFE2   Go if connect                       
+&KeyArray SETC 'OOOOOOOOOOOIO'          Assume execute encrypt/decrypt          
+         AIF   ('&FuncCode' EQ 'E' Or                                  *        
+               '&FuncCode' EQ 'D').TMFE2   Go if encrypt or decrypt             
+&KeyArray SETC 'OIIIIIIOIOOIO'          Assume execute disconnect form          
+         AIF   ('&FuncCode' EQ 'I').TMFE2  Go if disconnect                     
+&KeyArray SETC 'OOOOOOOOOO000'          Invalid: everything is optional         
+.TMFE2   AIF   (N'&MF EQ 2 OR N'&MF EQ 3).TestComp                              
+         MNOTE 8,'With MF=&MF you must code one or two more values'             
+         MEXIT                                                                  
+.TestComp AIF  (N'&MF EQ 2 OR 'COMPLETE' EQ Upper('&MF(3)')).GotMF              
+         MNOTE 8,'The third value of MF must be COMPLETE'                       
+         MEXIT                                                                  
+                                                                                
+.TestMFS AIF   ('&MF' NE '').TestMFL    Branch if not standard form             
+&MFType  SETC  'S'                      Remember standard form                  
+&KeyArray SETC 'RIIIIRIRIRROR'          Assume standard connect form            
+         AIF   ('&FuncCode' EQ 'C').GotMF   Go if connect                       
+&KeyArray SETC 'RRRROIRRORRIO'          Assume standard encrypt/decrypt         
+         AIF   ('&FuncCode' EQ 'E' Or                                  *        
+               '&FuncCode' EQ 'D').GotMF   Go if encrypt or decrypt             
+&KeyArray SETC 'RIIIIIIRIRRIR'          Assume standard disconnect form         
+         AGO   .GotMF                                                           
+                                                                                
+.TestMFL AIF   ('L' NE Upper('&MF')).BadMF     Branch if not list form          
+&MFType  SETC  'L'                      Remember list form                      
+&KeyArray SETC 'RIIIIOIOIOOOO'          Assume list connect form                
+         AIF   ('&FuncCode' EQ 'C').GOTMF   Go if connect                       
+&KeyArray SETC 'ROOOOIOOOOOIO'          Assume list encrypt/decrypt             
+         AIF   ('&FuncCode' EQ 'E' Or                                  *        
+               '&FuncCode' EQ 'D').GOTMF   Go if encrypt or decrypt             
+&KeyArray SETC 'RIIIIIIOIOOIO'          Assume list disconnect form             
+         AGO   .GotMF                                                           
+                                                                                
+.BadMF   IGGERMAC 112     "Invalid value for TYPE"                              
+         AGO   .MEXIT                                                           
+                                                                                
+.GotMF   ANOP         Test for missing required parameter.                      
+         AIF   ('&KeyArray'(1,1) NE 'R' OR '&FuncCode' NE '').Test2             
+         MNOTE 8,'First positional parameter is required with MF=&MF an*        
+               d &Function'                                                     
+&Err     SETB  1                        Remember error                          
+.Test2   AIF   ('&KeyArray'(2,1) NE 'R' OR '&BlkIdList' NE '').Test3            
+         MNOTE 8,'BLKIDLIST is required with MF=&MF and &Function'              
+&Err     SETB  1                        Remember error                          
+.Test3   AIF   ('&KeyArray'(3,1) NE 'R' OR '&BufCount' NE '').Test4             
+         MNOTE 8,'BUFCOUNT is required with MF=&MF and &Function'               
+&Err     SETB  1                        Remember error                          
+.Test4   AIF   ('&KeyArray'(4,1) NE 'R' OR '&BufLenList' NE '').Test5           
+         MNOTE 8,'BUFLENLIST is required with MF=&MF and &Function'             
+&Err     SETB  1                        Remember error                          
+.Test5   AIF   ('&KeyArray'(5,1) NE 'R' OR '&DCB' NE '').Test6                  
+         MNOTE 8,'DCB is required with MF=&MF and &Function'                    
+&Err     SETB  1                        Remember error                          
+.Test6   AIF   ('&KeyArray'(6,1) NE 'R' OR '&ENCRYPTA' NE '').Test7             
+         MNOTE 8,'ENCRYPTA is required with MF=&MF and &Function'               
+&Err     SETB  1                        Remember error                          
+.Test7   AIF   ('&KeyArray'(7,1) NE 'R' OR '&InBufList' NE '').Test8            
+         MNOTE 8,'INBUFLIST is required with MF=&MF and &Function'              
+&Err     SETB  1                        Remember error                          
+.Test8   AIF   ('&KeyArray'(8,1) NE 'R' OR '&Options' NE '').Test9              
+         MNOTE 8,'OPTIONS is required with MF=&MF and &Function'                
+&Err     SETB  1                        Remember error                          
+.Test9   AIF   ('&KeyArray'(9,1) NE 'R' OR '&OutBufList' NE '').Test10          
+         MNOTE 8,'OUTBUFLIST is required with MF=&MF and &Function'             
+&Err     SETB  1                        Remember error                          
+.Test10   AIF   ('&KeyArray'(10,1) NE 'R' OR '&RetCode' NE '').Test11           
+         MNOTE 8,'RETCODE is required with MF=&MF and &Function'                
+&Err     SETB  1                        Remember error                          
+.Test11  AIF   ('&KeyArray'(11,1) NE 'R' OR '&RsnCode' NE '').Test12            
+         MNOTE 8,'RSNCODE is required with MF=&MF and &Function'                
+&Err     SETB  1                        Remember error                          
+.Test12  AIF   ('&KeyArray'(12,1) NE 'R' OR '&TCBAddr' NE '').Test13            
+         MNOTE 8,'TCBAddr is required with MF=&MF and &Function'                
+&Err     SETB  1                        Remember error                          
+.Test13  AIF   ('&KeyArray'(13,1) NE 'R' OR '&Token' NE '').TestInv             
+         MNOTE 8,'Token is required with MF=&MF and &Function'                  
+&Err     SETB  1                        Remember error                          
+                                                                                
+.* Test for invalid parameters that were coded.                                 
+.TestInv AIF   ('&KeyArray'(1,1) NE 'I' OR '&FuncCode' EQ '').ITest2            
+         MNOTE 8,'First positional parameter is not allowed with MF=&MF*        
+                and &Function'                                                  
+&Err     SETB  1                        Remember error                          
+.ITest2  AIF   ('&KeyArray'(2,1) NE 'I' OR '&BlkIdList' EQ '').ITest3           
+         MNOTE 8,'BLKDIDLIST is not allowed with MF=&MF and &Function'          
+&Err     SETB  1                        Remember error                          
+.ITest3  AIF   ('&KeyArray'(3,1) NE 'I' OR '&BufCount' EQ '').ITest4            
+         MNOTE 8,'BUFCOUNT is not allowed with MF=&MF and &Function'            
+&Err     SETB  1                        Remember error                          
+.ITest4  AIF   ('&KeyArray'(4,1) NE 'I' OR '&BufLenList' EQ '').ITest5          
+         MNOTE 8,'BUFLENLIST is not allowed with MF=&MF and &Function'          
+&Err     SETB  1                        Remember error                          
+.ITest5  AIF   ('&KeyArray'(5,1) NE 'I' OR '&DCB' EQ '').ITest6                 
+         MNOTE 8,'DCB is not allowed with MF=&MF and &Function'                 
+&Err     SETB  1                        Remember error                          
+.ITest6  AIF   ('&KeyArray'(6,1) NE 'I' OR '&ENCRYPTA' EQ '').ITest7            
+         MNOTE 8,'ENCRYPTA is not allowed with MF=&MF and &Function'            
+&Err     SETB  1                        Remember error                          
+.ITest7  AIF   ('&KeyArray'(7,1) NE 'I' OR '&InBufList' EQ '').ITest8           
+         MNOTE 8,'INBUFLIST is not allowed with MF=&MF and &Function'           
+&Err     SETB  1                        Remember error                          
+.ITest8  AIF   ('&KeyArray'(8,1) NE 'I' OR '&Options' EQ '').ITest9             
+         MNOTE 8,'OPTIONS is not allowed with MF=&MF and &Function'             
+&Err     SETB  1                        Remember error                          
+.ITest9  AIF   ('&KeyArray'(9,1) NE 'I' OR '&OutBufList' EQ '').ITest10         
+         MNOTE 8,'OUTBUFLIST is not allowed with MF=&MF and &Function'          
+&Err     SETB  1                        Remember error                          
+.ITest10  AIF   ('&KeyArray'(10,1) NE 'I' OR '&RetCode' EQ '').ITest11          
+         MNOTE 8,'RETCODE is not allowed with MF=&MF and &Function'             
+&Err     SETB  1                        Remember error                          
+.ITest11 AIF  ('&KeyArray'(11,1) NE 'I' OR '&RsnCode' EQ '').ITest12            
+         MNOTE 8,'RSNCODE is not allowed with MF=&MF and &Function'             
+&Err     SETB  1                        Remember error                          
+.ITest12 AIF  ('&KeyArray'(12,1) NE 'I' OR '&TCBAddr' EQ '').ITest13            
+         MNOTE 8,'TCBAddr is not allowed with MF=&MF and &Function'             
+&Err     SETB  1                        Remember error                          
+.ITest13 AIF  ('&KeyArray'(13,1) NE 'I' OR '&Token' EQ '').ITestED              
+         MNOTE 8,'TOKEN is not allowed with MF=&MF and &Function'               
+&Err     SETB  1                        Remember error                          
+                                                                                
+.* Test for invalid combination of parameters - Encrypt/Decrypt                 
+.ITestED AIF   ('&FuncCode' NE 'E' AND '&FuncCode' NE 'D').TestErr              
+         AIF   (('&DCB' EQ '' AND '&TOKEN' NE '') OR                   *        
+               ('&DCB' NE '' AND '&TOKEN' EQ '')).TestErr                       
+.* Either both or neither was coded for the connect function.  It               
+.* is okay to omit both for modify and list forms.                              
+         AIF   (('&MFType' EQ 'L' OR '&MFType' EQ 'M') AND             *        
+               ('&DCB' EQ '' AND '&TOKEN' EQ '')).TestErr                       
+         MNOTE 8,'&Function requires DCB or TOKEN but not both'                 
+&Err     SETB  1                        Remember error                          
+                                                                                
+.TestErr AIF   (&Err).MExit             Exit if any error so far                
+                                                                                
+         AIF   ('&MFType' EQ 'L').ExpList   Go if list form                     
+.* Modify the Options block <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<         
+.*   Set the function code in the User's Option block                           
+.*   Set the ENCRYPTA option bit flag if CONNECT or DISCONNECT                  
+.*   Set the ENCRYPTA option bit flag if ENCRYPT or DECRYPT and                 
+.*     user coded TOKEN parameter                                               
+         AIF   ('&Options' EQ '').SkipOptSet Go if options already set          
+         AIF   ('&Options'(1,1) EQ '(').OptReg   Go if in register              
+&Lab     MVI   &Options+1,&FuncNum     Set function code                        
+&Lab     SETC  ''                                                               
+         AIF   ('&FuncCode' EQ 'C' OR '&FuncCode' EQ 'I').SetENCA1              
+         AIF   (('&FuncCode' EQ 'E' OR '&FuncCode' EQ 'D') AND         *        
+               ('&Token' EQ '')).SkipOptSet                                     
+.SetENCA1 ANOP                                                                  
+&Lab     OI    &Options+2,X'40'        Set ENCRYPTA interface opt bit           
+&Lab     SETC  ''                                                               
+         AGO   .SkipOptSet                                                      
+.OptReg  ANOP                                                                   
+&Lab     MVI   1&Options,&FuncNum      Set function code                        
+&Lab     SETC  ''                                                               
+         AIF   ('&FuncCode' EQ 'C' OR '&FuncCode' EQ 'I').SetENCA2              
+         AIF   (('&FuncCode' EQ 'E' OR '&FuncCode' EQ 'D') AND         *        
+               ('&Token' EQ '')).SkipOptSet                                     
+.SetENCA2 ANOP                                                                  
+&Lab     OI    2&Options,X'40'         Set ENCRYPTA interface opt bit           
+&Lab     SETC  ''                                                               
+.SkipOptSet ANOP                                                                
+                                                                                
+.* Expand the standard form. <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<         
+         AIF   ('&MFType' NE 'S').TestM                                         
+         CNOP  &CNOP               Align to proper boundary                     
+&Lab     BRAS  1,*+4+&ParmLen      Branch around parameter list                 
+&Lab     SETC  ''                                                               
+.ExpList ANOP           Handle list or standard form                            
+&Lab     IGGENCSubDC &Options,&A    1 For any call                              
+         IGGENCSubDC &RetCode,&A    2 For any call                              
+         IGGENCSubDC &RsnCode,&A    3 For any call                              
+         AIF   ('&FuncCode' NE 'E' AND '&FuncCode' NE 'D').UseTok               
+         AIF   ('&DCB' EQ '').UseTok                                            
+         IGGENCSubDC &DCB,&A        4 For ENCRYPT/DECRYPT                       
+         AGO   .Exp5                                                            
+.UseTok  IGGENCSubDC &TOKEN,&A      4 For any call                              
+         AIF   ('&FuncCode' EQ 'C').ExpandC  Go if CONNECT                      
+         AIF   ('&FuncCode' EQ 'I').EndStand Go if DISCONNECT                   
+.Exp5    IGGENCSubDC &BlkIdList,&A  5 For ENCRYPT or DECRYPT                    
+         IGGENCSubDC &InBufList,&A  6 For ENCRYPT or DECRYPT                    
+         IGGENCSubDC &BufLenList,&A 7 For ENCRYPT or DECRYPT                    
+         IGGENCSubDC &BufCount,&A   8 For ENCRYPT or DECRYPT                    
+         IGGENCSubDC &OutBufList,&A 9 For ENCRYPT or DECRYPT                    
+         AGO   .EndStand                                                        
+.ExpandC IGGENCSubDC &ENCRYPTA,&A   5 For CONNECT                               
+         IGGENCSubDC &TCBAddr,&A    6 For CONNECT                               
+.EndStand AIF  ('&MFType' EQ 'L').RealEnd   Exit if doing list form             
+         AGO   .DoMod1                                                          
+                                                                                
+.* Expand the modify or execute form. <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<         
+.TestM   AIF   ('&MFType' NE 'M' AND '&MFType' NE 'E').RealEnd                  
+         AIF   ('&MF(2)'(1,1) EQ '(').MReg                         @01C         
+&Lab     LA    1,&MF(2)            Point to the parameter list                  
+&Lab     SETC  ''                  Ensure label not redefined                   
+         AGO   .Clear                                                           
+.MReg    AIF   ('&MF(2)' EQ '(1)').Clear Go if already loaded      @01C         
+&Temp    SETC  '&MF(2)'(2,K'&MF(2)-2)    Remove parentheses                     
+&Lab     LR    1,&Temp             Point to the parameter list     @01C         
+&Lab     SETC  ''                  Ensure label not redefined                   
+.Clear   AIF   (N'&MF LT 3).MFM3   Go if COMPLETE not coded                     
+&Lab     XC    0(&ParmLen,1),0(1)  clear the parameter list                     
+&Lab     SETC  ''                  Ensure label not redefined                   
+.MFM3    AIF   ('&Lab' EQ '').DoMod1                                            
+&Lab     DS    0H'0'                                                            
+&Lab     SETC  ''                  Prevent reuse of label                       
+.DoMod1  ANOP        Expand standard, modify or execute form                    
+         IGGENCSubST &Options,&ST,&AL,0,&MFType                                 
+         IGGENCSubST &Retcode,&ST,&AL,1,&MFType                                 
+         IGGENCSubST &RsnCode,&ST,&AL,2,&MFType                                 
+         IGGENCSubST &Token,&ST,&AL,3,&MFType                                   
+         IGGENCSubST &DCB,&ST,&AL,3,&MFType                                     
+         IGGENCSubST &ENCRYPTA,&ST,&AL,4,&MFType                                
+         IGGENCSubST &BlkIdList,&ST,&AL,4,&MFType                               
+         IGGENCSubST &TCBAddr,&ST,&AL,5,&MFType                                 
+         IGGENCSubST &InBufList,&ST,&AL,5,&MFType                               
+         IGGENCSubST &BufLenList,&ST,&AL,6,&MFType                              
+         IGGENCSubST &BufCount,&ST,&AL,7,&MFType                                
+         IGGENCSubST &OutBufList,&ST,&AL,8,&MFType                              
+         AIF   ('&MFType' NE 'E' AND '&MFType' NE 'S').RealEnd                  
+                                                                                
+.* Finish the expansion of the execute or standard form.                        
+.FExp    &L    15,16(,0)           Get address of CVT                           
+         L     15,1216(,15)        Get address of DFA                           
+         L     15,44(,15)                                          @01C         
+         L     14,244(,15)         Get PC Number                   @01C         
+         PC    0(14)               Call the service                             
+                                                                                
+.MExit   AIF   ('&Lab' EQ '').RealEnd  Branch if label not expanded             
+&Lab     DS    0H'0'                                                            
+.RealEnd MEND         End of PL/X comment */                                    
+                                                                                
+*%IGGENC: MACRO                                                                 
+*            Keys(BlkIdList,                                                    
+*                BufCount,                                                      
+*                BufLenList,                                                    
+*                DCB,                                                           
+*                ENCRYPTA,                                                      
+*                InBufList,                                                     
+*                MF,                                                            
+*                Options,                                                       
+*                OutBufList,                                                    
+*                RetCode,                                                       
+*                RsnCode,                                                       
+*                TCBAddr,                                                       
+*                Token);                                                        
+*Dcl IHARC   fixed;          ]Return code from this macro                       
+*                                                                               
+*     ANS(COMMENT('?' !! MACLABEL !! ' IGGENC ' !! MACLIST !!                   
+*         MACKEYS))    NORESCAN SKIP COL(5);                                    
+*     IF MF(1)^='L' THEN                ]No DO-END pair for list form           
+*       DO;                             ]Generate DO-END pair                   
+*         IF MACLABEL^='' THEN          ]Label on macro invocation              
+*           ANS(MACLABEL) COL(MACLMAR)  ]Generate label in answer               
+*           NORESCAN;                                                           
+*         ANS('DO; ' !! COMMENT(IDECMT)) COL(MACCOL) NORESCAN;                  
+*       END;                            ]Generate DO-END pair                   
+*     IF Number(MACLIST)>1 THEN         ]If more then one positional            
+*       DO;                             ]  then too many positional             
+*         IHARC=12;                     ]Yes, set bad return code               
+*         ANS Msg('''' !! 'MACLIST' !!                                          
+*           ''' is too long. Arguments are ignored after '                      
+*           !! MacList(1) !! '.');                                              
+*       END;                            ]Too many parameters                    
+*                                                                               
+*     Ans(COMMENT('?' !! MACLABEL !! ' IGGENC ' !! MACLIST !!                   
+*         MACKEYS))    NORESCAN SKIP COL(5);                                    
+*     %END IGGENC;                                                              

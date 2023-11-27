@@ -1,0 +1,1321 @@
+*%/* START OF SPECIFICATIONS *****************************************          
+*01* PROPRIETARY STATEMENT:                                                     
+*01**PROPRIETARY_STATEMENT********************************************          
+*                                                                               
+*   LICENSED MATERIALS - PROPERTY OF IBM                                        
+*   5650-ZOS COPYRIGHT IBM CORP. 1988, 2021                                     
+*                                                                               
+*   STATUS= HBB77D0                                                             
+*                                                                               
+*01**END_OF_PROPRIETARY_STATEMENT*************************************          
+*                                                                               
+*01*  MACRO NAME: ATTACHX                                                       
+*                                                                               
+*01*  DESCRIPTIVE NAME: Attach a new task                                       
+*                                                                               
+*                                                                               
+*01*  FUNCTION:                                                                 
+*        Provide the interface to the ATTACH subtask service routine            
+*        (IEAVEAT0) via SVC 42                                                  
+*                                                                               
+*01* EXTERNAL CLASSIFICATION:                                                   
+*                                                                               
+*02* PI: BASE                                                                   
+*                                                                               
+*02* BASE: FIELDS                                                               
+*          GIVEJPQ JSCB MF SF VL                                                
+*          FPREGSA TSLOGON LSQA ROLL HIARCHY TQE                                
+*                                                                               
+*01* END OF EXTERNAL CLASSIFICATION:                                            
+*                                                                               
+*01*  COMPONENT: SC1CL (Task Management)                                        
+*                                                                               
+*01*  MACLIB: AMACLIB                                                           
+*                                                                               
+*01*  CHANGE ACTIVITY:                                                          
+*   $D0=DCR0049  HBB3310  860416  PD16H4: ATTACHX support                       
+*   $P1=PC40708  HBB3310  860216  PD16H4: Set high bit of ECB address           
+*   $L2=DBFMC    HBB4430  910807  PD16FH: STATUS REWRITE                        
+*   $P2=PKB0146  HBB4430  911106  PD16FH: ATFORMNM for DISP=RESET               
+*   $P3=PKB0754  HBB4430  920629  PD16CU: Set ATNFORM correctly for             
+*                                         DISP=RESET                            
+*   $L3=BCOTE    HBB6606  971208  B7HGH5: CICS OTE support                      
+*   $L4=PR607    JBB6607  980710  B7HGH5: Delete blank line                     
+*   $L5=CICSOSUP JBB6609  980928  PD00XB: KEY=NINE,PKM=REPLACE                  
+*   $L6=64BITSUP HBB7703  981204  PD00XB: ESAME                                 
+*   $P4=PXD0139  HBB7703  990603  PD00XB: Fix typos                             
+*   $P5=PX00773  HBB7705  001025  PD00XB: SDWALOC31                             
+*   $01=OW45366  JBB6609  000808  U2IAXZ: Clear correct bit for KEY0            
+*                                         when SF=(E,x) and KEY=NINE            
+*                                         are specified.                        
+*   $P6=PYM0367  HBB7706  010724  PD00XB: Fix check for PLIST8                  
+*   $L7=ARALETS  HBB7770  090501  PD00XB: ALETS FOR AMODE 64 AR-MODE            
+*   $L8=ME18027  HBB7770  091218  PD00XB: SYSALVL                               
+*   $L9=ME26814  HBB77A0  131031  PD00XB: PLISTARALETS                          
+*   $LA=W348113  HBB77D0  191115  PD00XB: BYADDRESS=                            
+*                                                                               
+*01* COMPONENT: TASK MANAGEMENT (SC1CL)                                         
+*                                                                               
+**** END OF SPECIFICATIONS *****************************************            
+*                                                                               
+         MACRO                                                                  
+&NAME    ATTACHX &EP=,&EPLOC=,&DE=,&DCB=,&PARAM=,&VL=,&ECB=,           X        
+               &GSPV=,&KEY=PROP,&GSPL=,&SHSPL=,&ETXR=,&LPMOD=,         X        
+               &DPMOD=,&MF=I,&SF=I,&SHSPV=,&SM=PROB,&SZERO=YES,        X        
+               &JSTCB=NO,&SVAREA=YES,&ROLL=(YES,NO),&HIARCHY=,         X        
+               &JSCB=,&GIVEJPQ=NO,&TASKLIB=,&TSLOGON=NO,               X        
+               &STAI=,&PURGE=,&ASYNCH=,                                X        
+               &ESTAI=,&TERM=NO,&NSHSPL=,&NSHSPV=,&RSAPF=NO,           X        
+               &RELATED=,                                              X        
+               &LSQA=0,&DISP=YES,&TID=0,&TQE=,&FPREGSA=,               X        
+               &ALCOPY=,                                           @L2CX        
+               &TCB=,&PLIST8=,&PLIST4=,&PKM=,&PLIST8ARALETS=,      @L7CX        
+               &SDWALOC31=,&PLISTARALETS=SYSTEM,                   @L9CX        
+               &BYADDRESS=,                                        @LACX        
+               &ADDRENV=                                           @L3A         
+         GBLB  &IHBSWA,&IHBSWB                                                  
+         GBLC  &IHBNO                                                           
+         GBLC  &SYSASCE              ASC ENVIRONMENT                            
+         GBLA  &SYSALVL              Architecture level            @L8A         
+         GBLC  &SYSAM64              AMODE 64                      @L6A         
+         GBLC  &SYSPLIST8ARALETS                                   @L7A         
+         GBLC  &SYSPLISTARALETS                                    @L9A         
+         SYSSTATE TEST                                             @L6A         
+         GBLC  &SYSPLIST8            8-byte parameter list         @L6A         
+         LCLC  &SAVEPLIST8           Saved value                   @L6A         
+         LCLC  &SAVEPLIST8ARALETS                                  @L7A         
+         LCLC  &SAVEPLISTARALETS                                   @L9A         
+&SAVEPLIST8 SETC '&SYSPLIST8'                                      @L6A         
+&SYSPLIST8 SETC ''                                                 @L6A         
+&SAVEPLIST8ARALETS SETC '&SYSPLIST8ARALETS'                        @L7A         
+&SAVEPLISTARALETS SETC '&SYSPLISTARALETS'                          @L9A         
+.**********************************************************************         
+.*   VALIDATE PLIST4, PLIST8                                          *         
+.**********************************************************************         
+         AIF   ('&PLIST8' EQ '').PLIST8END                         @L6A         
+         AIF   ('&PLIST8' EQ 'YES' OR '&PLIST8' EQ 'NO').PLIST8END @L6A         
+         IHBERMAC 1001,PLIST8,&PLIST8                              @L6A         
+         AGO   .EXIT                                               @L6A         
+.PLIST8END ANOP                                                    @L6A         
+         AIF   ('&PLIST4' EQ '').PLIST4END                         @L6A         
+         AIF   ('&PLIST4' EQ 'YES' OR '&PLIST4' EQ 'NO').PLIST4END @L6A         
+         IHBERMAC 1001,PLIST4,&PLIST4                              @L6A         
+         AGO   .EXIT                                               @L6A         
+.PLIST4END ANOP                                                    @L6A         
+         AIF   ('&PLIST8' EQ '' OR '&PLIST4' EQ '').PLIST84END     @L6A         
+         IHBERMAC 1304,PLIST4,PLIST8                               @L6A         
+.PLIST84END ANOP                                                   @L6A         
+         AIF   ('&PLIST8' EQ 'YES').YESPL8                         @L6A         
+         AIF   ('&PLIST4' EQ 'NO').YESPL8                          @L6A         
+         AIF   ('&SYSAM64' NE 'YES').NOPL8                         @L7C         
+.YESPL8  ANOP                                                      @L6A         
+&SYSPLIST8 SETC 'YES'                                              @L6A         
+.NOPL8   ANOP                                                      @L6A         
+         AIF   ('&PLIST4' NE 'YES').NOPL4                          @P6C         
+&SYSPLIST8 SETC ''                                                 @L6A         
+.NOPL4   ANOP                                                      @L6A         
+.**********************************************************************         
+.*   VALIDATE PLIST8ARALETS                                           *         
+.**********************************************************************         
+         AIF   ('&PLIST8ARALETS' EQ '').PLIST8ARALETSEND           @L7A         
+         AIF   ('&PLIST8ARALETS' EQ 'NO').PLIST8ARALETSEND         @L7A         
+         AIF   ('&PLIST8ARALETS' EQ 'YES').PLIST8ARALETSEND        @L7A         
+         IHBERMAC 1001,PLIST8ARALETS,&PLIST8ARALETS                @L7A         
+         AGO   .EXIT                                               @L7A         
+.PLIST8ARALETSEND ANOP                                             @L7A         
+&SYSPLIST8ARALETS SETC 'NO'                                        @L7A         
+         AIF   ('&SYSPLIST8' NE 'YES').DONEPLIST8ARALETS           @L7A         
+         AIF   ('&PLIST8ARALETS' NE 'YES').DONEPLIST8ARALETS       @L7A         
+&SYSPLIST8ARALETS SETC 'YES'                                       @L7A         
+.DONEPLIST8ARALETS ANOP                                            @L7A         
+.**********************************************************************         
+.*   VALIDATE PLISTARALETS                                            *         
+.**********************************************************************         
+&SYSPLISTARALETS SETC '&PLISTARALETS'                              @L9A         
+         AIF   ('&PLISTARALETS' EQ 'NO').PLISTARALETSVALID         @L9A         
+         AIF   ('&PLISTARALETS' EQ 'SYSTEM').PLISTARALETSVALID     @L9A         
+         IHBERMAC 1001,PLISTARALETS,&PLISTARALETS                  @L9A         
+         AGO   .EXIT                                               @L9A         
+.PLISTARALETSVALID ANOP                                            @L9A         
+         AIF   ('&PLISTARALETS' NE 'NO').PLISTARALETSNOTNO         @L9A         
+         AIF   ('&PLIST8ARALETS' NE 'YES').PLISTARALETSNOTNO       @L9A         
+         IHBERMAC 1020,''PLISTARALETS=NO'',''PLIST8ARALETS=YES''   @L9A         
+.PLISTARALETSNOTNO ANOP                                            @L9A         
+         LCLA  &A,&NUMB                                            @L4A         
+         LCLA  &NUMB1,&NUMB3,&NUMF3,&NUMF3S                        @L5A         
+         LCLA  &NI27,&NI52,&NI60,&NI62                             @L5A         
+         LCLB  &F27(8),&F52(8),&F60(8),&F62(8)                     @L5C         
+         LCLB  &NUMB3B                                                          
+         LCLB  &SWSTAI,&SWESTAI                                                 
+         LCLC  &STAITYP,&STXADDR,&STPADDR                                       
+         LCLC  &H,&GNAME,&NSHSP                                                 
+         LCLC  &FORM#                FORMAT NUMBER                              
+         LCLC  &NICOPY               MASK TO TURN OFF ALCOPY BIT                
+&F27(4)  SETB  1                     Initialize KEY0 bit           @L5A         
+&F52(1)  SETB  1                     INITIALIZE NSHSPL BIT                      
+&F60(1)  SETB  1                     INITIALIZE DE BIT                          
+&F60(2)  SETB  1                     INITIALIZE GSPL BIT                        
+&F60(3)  SETB  1                     INITIALIZE SHSPL BIT                       
+&F62(1)  SETB  1                     Initialize KEYNINE bit        @L5A         
+&F62(2)  SETB  1                     Initialize PKM bit            @L5A         
+&F62(3)  SETB  1                     Initialize SDWALOC31 bit      @P5A         
+&F62(4)  SETB  1                     Initialize ByAddress Bit      @LAA         
+&NICOPY  SETC  '1'                   INITIALIZE TO LEAVE ON BIT                 
+&FORM#   SETC  '2'                   INITIAL FORMAT NUMBER                      
+* /* MACDATE   11/11/91                                              */         
+* /*                                                                            
+.**********************************************************************         
+.*   TEST FOR REQUEST TO RESET A SUBTASK VIA DISP=RESET WITH TCB      *         
+.**********************************************************************         
+         AIF (T'&TCB NE 'O').ATTCHD                                @L2A         
+         AIF ('&DISP' EQ 'RESET').ATTCHD                           @L2A         
+&SWSTAI  SETB  ('&STAI(1)' NE '' )   SWITCH VALUE 1 IF STAI                     
+&SWESTAI SETB  ('&ESTAI(1)' NE '' )  SWITCH VALUE 1 IF ESTAI                    
+         AIF   (&SWSTAI AND &SWESTAI).ERSTAI                                    
+         AIF   (NOT &SWESTAI).STTYP1                                            
+         AIF   (N'&ESTAI GT 2).ERROR                                            
+&STXADDR SETC  '&ESTAI(1)'        EXIT RTN ADDR                                 
+&STPADDR SETC  '&ESTAI(2)'        PARM LIST FOR EXIT RTN                        
+&STAITYP SETC  'ESTAI'                                                          
+         AGO   .STTYP2                                                          
+.STTYP1  AIF   (NOT &SWSTAI).STTYP2                                             
+         AIF   (N'&STAI GT 2).ERROR                                             
+&STXADDR SETC  '&STAI(1)'         EXIT RTN ADDR                                 
+&STPADDR SETC  '&STAI(2)'         PARM LIST FOR EXIT RTN                        
+&STAITYP SETC  'STAI'                                                           
+.STTYP2  ANOP                                                                   
+&IHBNO   SETC  '306'                                                            
+ AIF ('&HIARCHY' NE '' AND '&HIARCHY' NE '0'                           *        
+               AND '&HIARCHY' NE '1').ERRHID                                    
+         AIF   ('&MF' EQ 'L' OR('&SF' EQ 'L' AND '&MF(1)' EQ 'E')).E1           
+         AIF   ('&SF' EQ 'L' AND '&PARAM' NE '').ERROR2                         
+         AIF   ('&SF' EQ 'L' AND '&BYADDRESS' NE '').ERROR2A       @LAA         
+         AIF   ('&DE' NE '' AND '&BYADDRESS' NE '').ERROR2B        @LAA         
+         AIF   ('&DCB' NE '' AND '&BYADDRESS' NE '').ERROR2C       @LAA         
+         AIF   ('&EP' NE '' AND '&EPLOC' NE '').ERROR4                          
+         AIF   ('&EP' NE '' AND '&DE' NE '').ERROR4                             
+         AIF   ('&DE' NE '' AND '&EPLOC' NE '').ERROR4                          
+         AIF   ('&LPMOD' EQ '').CONTAAA                                         
+         AIF   ('&LPMOD'(1,1) EQ '-').ERROR7                                    
+.CONTAAA ANOP                                                                   
+         AIF   ('&DISP' NE 'YES' AND '&DISP' NE 'NO').ERDISP                    
+         AIF   ('&LSQA' NE '0' AND (&SWSTAI OR &SWESTAI)).E2                    
+         AIF   ('&LSQA' NE '0' AND '&PURGE' NE '' ).E3                          
+         AIF   ('&LSQA' NE '0' AND '&ASYNCH' NE '' ).E4                         
+         AIF   ('&LSQA' NE '0' AND ('&SZERO' NE 'NO')).E5                       
+         AIF   ('&GIVEJPQ' NE 'NO' AND '&LSQA' NE '0').E6                       
+         AIF   ('&LSQA' NE '0' AND '&GSPV' NE '').E7                            
+         AIF   ('&LSQA' NE '0' AND '&GSPL' NE '').E8                            
+         AIF   ('&LSQA' NE '0' AND '&SHSPV' NE '').E9                           
+         AIF   ('&LSQA' NE '0' AND '&SHSPL' NE '').E10                          
+         AIF   ('&TQE' NE 'YES' AND '&TQE' NE 'NO' AND '&TQE' NE '').ERX        
+               TQE                                                              
+         AIF   ('&FPREGSA' NE 'YES' AND '&FPREGSA' NE 'NO' AND '&FPREGSX        
+               A' NE '').ERFP                                                   
+         AIF   ('&NSHSPL' NE '' AND '&NSHSPV' NE '').ERNSHSP                    
+         AIF   ('&TERM' NE 'YES' AND '&TERM' NE 'NO').ERTERM                    
+         AIF   ('&ALCOPY' NE 'YES' AND '&ALCOPY' NE 'NO' AND '&ALCOPY' X        
+               NE '').ERALCPY                                                   
+         AIF   ('&ADDRENV' NE 'SAME' AND '&ADDRENV' NE 'SUBSP' AND     X        
+               '&ADDRENV' NE '').ERADDRE                           @L3A         
+         SYSSTATE TEST                  CHECK ASC ENVIRONMENT                   
+.* HERE INITIALIZE VARIABLES &NUMB,&NUMB1,&NUMB3                                
+.* THESE MUST NOT BE ALTERED ONCE SET.                                          
+.* BYTE AT OFFSET DECIMAL 27 IS DEFINED BY &NUMB                                
+         AIF   ('&DISP' EQ 'YES').NUMBX1                                        
+&NUMB    SETA  (&NUMB+128)        DISP=NO FLAG SET TO 1                         
+.NUMBX1  ANOP                                                                   
+         AIF   ('&JSCB' EQ '').NUMBX2                                           
+&NUMB    SETA  (&NUMB+64)         JSCB ADDRESS SPECIFIED FLAG                   
+.NUMBX2  ANOP                                                                   
+         AIF   ('&GIVEJPQ' EQ 'NO').NUMBX3                                      
+&NUMB    SETA  (&NUMB+32)         GIVEJPQ=YES FLAG SET TO 1                     
+.NUMBX3  ANOP                                                                   
+         AIF   ('&KEY' EQ 'NINE').NUMBX4A                          @L5A         
+         AIF   ('&KEY' EQ 'PROP').NUMBX4                         Y02752         
+&NUMB    SETA  (&NUMB+16)         KEY=ZERO FLAG ON               Y02752         
+&F62(1)  SETB  0                  Need to reset KEY=NINE           @L5A         
+         AGO   .NUMBX4                                             @L5A         
+.NUMBX4A ANOP                                                      @L5A         
+&NUMF3S  SETA  1                  FLAG3 specified                  @L5A         
+&NUMF3   SETA  (&NUMF3+128)       KEY=NINE FLAG ON                 @L5A         
+&F27(4)  SETB  0                  Need to reset KEY=ZERO           @L5A         
+         AIF   ('&GSPL' NE '' OR '&GSPV' NE '' OR '&SHSPL' NE '' OR    *        
+               '&SHSPV' NE '' OR '&SZERO' EQ 'YES').ERRKEYNINE     @L5A         
+.NUMBX4  ANOP                                                      @L5A         
+         AIF   ('&PKM' EQ '').NUMBX4B                              @L5A         
+&NUMF3S  SETA  1                  FLAG3 specified                  @L5A         
+         AIF   ('&PKM' EQ 'SYSTEM_RULES').NUMBX4B                  @L5A         
+         AIF   ('&PKM' NE 'REPLACE').ERROR8                        @L5A         
+&NUMF3   SETA  (&NUMF3+64)        PKM=REPLACE                      @L5A         
+         AGO   .NUMBX4B                                            @L5A         
+.NUMBX4B ANOP                                                      @L5A         
+&F62(2)  SETB  0                  Need to reset PKM                @L5A         
+.NUMBX4C ANOP                                                      @P5A         
+         AIF   ('&SDWALOC31' EQ '').NUMBX4D                        @P5A         
+&NUMF3S  SETA  1                  FLAG3 specified                  @P5A         
+         AIF   ('&SDWALOC31' EQ 'NO').NUMBX4D                      @P5A         
+         AIF   ('&SDWALOC31' NE 'YES').ERROR9                      @P5A         
+&NUMF3   SETA  (&NUMF3+32)        SDWALOC31=YES                    @P5A         
+         AGO   .NUMBX4D                                            @P5A         
+.NUMBX4D ANOP                                                      @P5A         
+&F62(3)  SETB  0                  Need to reset SDWALOC31          @P5A         
+.NUMBX4E ANOP                                                      @P5A         
+         AIF   (&NUMF3S EQ 0).KEEPF2                               @L5A         
+&FORM#   SETC  '5'                   INITIAL FORMAT NUMBER         @L5A         
+.KEEPF2  ANOP                                                      @L5A         
+.* When BYADDRESS is not specified we want a 0-bit in the                       
+.* parameter list. Otherwise, a 1-bit.                                          
+&F62(4)  SETB  0                  Need to reset ByAddress          @LAA         
+         AIF   ('&BYADDRESS' EQ '').KEEPF5                         @LAA         
+.* "16" is the value needed to form a byte with the ByAddress bit on            
+&NUMF3   SETA  (&NUMF3+16)        BYADDRESS=xxx                    @LAA         
+&F62(4)  SETB  1                  Want ByAddress=xxx               @LAA         
+&FORM#   SETC  '6'                   INITIAL FORMAT NUMBER         @LAA         
+.KEEPF5  ANOP                                                      @LAA         
+         AIF   ('&SZERO' EQ 'YES').NUMBX5                                       
+&NUMB    SETA  (&NUMB+8)          SZERO=NO FLAG SET TO 1                        
+.NUMBX5  ANOP                                                                   
+         AIF   ('&SVAREA' EQ 'YES').NUMBX6                                      
+&NUMB    SETA  (&NUMB+4)          SVAREA=NO FLAG SET TO 1                       
+.NUMBX6  ANOP                                                                   
+         AIF   ('&JSTCB' NE 'YES').NUMBX7                                       
+&NUMB    SETA  (&NUMB+2)          JSTCB=YES FLAG SET TO 1                       
+.NUMBX7  ANOP                                                                   
+         AIF   ('&SM' NE 'SUPV').NUMBX8                                         
+&NUMB    SETA  (&NUMB+1)          SM=SUPV FLAG ON                               
+.NUMBX8  ANOP                     BYTE IS COMPLETE                              
+.* BYTE AT OFFSET DECIMAL 60 IS DEFINED BY &NUMB1                               
+&NUMB1   SETA  0                                                                
+         AIF   ('&TASKLIB' EQ '').NUMB1X2                                       
+&NUMB1   SETA  (&NUMB1+2)         TASKLIB ADDRESS SPECIFIED FLAG                
+.NUMB1X2 ANOP                                                                   
+         AIF   (NOT (&SWSTAI OR &SWESTAI) ).NUMB1X3                             
+&NUMB1   SETA  (&NUMB1+1)         FLAG FOR STAI OR ESTAI                        
+.NUMB1X3 ANOP                                                      @L3C         
+         AIF   ('&ADDRENV' EQ 'SAME').DEW1                         @L3A         
+         AIF   ('&ADDRENV' NE 'SUBSP').DEW1                        @L3A         
+&NUMB1   SETA  (&NUMB1+8)         BIT4=1 FOR ADDRENV=SUBSP         @L3A         
+.DEW1    ANOP                                                      @L3A         
+.* BYTE AT OFFSET DECIMAL 52 IS DEFINED BY &NUMB3                               
+         AIF   (NOT (&SWSTAI OR &SWESTAI)  ).NUMB3X1                            
+.* PURGE BITS (BITS 6 AND 7) ARE 00, CORRECT FOR PURGE=QUIESCE                  
+         AIF   ('&PURGE' EQ '').NOPRGE                                          
+         AIF   ('&PURGE' EQ 'QUIESCE').PRGEOK                                   
+&NUMB3   SETA  1                  SET TO PURGE=HALT FLAGS                       
+         AIF   ('&PURGE' EQ 'HALT').PRGEOK                                      
+&NUMB3   SETA  2                  SET TO PURGE=NONE FLAGS                       
+         AIF   ('&PURGE' EQ 'NONE').PRGEOK                                      
+         AGO   .ERROZ             INVALED PURGE OPERAND                         
+.NOPRGE  ANOP                     &NUMB3 IS SET TO QUIESCE                      
+         AIF   (&SWSTAI).PRGEOK   CORRECT DEFAULT FOR STAI                      
+&NUMB3   SETA  2                  SET TO NONE, DEFAULT FOR ESTAI                
+.PRGEOK  ANOP                     PURGE BITS ARE SET CORRECTLY                  
+         AIF   ('&ASYNCH' EQ '').NOASYNC                                        
+         AIF   ('&ASYNCH' EQ 'NO').ASYNCOK                                      
+&NUMB3   SETA  (&NUMB3+4)         SET ASYNCH=YES FLAG                           
+         AIF   ('&ASYNCH' EQ 'YES').ASYNCOK                                     
+         AGO   .ERROZ             INVALID ASYNCH OPERAND                        
+.NOASYNC ANOP                     CHECK DEFAULTS                                
+         AIF   (&SWSTAI).ASYNCOK  ASYNCH=NO IS STAI DEFAULT                     
+&NUMB3   SETA  (&NUMB3+4)         ASYNCH=YES IS ESTAI DEFAULT                   
+.ASYNCOK ANOP                     ASYNCH BIT IS SET CORRECTLY                   
+         AIF   (&SWSTAI).NUMB3X1  TERM AND ESTAI FLAGS NOT SET                  
+&NUMB3   SETA  (&NUMB3+8)         BIT4=1 FOR ESTAI                              
+         AIF   ('&TERM' EQ 'NO').NUMB3X1                                        
+&NUMB3   SETA  (&NUMB3+16)        BIT3=1 FOR TERM=YES                           
+.NUMB3X1 ANOP                                                                   
+         AIF   ('&ALCOPY' EQ 'NO').COPYNO                                       
+         AIF   ('&ALCOPY' NE 'YES').NUMB3X2                                     
+&NUMB3   SETA  (&NUMB3+32)        BIT2=1 FOR ALCOPY=YES                         
+         AGO   .NUMB3X2                                                         
+.COPYNO  ANOP                                                                   
+&NICOPY  SETC  '0'                TURN OFF ALCOPY BIT IF ALCOPY=NO              
+.NUMB3X2 ANOP                     BYTE IS COMPLETE                              
+&GNAME   SETC  'IHB'.'&SYSNDX'                                                  
+&IHBSWA  SETB  ('&VL' EQ '1')                                                   
+&IHBSWB  SETB  ('&SF' EQ '(E,(15))')                                            
+         AIF   ('&NAME' EQ '' OR '&SF' EQ 'L').CONTAA                           
+&NAME    DS    0H                                                               
+.CONTAA  AIF   ('&PARAM' EQ '' AND '&MF(1)' NE 'E').CONTA                       
+         IHBOPLTX ,&PARAM,MF=&MF                                                
+.CONTA   AIF   ('&SF' EQ 'I').IROUT                                             
+         AIF   ('&SF' EQ 'L').LROUT                                             
+         AIF   (N'&SF NE 2).ERROR3                                              
+         AIF   ('&SF(1)' NE 'E').ERROR3                                         
+         AIF   ('&SF'(4,1) EQ '(').ISAREG                                       
+         LAE   15,&SF(2)          LOAD LIST ADDRESS                             
+         AGO   .CONTB                                                           
+.E1      IHBERMAC 35,&IHBNO,&MF,,,0                                             
+         AGO   .EXIT                                                            
+.ERROR2  IHBERMAC 71,&IHBNO,&PARAM                                              
+         AGO   .EXIT                                                            
+.ERROR2A MNOTE 8,'ATTACHX --> BYADDRESS IS NOT ALLOWED WITH SF=L'  @LAA         
+         AGO   .EXIT                                               @LAA         
+.ERROR2B MNOTE 8,'ATTACHX --> BYADDRESS IS NOT ALLOWED WITH DE'    @LAA         
+         AGO   .EXIT                                               @LAA         
+.ERROR2C MNOTE 8,'ATTACHX --> BYADDRESS IS NOT ALLOWED WITH DCB'   @LAA         
+         AGO   .EXIT                                               @LAA         
+.ERROR3  IHBERMAC 41,&IHBNO,&SF,,,0                                             
+         AGO   .EXIT                                                            
+.ERROR4  IHBERMAC 88,&IHBNO                                                     
+         AGO   .EXIT                                                            
+.ERROR5  IHBERMAC 72,&IHBNO                                                     
+         AGO   .EXIT                                                            
+.ERROR6  IHBERMAC 31,&IHBNO                                                     
+         AGO   .EXIT                                                            
+.ERROR7  IHBERMAC 240,,LPMOD                                                    
+         AGO   .EXIT                                                            
+.ERROR8  IHBERMAC 1001,PKM,&PKM                                    @L5A         
+         MEXIT                                                     @L5A         
+.ERROR9  IHBERMAC 1001,SDWALOC31,&SDWALOC31                        @P5A         
+         MEXIT                                                     @P5A         
+.ERRHID IHBERMAC 195                                                            
+         AGO   .EXIT                                                            
+.ISAREG  AIF   ('&SF(2)' EQ '(15)').JAF1                                        
+&A       SETA  K'&SF-6                                                          
+&H       SETC  '&SF'(5,&A)                                                      
+         AIF   ('&SYSAM64' EQ 'YES').AM641                         @MXA         
+         LR    15,&H              LOAD LIST ADDRESS                             
+         AGO   .AM31641                                                         
+.AM641   ANOP                                                      @MXA         
+         LLGFR 15,&H              LOAD LIST ADDRESS                @MXA         
+.AM31641 ANOP                                                      @MXA         
+         AIF   ('&SYSASCE' EQ 'P').JAF2                                         
+         CPYA  15,&H              LOAD LIST AR                                  
+         AGO   .CONTB                                                           
+.JAF1    ANOP                                                                   
+         AIF   ('&SYSASCE' NE 'P').CONTB                                        
+.JAF2    ANOP                                                                   
+         SLR   14,14              ZERO WORK REGISTER                            
+         SAR   15,14              SET LIST AR TO ZERO                           
+.CONTB   ANOP                                                                   
+.* E FORM MUST ALLOW SETTING OF ALL FIELDS, SO THAT A LIST FORM                 
+.* OF ALL ZEROS IS ACCEPTABLE. EXTENDED PARM LIST BITS AND                      
+.* LENGTH FIELD MUST BE SET.                                                    
+         AIF   ('&EP' EQ '').CONTC                                              
+&F60(1)  SETB  0                  RESET DE INDICATION                           
+         LAE   14,28(,15)         PICK UP EP ADDRESS                            
+         ST    14,0(,15)          INSERT EP ADDRESS INTO LIST                   
+         STAM  14,14,64(15)       INSERT EP AR INTO LIST                        
+         AIF   (&SYSALVL GT 0).ALVL_1A                             @L8A         
+         MVC   28(8,15),*+10      MOVE EP SYMB INTO LIST                        
+         B     *+12               BRANCH AROUND EP SYMBOL                       
+         DC    CL8'&EP'           EP SYMBOL                                     
+         AGO   .CONTE                                              @L8A         
+.ALVL_1A ANOP                                                      @L8A         
+         MVC   28(8,15),=CL8'&EP' MOVE EP SYMB INTO LIST           @L8A         
+         AGO   .CONTE                                                           
+.CONTC   AIF   ('&EPLOC' EQ '').CONTD                                           
+&F60(1)  SETB  0                  RESET DE INDICATION                           
+         AIF   ('&EPLOC'(1,1) EQ '(').ISAREGA                                   
+         LAE   14,&EPLOC          PICK UP EPLOC ADDRESS                         
+         ST    14,0(,15)          INSERT EPLOC INTO LIST                        
+         STAM  14,14,64(15)       INSERT EPLOC AR INTO LIST                     
+         AGO   .CONTE                                                           
+.ISAREGA ST    &EPLOC(1),0(,15)   INSERT EPLOC INTO LIST                        
+         AIF   ('&SYSASCE' EQ 'P').JAF3                                         
+         STAM  &EPLOC(1),&EPLOC(1),64(15) STORE EPLOC AR INTO LIST              
+         AGO   .CONTE                                                           
+.JAF3    ANOP                                                                   
+         SLR   14,14              ZERO WORK REGISTER                            
+         ST    14,64(,15)         ZERO EPLOC AR                                 
+         AGO   .CONTE                                                           
+.CONTD   AIF   ('&DE' EQ '').CONTE                                              
+&NUMB1   SETA  &NUMB1+128         DE BIT                                        
+         AIF   ('&DE'(1,1) EQ '(').ISAREGB                                      
+         LAE   14,&DE             PICK UP DE ADDRESS                            
+         ST    14,0(,15)          INSERT DE INTO LIST                           
+         STAM  14,14,64(15)       INSERT DE AR INTO LIST                        
+         AGO   .CONTE                                                           
+.ISAREGB ST    &DE(1),0(,15)      INSERT DE INTO LIST                           
+         AIF   ('&SYSASCE' EQ 'P').JAF4                                         
+         STAM  &DE(1),&DE(1),64(15) STORE DE AR INTO LIST                       
+         AGO   .CONTE                                                           
+.JAF4    ANOP                                                                   
+         SLR   14,14              ZERO WORK REGISTER                            
+         ST    14,64(,15)         ZERO DE AR                                    
+.CONTE   AIF   ('&DCB' EQ '').CONHID                                            
+         AIF   ('&DCB'(1,1) EQ '(').ISAREGC                                     
+         LAE   14,&DCB            PICK UP DCB ADDRESS                           
+         ST    14,4(,15)          STORE DCB INTO LIST                           
+         STAM  14,14,68(15)       STORE DCB AR INTO LIST                        
+         AGO   .CONHID                                                          
+.ISAREGC ST    &DCB(1),4(,15)     STORE DCB ADDR INTO LIST                      
+         AIF   ('&SYSASCE' EQ 'P').JAF5                                         
+         STAM  &DCB(1),&DCB(1),68(15) STORE DCB AR INTO LIST                    
+         AGO   .CONHID                                                          
+.JAF5    ANOP                                                                   
+         SLR   14,14              ZERO WORK REGISTER                            
+         ST    14,68(,15)         ZERO DCB AR                                   
+.CONHID  ANOP                                                                   
+.CONTF   AIF   ('&ECB' EQ '').CONTG                                             
+         AIF   ('&ECB'(1,1) EQ '(').ISAREGD                                     
+         LAE   14,&ECB            PICK UP ECB ADDRESS                           
+         ST    14,8(,15)          ECB ADDRESS INTO LIST                         
+         STAM  14,14,72(15)       ECB AR INTO LIST                              
+         AGO   .CONTG                                                           
+.ISAREGD ST    &ECB(1),8(,15)     ECB INTO LIST                                 
+         AIF   ('&SYSASCE' EQ 'P').JAF6                                         
+         STAM  &ECB(1),&ECB(1),72(15) STORE ECB AR INTO LIST                    
+         AGO   .CONTG                                                           
+.JAF6    ANOP                                                                   
+         SLR   14,14              ZERO WORK REGISTER                            
+         ST    14,72(,15)         ZERO ECB AR                                   
+.CONTG   ANOP                                                                   
+         AIF   ('&GSPV' EQ '').CONTH                                            
+&F60(2)  SETB  0                  RESET GSPL INDICATION                         
+         AIF   ('&GSPV'(1,1) EQ '(').ISAREGE                                    
+         LA    14,&GSPV.(0,0)     PICK UP GSPV VALUE                            
+         ST    14,12(,15)         GSPV INTO LIST                                
+         AGO   .CONTI                                                           
+.ISAREGE ST    &GSPV(1),12(,15)   GSPV INTO LIST                                
+         AGO   .CONTI                                                           
+.CONTH   AIF   ('&GSPL' EQ '').CONTI                                            
+&NUMB1   SETA  &NUMB1+64          INDICATE GSPL                                 
+         AIF   ('&GSPL'(1,1) EQ '(').ISAREGF                                    
+         LAE   14,&GSPL           PICK UP GSPL ADDRESS                          
+         ST    14,12(,15)         GSPL INTO LIST                                
+         AIF   ('&BYADDRESS' NE '').CONTI                          @LAA         
+         STAM  14,14,76(15)       GSPL AR INTO LIST                             
+         AGO   .CONTI                                                           
+.ISAREGF ST    &GSPL(1),12(,15)   GSPL INTO LIST                                
+         AIF   ('&SYSASCE' EQ 'P').JAF7                                         
+         AIF   ('&BYADDRESS' NE '').CONTI                          @LAA         
+         STAM  &GSPL(1),&GSPL(1),76(15) STORE GSPL AR INTO LIST                 
+         AGO   .CONTI                                                           
+.JAF7    ANOP                                                                   
+         SLR   14,14              ZERO WORK REGISTER                            
+         ST    14,76(,15)         ZERO GSPL AR                                  
+.CONTI   AIF   ('&SHSPV' EQ '').CONTK                                           
+&F60(3)  SETB  0                  RESET SHSPL INDICATION                        
+         AIF   ('&SHSPV'(1,1) EQ '(').ISAREGG                                   
+         LA    14,&SHSPV.(0,0)    PICK UP SHSPV VALUE                           
+         ST    14,16(,15)         SHSPV INTO LIST                               
+         AGO   .CONTL                                                           
+.ISAREGG ST    &SHSPV(1),16(,15)  SHSPV INTO LIST                               
+         AGO   .CONTL                                                           
+.CONTK   AIF   ('&SHSPL' EQ '').CONTL                                           
+&NUMB1   SETA  &NUMB1+32          SHSPL PRESENT                                 
+         AIF   ('&SHSPL'(1,1) EQ '(').ISAREGH                                   
+         LAE   14,&SHSPL          PICK UP SHSPL ADDRESS                         
+         ST    14,16(,15)         SHSPL INTO LIST                               
+         AIF   ('&BYADDRESS' NE '').CONTL                          @LAA         
+         STAM  14,14,80(15)       SHSPL AR INTO LIST                            
+         AGO   .CONTL                                                           
+.ISAREGH ST    &SHSPL(1),16(,15)  SHSPL INTO LIST                               
+         AIF   ('&SYSASCE' EQ 'P').JAF8                                         
+         AIF   ('&BYADDRESS' NE '').CONTL                          @LAA         
+         STAM  &SHSPL(1),&SHSPL(1),80(15) STORE SHSPL AR INTO LIST              
+         AGO   .CONTL                                                           
+.JAF8    ANOP                                                                   
+         SLR   14,14              ZERO WORK REGISTER                            
+         ST    14,80(,15)         ZERO SHSPL AR                                 
+.CONTL   AIF   ('&ETXR' EQ '').CONTN                                            
+         AIF   ('&ETXR'(1,1) EQ '(').ISAREGI                                    
+         LA    14,&ETXR           PICK UP ETXR ADDRESS                          
+         ST    14,20(,15)         INSERT ETXR INTO LIST                         
+         AGO   .CONTN                                                           
+.ISAREGI ST    &ETXR(1),20(,15)   INSERT ETXR INTO LIST                         
+.CONTN   ANOP                                                                   
+.CONTN0  AIF   ('&DPMOD' EQ '').CONTO                                           
+         AIF   ('&DPMOD'(1,1) EQ '(').ISAREGJ                                   
+         AIF   (&SYSALVL GT 0).ALVL_2A                             @L8A         
+         B     *+6                BRANCH AROUND DPMOD                           
+         AIF   ('&DPMOD'(1,1) EQ '+' OR '&DPMOD'(1,1) EQ '-').SIGNA             
+         DC    AL2(&DPMOD)        DPMOD VALUE                                   
+         MVC   24(2,15),*-2       INSERT DPMOD IN LIST                          
+         AGO   .CONTO                                                           
+.SIGNA   DC    AL2(0&DPMOD)       DPMOD VALUE                                   
+         MVC   24(2,15),*-2       INSERT DPMOD IN LIST                          
+         AGO   .CONTO                                                           
+.ALVL_2A ANOP                                                      @L8A         
+         AIF   ('&DPMOD'(1,1) EQ '+' OR '&DPMOD'(1,1) EQ '-').ALVL_2B           
+         MVC   24(2,15),=AL2(&DPMOD)  Insert DPMOD in list         @L8A         
+         AGO   .CONTO                                              @L8A         
+.ALVL_2B ANOP                                                      @L8A         
+         MVC   24(2,15),=AL2(0&DPMOD) Insert DPMOD in list         @L8A         
+         AGO   .CONTO                                              @L8A         
+.ISAREGJ STH   &DPMOD(1),24(,15)  DPMOD IN LIST                                 
+.CONTO   AIF   ('&LPMOD' EQ '').CONTP                                           
+         AIF   ('&LPMOD'(1,1) EQ '(').ISAREGK                                   
+         MVI   26(15),&LPMOD      INSERT LPMOD IN LIST                          
+         AGO   .CONTP                                                           
+.ISAREGK STC   &LPMOD(1),26(,15)  LPMOD IN LIST                                 
+.CONTP   ANOP                                                                   
+&NI27    SETA  16*&F27(4)+(255-16) Mask to possibly clear key0 bit @01C         
+         AIF   (&NI27 EQ 255).NONI27 Nothing to reset              @L5A         
+         NI    27(15),&NI27       Clear unwanted bits              @L5A         
+.NONI27  ANOP                                                      @L5A         
+         AIF   (&NUMB EQ 0).JSCB1                                               
+         OI    27(15),&NUMB       SET STATUS BYTE                               
+.JSCB1   AIF   ('&JSCB' EQ '').CONTQ5                                           
+         AIF   ('&JSCB'(1,1) EQ '(').ISAREG1                                    
+         LAE   14,&JSCB           PICK UP JSCB ADDRESS                          
+         ST    14,36(,15)         INSERT JSCB INTO LIST                         
+         STAM  14,14,84(15)       INSERT JSCB AR INTO LIST                      
+         AGO   .CONTQ5                                                          
+.ISAREG1 ST    &JSCB(1),36(,15)   INSERT JSCB INTO LIST                         
+         AIF   ('&SYSASCE' EQ 'P').JAF10                                        
+         STAM  &JSCB(1),&JSCB(1),84(15) STORE JSCB AR INTO LIST                 
+         AGO   .CONTQ5                                                          
+.JAF10   ANOP                                                                   
+         SLR   14,14              ZERO WORK REGISTER                            
+         ST    14,84(,15)         ZERO JSCB AR                                  
+.CONTQ5  ANOP                                                                   
+         AIF   ( NOT (&SWSTAI OR &SWESTAI) ).TTID  NEITHER GIVEN                
+.* IF EITHER STAI OR ESTAI GIVEN, OVERRIDE BYTES DEC 41 - 47                    
+.STAIRB  AIF   ('&STXADDR'(1,1) EQ '(' ).REG1                                   
+         LA    14,&STXADDR        GET (E)STAI EXIT ADDRESS                      
+         ST    14,44(,15)         (E)STAI EXIT ADDR INTO LIST                   
+         AGO   .STAI2                                                           
+.REG1    ST    &STXADDR,44(,15)   (E)STAI EXIT ADDR INTO LIST                   
+.STAI2   ANOP                                                                   
+         AIF   ('&STPADDR' NE '').STY                                           
+         SLR   14,14                                                            
+         ST    14,40(,15)         NO STAI/ESTAI PARM LIST ADDR                  
+         ST    14,88(,15)         NO STAI/ESTAI PARM LIST AR                    
+         AGO   .TTID                                                            
+.STY     ANOP                                                                   
+         AIF   ('&STPADDR'(1,1) EQ '(').REG2                                    
+         LAE   14,&STPADDR        GET STAI/ESTAI PARM LIST ADDR                 
+         ST    14,40(,15)         STAI/ESTAI PARM LIST ADDR                     
+         STAM  14,14,88(15)       STAI/ESTAI PARM LIST AR                       
+         AGO   .TTID                                                            
+.REG2    ST    &STPADDR,40(,15)   STAI/ESTAI PARM LIST ADDR                     
+         AIF   ('&SYSASCE' EQ 'P').JAF12                                        
+         STAM  &STPADDR,&STPADDR,88(15) (E)STAI AR INTO LIST                    
+         AGO   .TTID                                                            
+.JAF12   ANOP                                                                   
+         SLR   14,14              ZERO WORK REGISTER                            
+         ST    14,88(,15)         ZERO (E)STAI AR                               
+.TTID    AIF   ('&TID' EQ '0').TLIBE                                            
+         AIF   ('&TID'(1,1) EQ '(').REGTID                                      
+         MVI   53(15),&TID        INSERT TID INTO LIST                          
+         AGO   .TLIBE                                                           
+.REGTID  STC   &TID(1),53(,15)    INSERT TID INTO LIST                          
+.TLIBE   AIF   ('&TASKLIB' EQ '').NSHSP1                                        
+.TLIBEA  AIF   ('&TASKLIB'(1,1) EQ '(').TREGE                                   
+         LAE   14,&TASKLIB(1)     GET TASKLIB DCB ADDRESS                       
+         ST    14,48(,15)         TASKLIB DCB ADDRESS IN LIST                   
+         STAM  14,14,92(15)       TASKLIB DCB AR INTO LIST                      
+         AGO   .NSHSP1                                                          
+.TREGE   ST    &TASKLIB(1),48(,15) TASKLIB DCB ADDR. IN LIST.                   
+         AIF   ('&SYSASCE' EQ 'P').JAF13                                        
+         STAM  &TASKLIB(1),&TASKLIB(1),92(15) TASKLIB AR INTO LIST              
+         AGO   .NSHSP1                                                          
+.JAF13   ANOP                                                                   
+         SLR   14,14              ZERO WORK REGISTER                            
+         ST    14,92(,15)         ZERO TASKLIB AR                               
+.NSHSP1  ANOP                                                                   
+         MVI   55(15),100         SET LENGTH OF THIS PARM LIST                  
+&NUMB3B  SETB  (&NUMB3 NE 0)      STAI BITS PRESENT?                            
+         AIF   ('&NSHSPL' EQ '').NSHSP2                                         
+         AIF   ('&RSAPF' EQ 'YES').NSHSP6   RSAPF ALSO ON                       
+&NUMB3   SETA  &NUMB3+X'80'       INDICATE SP LIST                              
+.NSHSP7  ANOP                                                                   
+         AIF   ('&NSHSPL'(1,1) EQ '(' ).NSHSP3                                  
+         LAE   14,&NSHSPL         GET SP LIST ADDR                              
+         ST    14,56(,15)         NSHSPL ADDR INTO PARM LIST                    
+         STAM  14,14,96(15)       NSHSPL AR INTO PARM LIST                      
+         AGO   .PRESVC                                                          
+.NSHSP3  ANOP                                                                   
+         ST    &NSHSPL(1),56(,15) NSHSPL ADDR INTO PARM LIST                    
+         AIF   ('&SYSASCE' EQ 'P').JAF14                                        
+         STAM  &NSHSPL(1),&NSHSPL(1),96(15) NSHSPL AR INTO LIST                 
+         AGO   .PRESVC                                                          
+.JAF14   ANOP                                                                   
+         SLR   14,14              ZERO WORK REGISTER                            
+         ST    14,96(,15)         ZERO NSHSPL AR                                
+         AGO   .PRESVC                                                          
+.NSHSP2  ANOP                                                                   
+         AIF   ('&NSHSPV' EQ '').NSHSP8                                         
+&F52(1)  SETB  0                  RESET NSHSPL INDICATION                       
+         AIF   ('&RSAPF' NE 'YES').NSHSP5                                       
+&NUMB3   SETA  &NUMB3+X'40'       SET APF FLAG ON                               
+.NSHSP5  ANOP                                                                   
+         AIF   ('&NSHSPV'(1,1) EQ '(' ).NSHSP4                                  
+         LA    14,&NSHSPV.(0,0)   SP VALUE FOR NSHSPV                           
+         ST    14,56(,15)         PARM INTO LIST                                
+         AGO   .PRESVC                                                          
+.NSHSP4  ANOP                                                                   
+         ST    &NSHSPV(1),56(,15) SET SP VALUE FOR NSHSPV                       
+         AGO   .PRESVC                                                          
+.NSHSP6  ANOP                                                                   
+&NUMB3   SETA  &NUMB3+X'C0'       SET NSHSPL,RSAPF                              
+         AGO   .NSHSP7                                                          
+.NSHSP8  ANOP                                                                   
+         AIF   ('&RSAPF' NE 'YES').PRESVC NO FLAGS ON                           
+&NUMB3   SETA  &NUMB3+X'40'       SET APF FLAG ON                               
+.PRESVC  ANOP                                                                   
+.* SET MASKS USED FOR CLEARING UNWANTED BITS IN FLAG BYTES                      
+&NI52    SETA  128*&F52(1)+64+32*&NICOPY+16+8+7                                 
+&NI60    SETA  128*&F60(1)+64*&F60(2)+32*&F60(3)+16+8+7            @P2C         
+&NI62    SETA  128*&F62(1)+64*&F62(2)+32*&F62(3)+16*&F62(4)+15     @LAC         
+         OI    8(15),X'80'        SET NEW FORMAT BIT                            
+         NI    60(15),&NI60       CLEAR UNWANTED BITS                           
+.NONI60  AIF   (&NUMB1 EQ 0).NO60 SKIP IF 0                                     
+         OI    60(15),&NUMB1      SET FLAG BYTE                                 
+.NO60    AIF   (&NI52 EQ 255).NONI52  ANY BITS TO BE RESET?                     
+         NI    52(15),&NI52       CLEAR UNWANTED BITS                           
+.NONI52  AIF   (NOT &NUMB3B).NO60B CHECK FOR STAI BITS                          
+         OI    52(15),&NUMB3      TURN ON SPECIFIED BITS                        
+         AGO   .NO52                                                            
+.NO60B   AIF   (&NUMB3 EQ 0).NO52 SKIP IF 0                                     
+         OI    52(15),&NUMB3      TURN ON SPECIFIED BITS                        
+.NO52    ANOP                                                      @LAC         
+         AIF   ('&BYADDRESS' EQ '').ENDBYADDR3                     @LAA         
+         AIF   ('&BYADDRESS'(1,1) NE '(').BYADDR3A                 @LAA         
+         MVC   76(8,15),0(&BYADDRESS(1))  Save ByAddress value     @LAA         
+         AGO   .ENDBYADDR3                                         @LAA         
+.BYADDR3A ANOP                                                     @LAA         
+         MVC   76(8,15),&BYADDRESS(1)   Save ByAddress value       @LAA         
+.ENDBYADDR3 ANOP                                                   @LAA         
+         MVI   61(15),&FORM#      SET FORMAT NUMBER                             
+         AIF   (&NI62 EQ 255).NONI62 Nothing to reset              @L5A         
+         NI    62(15),&NI62       Clear unwanted bits              @L5A         
+.NONI62  ANOP                                                      @L5A         
+         AIF   (&NUMF3 EQ 0).NO62 No flags to set                001024         
+         OI    62(15),&NUMF3      FLAGS                            @L5A         
+.NO62    ANOP                                                      @L5A         
+         AGO   .SVC                                                             
+.LROUT   ANOP                                                                   
+.* L FORM MUST ACCEPT ALL PARAMETERS POSSIBLE. A LIST OF ALL                    
+.* ZEROS MUST BE ACCEPTABLE AS AN L FORM.                                       
+&NAME    DS    0F                                                               
+         AIF   ('&EP' EQ '').CONTLA                                             
+         AIF   ('&EP'(1,1) EQ '(').ERROR5                                       
+         DC    A(*+28)            POINTER TO SYMBOL NAME                        
+         AGO   .COHID                                                           
+.CONTLA  AIF   ('&EPLOC' EQ '').CONTLB                                          
+         AIF   ('&EPLOC'(1,1) EQ '(').ERROR5                                    
+         DC    A(&EPLOC)          POINTER TO SYMBOL NAME                        
+         AGO   .COHID                                                           
+.CONTLB  AIF   ('&DE' EQ '').CONTLLA                                            
+         AIF   ('&DE'(1,1) EQ '(').ERROR5                                       
+         DC    A(&DE)             SET DE POINTER                                
+&NUMB1   SETA  &NUMB1+X'80'                                                     
+         AGO   .COHID                                                           
+.CONTLLA DC    A(0)               DE OR EPLOC ADDRESS                           
+.COHID   ANOP                                                                   
+.CHID    ANOP                                                                   
+.CONTLC  AIF   ('&DCB' EQ '').CONTLD                                            
+         AIF   ('&DCB'(1,1) EQ '(').ERROR5                                      
+         DC    A(&DCB)            DCB ADDRESS                                   
+         AGO   .CONTLSE                                                         
+.CONTLD  DC    A(0)               DCB ADDRESS                                   
+.CONTLSE ANOP                                                                   
+.CONTLE  AIF   ('&ECB' EQ '').CONTLF                                            
+         AIF   ('&ECB'(1,1) EQ '(').ERROR5                                      
+         DC    A(X'80000000'+&ECB) NEW FORMAT + ECB ADDR                        
+         AGO   .CONTLG                                                          
+.CONTLF  DC    A(X'80000000')     NEW FORMAT + ECB ADDR                         
+.CONTLG  AIF   ('&GSPV' EQ '').CONTLH                                           
+         AIF   ('&GSPV'(1,1) EQ '(').ERROR5                                     
+         DC    A(&GSPV)           GSPV VALUE                                    
+         AGO   .CONTLI                                                          
+.CONTLH  AIF   ('&GSPL' EQ '').CONTLJ                                           
+         AIF   ('&GSPL'(1,1) EQ '(').ERROR5                                     
+&NUMB1   SETA  &NUMB1+X'40'       INDICATE GSPL                                 
+         DC    A(&GSPL)           SET GSPL ADDRESS                              
+         AGO   .CONTLI                                                          
+.CONTLJ  DC    A(0)               GSPL OR GSPV                                  
+.CONTLI  AIF   ('&SHSPV' EQ '').CONTLK                                          
+         AIF   ('&SHSPV'(1,1) EQ '(').ERROR5                                    
+         DC    A(&SHSPV)          SHSPV VALUE                                   
+         AGO   .CONTLL                                                          
+.CONTLK  AIF   ('&SHSPL' EQ '').CONTLM                                          
+         AIF   ('&SHSPL'(1,1) EQ '(').ERROR5                                    
+         DC    A(&SHSPL)          SET SHSPL ADDRESS                             
+&NUMB1   SETA  &NUMB1+X'20'       SHSPL PRESENT                                 
+         AGO   .CONTLL                                                          
+.CONTLM  DC    A(0)               SHSPV OR SHSPL                                
+.CONTLL  ANOP                                                                   
+         AIF   ('&ETXR' EQ '').CONTLN                                           
+         AIF   ('&ETXR'(1,1) EQ '(').ERROR5                                     
+         DC    A(&ETXR)           EXIT ROUTINE ADDRESS                          
+         AGO   .CONTLO                                                          
+.CONTLN  DC    A(0)               EXIT ROUTINE ADDRESS                          
+.CONTLO  AIF   ('&DPMOD' EQ '').CONTLP                                          
+         AIF   ('&DPMOD'(1,1) EQ '(').ERROR5                                    
+         AIF   ('&DPMOD'(1,1) EQ '+' OR '&DPMOD'(1,1) EQ '-').SIGNB             
+         DC    AL2(&DPMOD)        DPMOD VALUE                                   
+         AGO   .CONTLQ                                                          
+.SIGNB   DC    AL2(0&DPMOD)       DPMOD VALUE                                   
+         AGO   .CONTLQ                                                          
+.CONTLP  DC    AL2(0)             DPMOD VALUE                                   
+.CONTLQ  AIF   ('&LPMOD' EQ '').CONTLR                                          
+         AIF   ('&LPMOD'(1,1) EQ '(').ERROR5                                    
+         DC    AL1(&LPMOD)        LPMOD VALUE                                   
+         AGO   .CONTLS6                                                         
+.CONTLR  DC    AL1(0)             LPMOD VALUE                                   
+.CONTLS6 ANOP                                                                   
+.CONTLU  DC    AL1(&NUMB)         STATUS BYTE                                   
+         AIF   ('&EP' EQ '').CONTLV                                             
+         DC    CL8'&EP'           EP SYMBOL                                     
+         AGO   .CONTLV1                                                         
+.* SET EP NAME SPACE TO ZEROS TO ALLOW ALL ZERO LIST FORM                       
+.CONTLV  DC    2A(0)              EP NAME SPACE                                 
+.CONTLV1 ANOP                                                                   
+         AIF   ('&JSCB' EQ '').NOJSCB                                           
+         AIF   ('&JSCB'(1,1) EQ '(').ERROR5                                     
+         DC    A(&JSCB)           ADDRESS OF JSCB                               
+         AGO   .LTID                                                            
+.NOJSCB  ANOP                                                                   
+         DC    A(0)               ADDRESS OF JSCB                               
+.LTID    ANOP                                                                   
+.CONTLW  AIF   (&SWSTAI OR &SWESTAI).CONTLX                                     
+         DC    A(0)               (E)STAI PARM LIST                             
+         DC    A(0)               EXIT ADDRESS                                  
+         AGO   .TLCONT                                                          
+.CONTLX  ANOP                                                                   
+         AIF   ('&STXADDR'(1,1) EQ '(' ).ERROR5                                 
+         AIF   ('&STPADDR' EQ '').CONTLY                                        
+         AIF   ('&STPADDR'(1,1) EQ '(' ).ERROR5                                 
+         DC    A(&STPADDR)        STAI/ESTAI PARM LIST ADDR                     
+         AGO   .TLCX                                                            
+.CONTLY  DC    A(0)               STAI/ESTAI PARAMETER LIST                     
+.TLCX    ANOP                                                                   
+.TLCZ    DC    A(&STXADDR)        STAI/ESTAI EXIT ROUTINE ADDR                  
+.TLCONT  AIF   ('&TASKLIB' NE '').TLCONTA                                       
+         DC    A(0)               TASKLIB                                       
+         AGO   .LNSHSP1                                                         
+.TLCONTA ANOP                                                                   
+         AIF   ('&TASKLIB'(1,1) EQ '(' ).ERROR5                                 
+         DC    A(&TASKLIB)        TASKLIB DCB ADDRESS                           
+.* ATTACHX PARM LIST LENGTH MUST BE SET IN EXECUTE FORM.                        
+.LNSHSP1 ANOP                                                                   
+&NSHSP   SETC  '0'                ASSUME NO NSHSPL,NSHSPV                       
+         AIF   ('&NSHSPL' EQ '').LNSHSP4   NSHSPL SPECIFIED:                    
+&NUMB3   SETA  &NUMB3+128         SET BIT TO INDICATE LIST                      
+&NSHSP   SETC  '&NSHSPL'          INDICATE NSHSPL                               
+         AGO   .LNSHSP2                                                         
+.LNSHSP4 AIF   ('&NSHSPV' EQ '').LNSHSP2    NSHSPV SPECIFIED:                   
+&NSHSP   SETC  '&NSHSPV'          INDICATE NSHSPV                               
+.LNSHSP2 AIF   ('&RSAPF' NE 'YES').LNSHSP3 RSAPF SPECIFIED:                     
+&NUMB3   SETA  &NUMB3+64          SET BIT TO INDICATE IT                        
+.LNSHSP3 DC    AL1(&NUMB3)        FLAG BYTE                                     
+         AIF   ('&TID'(1,1) EQ '(').ERROR5                                      
+         AIF   ('&NSHSP'(1,1) EQ '(').ERROR5                                    
+         DC    AL1(&TID)          TASK ID                                       
+         DC    AL2(100)           PARM LIST LENGTH                              
+         DC    A(&NSHSP)          SUBPOOL LIST ADDRESS/VALUE                    
+.LBYTE60 DC    AL1(&NUMB1)        SET FLAGS                                     
+         DC    AL1(&FORM#)        SET UP FORMAT NUMBER                          
+         DC    AL1(&NUMF3)        SET FLAGS                                     
+         DC    AL1(0)             RESERVED BYTE                                 
+         DC    A(0)               EPLOC/DE/EP ALET                              
+         DC    A(0)               DCB ALET                                      
+         DC    A(0)               ECB ALET                                      
+         DC    A(0)               GSPL ALET                                     
+         DC    A(0)               SHSPL ALET                                    
+         DC    A(0)               JSCB ALET                                     
+         DC    A(0)               (E)STAI PARAMETER ALET                        
+         DC    A(0)               TASKLIB ALET                                  
+         DC    A(0)               NSHSPL ALET                                   
+         AGO   .END                                                             
+.IROUT   ANOP                                                                   
+.* NORMAL FORM. IN-LINE LIST.                                                   
+         LAE   15,&GNAME          SET UP LIST ADDRESS                           
+         AIF   ('&EPLOC' EQ '').ICONTA                                          
+         AIF   ('&EPLOC'(1,1) NE '(').ICONTB                                    
+         ST    &EPLOC(1),0(,15)   PUT EPLOC INTO LIST                           
+         AIF   ('&SYSASCE' EQ 'P').ICONTB                                       
+         STAM  &EPLOC(1),&EPLOC(1),64(15) EPLOC AR INTO LIST                    
+         AGO   .ICONTB                                                          
+.ICONTA  AIF   ('&DE' EQ '').ICONTB                                             
+&NUMB1   SETA  &NUMB1+X'80'       INDICATE DE PRESENT                           
+         AIF   ('&DE'(1,1) NE '(').ICONTB                                       
+         ST    &DE(1),0(,15)      PUT DE INTO LIST                              
+         AIF   ('&SYSASCE' EQ 'P').ICONTB                                       
+         STAM  &DE(1),&DE(1),64(15) DE AR INTO LIST                             
+.ICONTB  AIF   ('&DCB' EQ '').ICOHID                                            
+         AIF   ('&DCB'(1,1) NE '(').ICOHID                                      
+         ST    &DCB(1),4(,15)     STORE DCB INTO LIST                           
+         AIF   ('&SYSASCE' EQ 'P').ICOHID                                       
+         STAM  &DCB(1),&DCB(1),68(15) DCB AR INTO LIST                          
+.* BITS 6 AND 7 OF BYTE 4 PREVIOUSLY DEFINED FOR HIARCHY                        
+.ICOHID  ANOP                                                                   
+.ICONTC  AIF   ('&ECB' EQ '').ICONTD                                            
+         AIF   ('&ECB'(1,1) NE '(').ICONTD                                      
+         ST    &ECB(1),8(,15)     STORE ECB INTO LIST                           
+         OI    8(15),X'80'        INDICATE NEW FORMAT              @P1M         
+         AIF   ('&SYSASCE' EQ 'P').ICONTD                                       
+         STAM  &ECB(1),&ECB(1),72(15) ECB AR INTO LIST                          
+.ICONTD  AIF   ('&GSPV' EQ '').ICONTE                                           
+         AIF   ('&GSPV'(1,1) NE '(').ICONTF                                     
+         ST    &GSPV(1),12(,15)   STORE GSPV INTO LIST                          
+         AGO   .ICONTF                                                          
+.ICONTE  AIF   ('&GSPL' EQ '').ICONTF                                           
+&NUMB1   SETA  &NUMB1+X'40'       INDICATE GSPL                                 
+         AIF   ('&GSPL'(1,1) NE '(').ICONTF                                     
+         ST    &GSPL(1),12(,15)   STORE GSPL INTO LIST                          
+         AIF   ('&SYSASCE' EQ 'P').ICONTF                                       
+         AIF   ('&BYADDRESS' NE '').ICONTF                         @LAA         
+         STAM  &GSPL(1),&GSPL(1),76(15) GSPL AR INTO LIST                       
+.ICONTF  ANOP                                                      @LAA         
+         AIF   ('&BYADDRESS' EQ '').ICONTF1                        @LAA         
+         AIF   ('&BYADDRESS'(1,1) NE '(').ICONTF1A                 @LAA         
+         MVC   76(8,15),0(&BYADDRESS(1)) BYADDRESS value into list @LAA         
+         AGO   .ICONTF1                                            @LAA         
+.ICONTF1A ANOP                                                     @LAA         
+         MVC   76(8,15),&BYADDRESS       BYADDRESS value into list @LAA         
+.ICONTF1 ANOP                                                      @LAA         
+         AIF   ('&SHSPV' EQ '').ICONTG                                          
+         AIF   ('&SHSPV'(1,1) NE '(').ICONTH                                    
+         ST    &SHSPV(1),16(,15)  STORE SHSPV INTO LIST                         
+         AGO   .ICONTH                                                          
+.ICONTG  AIF   ('&SHSPL' EQ '').ICONTH                                          
+&NUMB1   SETA  &NUMB1+X'20'       INDICATE SHSPL PRESENT                        
+         AIF   ('&SHSPL'(1,1) NE '(').ICONTH                                    
+         ST    &SHSPL(1),16(,15)  STORE SHSPL INTO LIST                         
+         AIF   ('&SYSASCE' EQ 'P').ICONTH                                       
+         AIF   ('&BYADDRESS' NE '').ICONTH                         @LAA         
+         STAM  &SHSPL(1),&SHSPL(1),80(15) SHSPL AR INTO LIST                    
+.ICONTH  AIF   ('&ETXR' EQ '').ICONTI                                           
+         AIF   ('&ETXR'(1,1) NE '(').ICONTI                                     
+         ST    &ETXR(1),20(,15)   STORE ETXR INTO LIST                          
+.ICONTI  AIF   ('&DPMOD' EQ '').ICONTJ                                          
+         AIF   ('&DPMOD'(1,1) NE '(').ICONTJ                                    
+         STH   &DPMOD(1),24(,15)  STORE DPMOD INTO LIST                         
+.ICONTJ  AIF   ('&LPMOD' EQ '').ICONTJ0                                         
+         AIF   ('&LPMOD'(1,1) NE '(').ICONTJ0                                   
+         STC   &LPMOD(1),26(,15)  STORE LPMOD INTO LIST                         
+.ICONTJ0 ANOP                                                                   
+.ICONTK  AIF   ('&JSCB' EQ '').ICONTL0                                          
+         AIF   ('&JSCB'(1,1) NE '(').ICONTL0                                    
+         ST    &JSCB(1),36(,15)   INSERT JSCB INTO LIST                         
+         AIF   ('&SYSASCE' EQ 'P').ICONTL0                                      
+         STAM  &JSCB(1),&JSCB(1),84(15) JSCB AR INTO LIST                       
+.ICONTL0 ANOP                                                                   
+         AIF   ('&TID' EQ '0').ICONTL1                                          
+         AIF   ('&TID'(1,1) NE '(').ICONTL1                                     
+         STC   &TID(1),53(,15)    INSERT TID INTO LIST                          
+.ICONTL1 ANOP                                                                   
+         AIF   (NOT (&SWSTAI OR &SWESTAI) ).ICONTO                              
+         AIF   ('&STXADDR'(1,1) NE '(' ).ICZ                                    
+         ST    &STXADDR,44(,15)   SET STAI/ESTAI EXIT ADDR                      
+.ICZ     AIF   ('&STPADDR' EQ '').ICONTO                                        
+         AIF   ('&STPADDR'(1,1) NE '(' ).ICONTO                                 
+         ST    &STPADDR,40(,15)   STAI/ESTAI PARM LIST ADDR                     
+         AIF   ('&SYSASCE' EQ 'P').ICONTO                                       
+         STAM  &STPADDR,&STPADDR,88(15) (E)STAI PARM AR                         
+.ICONTO  AIF   ('&TASKLIB' EQ '').ICONTP                                        
+.ICONTQ  AIF   ('&TASKLIB'(1,1) NE '(').ICONTP                                  
+         ST    &TASKLIB(1),48(,15) TASKLIB DCB ADDRESS                          
+         AIF   ('&SYSASCE' EQ 'P').ICONTP                                       
+         STAM  &TASKLIB(1),&TASKLIB(1),92(15) TASKLIB AR                        
+.ICONTP  ANOP                                                                   
+         AIF   ('&NSHSPL' EQ '').ICONTP0                                        
+         AIF   ('&NSHSPL'(1,1) NE '(' ).ICONTP1                                 
+         ST    &NSHSPL(1),56(,15) NSHSPL ADDR INTO LIST                         
+         AIF   ('&SYSASCE' EQ 'P').ICONTP1                                      
+         STAM  &NSHSPL(1),&NSHSPL(1),96(15) NSHSPL AR                           
+         AGO   .ICONTP1                                                         
+.ICONTP0 ANOP                                                                   
+         AIF   ('&NSHSPV' EQ '').ICONTP1                                        
+         AIF   ('&NSHSPV'(1,1) NE '(' ).ICONTP1                                 
+         STC   &NSHSPV(1),59(,15) NSHSPV VALUE INTO LIST                        
+.ICONTP1 ANOP                                                                   
+         B     100(,15)           BRANCH AROUND LIST                            
+&GNAME   DS    0F                 SUP. PARAM. LIST                              
+         AIF   ('&EP' EQ '').CNTA                                               
+         DC    A(*+28)            ADDRESS OF SYMB NAME                          
+         AGO   .CCHID                                                           
+.CNTA    AIF   ('&EPLOC' EQ '').CNTC                                            
+         AIF   ('&EPLOC'(1,1) EQ '(').CNTD                                      
+         DC    A(&EPLOC)          ADDRESS OF SYMB NAME                          
+         AGO   .CCHID                                                           
+.CNTC    AIF   ('&DE' EQ '').ERROR6                                             
+         AIF   ('&DE'(1,1) EQ '(').CNTD                                         
+         DC    A(&DE)             SET DE ADDR                                   
+         AGO   .CCHID                                                           
+.CNTD    DC    A(0)               DE OR EPLOC ADDRESS                           
+.CCHID   ANOP                                                                   
+.CCCHID  ANOP                                                                   
+.CNTB    AIF   ('&DCB' EQ '').CNTE                                              
+         AIF   ('&DCB'(1,1) EQ '(').CNTE                                        
+         DC    A(&DCB)            DCB ADDRESS                                   
+         AGO   .CNTF                                                            
+.CNTE    DC    A(0)               DCB ADDRESS                                   
+.CNTF    ANOP                                                                   
+         AIF   ('&ECB' EQ '').CNTG                                              
+         AIF   ('&ECB'(1,1) EQ '(').CNTG                                        
+         DC    A(X'80000000'+&ECB)  ECB ADDRESS, NEW FORMAT                     
+         AGO   .CNTH                                                            
+.CNTG    DC    A(X'80000000')     ECB ADDRESS, NEW FORMAT                       
+.CNTH    AIF   ('&GSPV' EQ '').CNTI                                             
+         AIF   ('&GSPV'(1,1) EQ '(').CNTJ                                       
+         DC    A(&GSPV)           GSPV VALUE                                    
+         AGO   .CNTK                                                            
+.CNTI    AIF   ('&GSPL' EQ '').CNTJ                                             
+         AIF   ('&GSPL'(1,1) EQ '(').CNTJ                                       
+         DC    A(&GSPL)           SET GSPL ADDR                                 
+         AGO   .CNTK                                                            
+.CNTJ    DC    A(0)               GSPV VALUE OR GSPL ADDRESS                    
+.CNTK    AIF   ('&SHSPV' EQ '').CNTL                                            
+         AIF   ('&SHSPV'(1,1) EQ '(').CNTM                                      
+         DC    A(&SHSPV)          SHSPV VALUE                                   
+         AGO   .CNTN                                                            
+.CNTL   AIF   ('&SHSPL' EQ '').CNTM                                             
+         AIF   ('&SHSPL'(1,1) EQ '(').CNTM                                      
+         DC    A(&SHSPL)          SET SHSPL ADDRESS                             
+         AGO   .CNTN                                                            
+.CNTM    DC    A(0)               SHSPL OR SHSPV                                
+.CNTN    ANOP                                                                   
+         AIF   ('&ETXR' EQ '').CNTO                                             
+         AIF   ('&ETXR'(1,1) EQ '(').CNTO                                       
+         DC    A(&ETXR)           EXIT ROUTINE ADDRESS                          
+         AGO   .CNTP                                                            
+.CNTO    DC    A(0)               EXIT ROUTINE ADDRESS                          
+.CNTP    AIF   ('&DPMOD' EQ '').CNTQ                                            
+         AIF   ('&DPMOD'(1,1) EQ '(').CNTQ                                      
+         AIF   ('&DPMOD'(1,1) EQ '+' OR '&DPMOD'(1,1) EQ '-').SIGNC             
+         DC    AL2(&DPMOD)        DPMOD VALUE                                   
+         AGO   .CNTR                                                            
+.SIGNC   DC    AL2(0&DPMOD)       DPMOD VALUE                                   
+         AGO   .CNTR                                                            
+.CNTQ    DC    AL2(0)             DPMOD VALUE                                   
+.CNTR    AIF   ('&LPMOD' EQ '').CNTS                                            
+         AIF   ('&LPMOD'(1,1) EQ '(').CNTS                                      
+         DC    AL1(&LPMOD)        LPMOD VALUE                                   
+         AGO   .CNTT0C                                                          
+.CNTS    DC    AL1(0)             LPMOD VALUE                                   
+.CNTT0C  ANOP                                                                   
+.CNTV    DC    AL1(&NUMB)         STATUS BYTE                                   
+         AIF   ('&EP' EQ '').CNTW                                               
+         DC    CL8'&EP'           EP SYMBOL                                     
+         AGO   .CNTXX                                                           
+.CNTW    DC    CL8' '             EP SYMBOL                                     
+.CNTXX   ANOP                                                                   
+         AIF   ('&JSCB' EQ '').CONTQ6                                           
+         AIF   ('&JSCB'(1,1) EQ '(').CONTQ6                                     
+         DC    A(&JSCB)           ADDRESS OF JSCB                               
+         AGO   .CNTYY                                                           
+.CONTQ6  DC    A(0)               ADDRESS OF JSCB                               
+.CNTYY   ANOP                                                                   
+         AIF   (NOT (&SWSTAI OR &SWESTAI) ).TLICN                               
+         AIF   ('&STPADDR' EQ '').CREG2                                         
+         AIF   ('&STPADDR'(1,1) EQ '(' ).CREG2                                  
+         DC    A(&STPADDR)        STAI/ESTAI PARM LIST ADDR                     
+         AGO   .CKREG1                                                          
+.CREG2   DC    A(0)               STAI/ESTAI PARM LIST ADDR                     
+.CKREG1  ANOP                                                                   
+         AIF   ('&STXADDR'(1,1) EQ '(' ).CREG1                                  
+         DC    A(&STXADDR)        STAI/ESTAI EXIT RTN ADDRESS                   
+         AGO   .TLICNA                                                          
+.CREG1   DC    A(0)               STAI/ESTAI EXIT RTN ADDRESS                   
+         AGO   .TLICNA                                                          
+.TLICN   DC    A(0)               NO STAI/ESTAI PARM LIST ADDR                  
+         DC    A(0)               NO EXIT ADDRESS                               
+.TLICNA  ANOP                                                                   
+         AIF   ('&TASKLIB' EQ '').TLICNC                                        
+         AIF   ('&TASKLIB'(1,1) EQ '(' ).TLICNC                                 
+         DC    A(&TASKLIB)        TASKLIB DCB ADDRESS                           
+         AGO   .INSHSP1                                                         
+.TLICNC  DC    A(0)               TASKLIB DCB ADDRESS                           
+.INSHSP1 ANOP                                                                   
+&NSHSP   SETC  '0'                ASSUME NO NSHSPL,NSHSPV                       
+         AIF   ('&NSHSPL' EQ '').INSHSP4   NSHSPL SPECIFIED:                    
+&NUMB3   SETA  &NUMB3+128         SET BIT TO INDICATE LIST                      
+&NSHSP   SETC  '&NSHSPL'          INDICATE NSHSPL                               
+         AGO   .INSHSP2                                                         
+.INSHSP4 AIF   ('&NSHSPV' EQ '').INSHSP2    NSHSPV SPECIFIED:                   
+&NSHSP   SETC  '&NSHSPV'          INDICATE NSHSPV                               
+.INSHSP2 AIF   ('&RSAPF' NE 'YES').INSHSP3 RSAPF SPECIFIED:                     
+&NUMB3   SETA  &NUMB3+64          SET BIT TO INDICATE IT                        
+.INSHSP3 DC    AL1(&NUMB3)        FLAG BYTE                                     
+         AIF   ('&TID'(1,1) EQ '(').BYT53A                                      
+         DC    AL1(&TID)          TASK ID                                       
+         AGO   .BYT53B                                                          
+.BYT53A  DC    AL1(0)             TID = 0                                       
+.BYT53B  ANOP                                                                   
+         DC    AL2(100)           PARM LIST LENGTH                              
+         AIF   ('&NSHSP'(1,1) EQ '(').INSHSP5                                   
+         DC    A(&NSHSP)          NSHSPV VALUE OR NSHSPL ADDR                   
+         AGO   .BYTE60                                                          
+.INSHSP5 ANOP                                                                   
+         DC    A(0)               NSHSPV VALUE OR NSHSPL ADDR                   
+.BYTE60  ANOP                                                                   
+         DC    AL1(&NUMB1)        FLAG BYTE                                     
+         DC    AL1(&FORM#)        SET UP FORMAT NUMBER                          
+         DC    AL1(&NUMF3)        SET FLAGS                                     
+         DC    AL1(0)             RESERVED BYTE                                 
+         DC    A(0)               EPLOC/DE/EP ALET                              
+         DC    A(0)               DCB ALET                                      
+         DC    A(0)               ECB ALET                                      
+         DC    A(0)               GSPL ALET                                     
+         DC    A(0)               SHSPL ALET                                    
+         DC    A(0)               JSCB ALET                                     
+         DC    A(0)               (E)STAI PARAMETER ALET                        
+         DC    A(0)               TASKLIB ALET                                  
+         DC    A(0)               NSHSP ALET                                    
+.SVC     SVC   42                 ISSUE ATTACH SVC                              
+         AGO   .EXIT                                                            
+.ERROZ   IHBERMAC 1003,PURGE,ASYNCH                                             
+         AGO   .EXIT                                                            
+.ERROR   IHBERMAC 1004,&STAITYP                                                 
+         AGO   .EXIT                                                            
+.E2      IHBERMAC 1005,&STAITYP                                                 
+         AGO   .EXIT                                                            
+.E3      IHBERMAC 1005,PURGE                                                    
+         AGO   .EXIT                                                            
+.E4      IHBERMAC 1005,ASYNCH                                                   
+         AGO   .EXIT                                                            
+.E5      IHBERMAC 1005,SZERO,YES                                                
+         AGO   .EXIT                                                            
+.E6      IHBERMAC 1005,GIVEJPQ                                                  
+         AGO   .EXIT                                                            
+.E7      IHBERMAC 1005,GSPV                                                     
+         AGO   .EXIT                                                            
+.E8      IHBERMAC 1005,GSPL                                                     
+         AGO   .EXIT                                                            
+.E9      IHBERMAC 1005,SHSPV                                                    
+         AGO   .EXIT                                                            
+.E10     IHBERMAC 1005,SHSPL                                                    
+         AGO   .EXIT                                                            
+.ERDISP  IHBERMAC 1001,DISP,&DISP                                               
+         AGO   .EXIT                                                            
+.ERTQE   IHBERMAC 1001,TQE,&TQE                                                 
+         AGO   .EXIT                                                            
+.ERFP    IHBERMAC 1001,FPREGSA,&FPREGSA                                         
+         AGO   .EXIT                                                            
+.ERTERM  IHBERMAC 1001,TERM,&TERM                                               
+         AGO   .EXIT                                                            
+.ERALCPY IHBERMAC 1001,ALCOPY,&ALCOPY                                           
+         AGO   .EXIT                                                            
+.ERADDRE IHBERMAC 1001,ADDRENV,&ADDRENV                            @L3A         
+         AGO   .EXIT                                               @L3A         
+.ERNSHSP IHBERMAC 1020,NSHSPV,NSHSPL                                            
+         AGO   .EXIT                                                            
+.ERSTAI  IHBERMAC 1020,STAI,ESTAI                                               
+         MEXIT                                                                  
+.ERRKEYNINE ANOP                                                                
+&ZMS     SETC  'KEY=NINE MAY NOT BE SPECIFIED WITH GSPL, GSPV, '   @L5A         
+&ZMS     SETC  '&ZMS.SHSPL, SHSPV, OR SZERO=YES'                   @L5A         
+         MNOTE 8,' &ZMS '                                          @L5A         
+         MEXIT                                                     @L5A         
+.END     ANOP                                                                   
+         AGO   .EXIT                                                            
+.**********************************************************************         
+.*   HANDLE DISP=RESET WITH TCB REQUEST                               *         
+.**********************************************************************         
+.ATTCHD  ANOP                                                      @L2A         
+.**********************************************************************         
+.*                                                                    *         
+.* PROCESSING OF ATTACH WITH DISP=YES AND TCB ADDRESS                 *         
+.*                                                                    *         
+.**********************************************************************         
+.RESET00 ANOP                                                      @L2A         
+         LCLC  &PLENGTH    PARAMETER LIST LENGTH                                
+         LCLC  &ZJUMP      WORK STRING FOR PARAMETER LIST LENGTH                
+         LCLC  &ZMS        MNOTE ERROR STRING                                   
+         LCLC  &FLEN       TOTAL LENGTH OF PARAMETER LIST                       
+         LCLC  &FLAE       XA OR ESA LOAD ADDRESS                               
+&FLEN    SETC  '100'                                                            
+&FLAE    SETC  'LAE'                                                            
+&FORM#   SETC  '3'         PARAMETER LIST FOR DISP=RESET WITH TCB  @P2A         
+.**********************************************************************         
+.*       PERFORM CHECK FOR UNRECOGNIZED DISP KEYWORD                  *         
+.**********************************************************************         
+&ZMACRET SETA  0           INIT RETURN CODE                        @L2A         
+         AIF   ('&DISP' EQ 'RESET').RESET0B                        @L2A         
+         AIF   ('&DISP' EQ 'YES').RESET0B                          @L2A         
+         AIF   ('&DISP' EQ 'NO').RESET0B                           @L2A         
+         IHBERMAC 1001,DISP,&DISP                                               
+&ZMACRET SETA  8           SET ERROR RETURN CODE                   @L2A         
+.**********************************************************************         
+.*       PERFORM CHECK FOR CORRECT COMBINATION OF DISP=RESET WITH TCB *         
+.**********************************************************************         
+.RESET0B ANOP                                                      @L2A         
+         AIF   ('&DISP' EQ 'RESET' AND T'&TCB NE 'O').RESET01      @L2A         
+&ZMS     SETC  'DISP=RESET MUST BE SPECIFIED WITH TCB KEYWORD. '   @L2A         
+         MNOTE 8,' &ZMS '                                          @L2A         
+&ZMACRET SETA  8           SET ERROR RETURN CODE                   @L2A         
+.**********************************************************************         
+.*       PERFORM CHECK FOR LIST FORM INVOCATION                       *         
+.**********************************************************************         
+.RESET01 ANOP                                                      @L2A         
+         AIF   ('&SF' NE 'L'  ).RESET02                            @L2A         
+&ZMS     SETC  'LIST FORM IS INCOMPATIBLE WITH DISP=RESET WITH TCB. '           
+         MNOTE 8,' &ZMS '                                                       
+&ZMACRET SETA  8           SET ERROR RETURN CODE                   @L2A         
+         AGO   .RESET02                                                         
+.**********************************************************************         
+.*       PERFORM CHECK FOR INCOMPATIBLE PARAMETERS                    *         
+.**********************************************************************         
+.RESET02 ANOP                                                      @L2A         
+         AIF   (T'&EP NE 'O').RESET03                              @L2A         
+         AIF   (T'&EPLOC NE 'O').RESET03                           @L2A         
+         AIF   (T'&DE NE 'O').RESET03                              @L2A         
+         AIF   (T'&DCB NE 'O').RESET03                             @L2A         
+         AIF   (T'&PARAM NE 'O').RESET03                           @L2A         
+         AIF   (T'&VL NE 'O').RESET03                              @L2A         
+         AIF   (T'&ECB NE 'O').RESET03                             @L2A         
+         AIF   (T'&GSPV NE 'O').RESET03                            @L2A         
+         AIF   (T'&GSPL NE 'O').RESET03                            @L2A         
+         AIF   (T'&SHSPL NE 'O').RESET03                           @L2A         
+         AIF   (T'&ETXR NE 'O').RESET03                            @L2A         
+         AIF   (T'&LPMOD NE 'O').RESET03                           @L2A         
+         AIF   (T'&DPMOD NE 'O').RESET03                           @L2A         
+         AIF   (T'&SHSPV NE 'O').RESET03                           @L2A         
+         AIF   (T'&HIARCHY NE 'O').RESET03                         @L2A         
+         AIF   (T'&JSCB NE 'O').RESET03                            @L2A         
+         AIF   (T'&TASKLIB NE 'O').RESET03                         @L2A         
+         AIF   (T'&STAI NE 'O').RESET03                            @L2A         
+         AIF   (T'&PURGE NE 'O').RESET03                           @L2A         
+         AIF   (T'&ASYNCH NE 'O').RESET03                          @L2A         
+         AIF   (T'&ESTAI NE 'O').RESET03                           @L2A         
+         AIF   (T'&NSHSPL NE 'O').RESET03                          @L2A         
+         AIF   (T'&NSHSPV NE 'O').RESET03                          @L2A         
+         AIF   (T'&TQE NE 'O').RESET03                             @L2A         
+         AIF   (T'&FPREGSA NE 'O').RESET03                         @L2A         
+         AIF   (T'&ALCOPY NE 'O').RESET03                          @L2A         
+         AIF   (T'&ADDRENV NE 'O').RESET03                         @L3A         
+         AIF   (T'&PKM NE 'O').RESET03                             @L5A         
+         AIF   (T'&SDWALOC31 NE 'O').RESET03                       @P5A         
+         AIF   (T'&BYADDRESS NE 'O').RESET03                       @LAA         
+         AIF   ('&KEY' EQ 'NINE').RESET03                          @L5A         
+         AGO .RESET04                                                           
+.**********************************************************************         
+.*       INCOMPATIBLE PARAMETER DETECTED                              *         
+.**********************************************************************         
+.RESET03 ANOP                                                      @L2A         
+&ZMS     SETC  'KEYWORD(S) SPECIFIED IS INCOMPATIBLE'                           
+&ZMS     SETC  '&ZMS. WITH DISP=RESET AND TCB KEYWORD. '                        
+         MNOTE 8,' &ZMS '                                                       
+&ZMACRET SETA  8           SET ERROR RETURN CODE                   @L2A         
+.**********************************************************************         
+.*       VERIFY THAT TCB PARAMETER IS O.K.                            *         
+.**********************************************************************         
+.RESET04 ANOP                                                      @L2A         
+         AIF   ('&TCB' NE '(15)').RESET05                          @L2A         
+&ZMS     SETC  'TCB ADDRESS CANNOT BE PASSED IN REGISTER 15.'      @L2A         
+         MNOTE 8,' &ZMS '                                                       
+&ZMACRET SETA  8           SET ERROR RETURN CODE                   @L2A         
+.RESET05 ANOP                                                      @L2A         
+         AIF   ('&SF'    EQ 'I'  ).RESET09                         @L2A         
+         AIF   ('&SF(1)' EQ 'E'  ).RESET06                         @L2A         
+         AGO   .RESET09                                            @L2A         
+.*                                                                              
+.*       VERIFY EXECUTE TCB SPECIFICATION                                       
+.*                                                                              
+.RESET06 ANOP                                                      @L2A         
+         AIF   ('&SF(2)' NE ''  ).RESET09                          @L2A         
+&ZMS     SETC  'LIST ADDRESS MUST BE SUPPLIED WITH EXECUTE FORM. '              
+         MNOTE 8,' &ZMS '                                                       
+&ZMACRET SETA  8           SET ERROR RETURN CODE                   @L2A         
+.**********************************************************************         
+.*        END CHECKING OF TCB SPECIFICATION                           *         
+.**********************************************************************         
+.RESET09 ANOP                                                                   
+.**********************************************************************         
+.*        ERROR-CHECKING COMPLETE                                     *         
+.**********************************************************************         
+.RESET26 ANOP                                                      @L2A         
+         AIF   (&ZMACRET NE 0).RESET99  IF ERRORS DETECTED THEN QUIT            
+.**********************************************************************         
+.*                                      ELSE, GENERATE CODE           *         
+.*--------------------------------------------------------------------*         
+.*        SEPARATE IN-LINE AND EXECUTE FORMS                          *         
+.**********************************************************************         
+         AIF   ('&SF'    EQ 'I').RESETIN     IN-LINE MACRO FORM    @L2A         
+         AIF   ('&SF(1)' EQ 'E').RESETEX     EXECUTE MACRO FORM    @L2A         
+.**********************************************************************         
+.*        HANDLE IN-LINE FORM                                         *         
+.**********************************************************************         
+.RESETIN ANOP                                                      @L2A         
+&GNAME   SETC  'IHB'.'&SYSNDX'    GENERATE LIST NAME               @L2A         
+&ZJUMP   SETC  '&FLEN'.'(,15)'    GENERATE BRANCH AROUND LIST      @L2A         
+&NAME    DS    0H                                                               
+         CNOP  0,4                                                              
+         &FLAE 15,&GNAME          SET UP LIST ADDRESS                           
+         B     &ZJUMP             BRANCH AROUND LIST                            
+&GNAME   DS    0F                 SUP. PARM LIST                                
+         DC    XL8'00'                                             @P3A         
+         DC    XL4'80000000'                                       @P3A         
+         DC    XL42'00'                                            @P3C         
+         DC    AL2(&FLEN)         PARM LIST LENGTH                              
+         DC    A(0)               NSHSPV VALUE OR NSHSPL ADDR                   
+         DC    X'00'              FLAG BYTE WITH TCB FLAG                       
+         DC    AL1(&FORM#)        SET UP FORMAT NUMBER                          
+         DC    XL(&FLEN-62)'00'   RESERVED BYTES AT END                         
+         AGO   .RESETCB           GENERATE CODE TO GET TCB ADDRESS              
+.**********************************************************************         
+.*        HANDLE EXECUTE FORM                                         *         
+.**********************************************************************         
+.RESETEX ANOP                                                      @L2A         
+&NAME    DS    0H                                                               
+         AIF   ('&SF(2)' EQ '(15)').RESETE3  LIST ADDRESS IN REG 15             
+         AIF   ('&SF'(4,1) EQ '(' ).RESETE2  LIST ADDRESS IN OTHER REG          
+         AGO   .RESETE1                      LIST ADDRESS TO BE LOADED          
+.RESETE1 ANOP                 LIST ADDRESS TO BE LOADED            @L2A         
+         &FLAE 15,&SF(2)          SET UP LIST ADDRESS                           
+         AGO   .RESETE4           GENERATE CODE TO SET BITS        @L2A         
+.RESETE2 ANOP                 LIST ADDRESS IN OTHER REG            @L2A         
+         AIF   ('&SYSAM64' EQ 'YES').AM642                         @Mxa         
+         LR    15,&H              COPY LIST ADDRESS                             
+         AGO   .AM31642                                                         
+.AM642   ANOP                                                      @Mxa         
+         LLGFR 15,&H              COPY LIST ADDRESS                @Mxa         
+.AM31642 ANOP                                                      @Mxa         
+         AGO   .RESETE4           GENERATE CODE TO SET BITS        @L2A         
+.RESETE3 ANOP                 LIST ADDRESS IN REG 15               @L2A         
+         AGO   .RESETE4           GENERATE CODE TO SET BITS        @L2A         
+.**********************************************************************         
+.*        GENERATE BAL CODE TO SET OPTION BIT IN ATTACH PARAMETER LIST          
+.**********************************************************************         
+.RESETE4 ANOP                                                      @L2A         
+         MVI   55(15),72          SET LENGTH OF THIS PARM LIST                  
+         OI    8(15),X'80'        SET NEW FORMAT BIT                            
+         MVI   61(15),&FORM#      SET FORMAT NUMBER                             
+         AGO   .RESETCB       GENERATE CODE TO GET TCB ADDRESS     @L2A         
+.**********************************************************************         
+.*        GENERATE BAL CODE TO GET TCB ADDRESS                        *         
+.**********************************************************************         
+.RESETCB ANOP                                                      @L2A         
+         AIF  ('&TCB' EQ '(1)').RESETB3                            @L2A         
+         AIF  ('&TCB'(1,1) EQ '(').RESETB2                         @L2A         
+.*                                                                              
+.*       TCB ADDRESS IS IN STORAGE                                              
+.*                                                                              
+         L     1,&TCB             LOAD TCB ADDRESS                              
+         AGO   .RESETB3         GO ISSUE SVC                       @L2A         
+.*                                                                              
+.*       TCB ADDRESS IS IN A REGISTER OTHER THAN REG 1                          
+.*                                                                              
+.RESETB2 ANOP                                                      @L2A         
+         LR    1,&TCB(1)          COPY TCB ADDRESS                              
+.********************************************************************           
+.***       ISSUE ATTACH SVC                                                     
+.********************************************************************           
+.RESETB3 ANOP                   TCB ADDRESS IS IN REGISTER 1                    
+         SVC   42                 ISSUE ATTACH SVC                              
+.********************************************************************           
+.***       EXIT MACRO                                                           
+.********************************************************************           
+.RESET99 ANOP                                                                   
+         SPACE 1                                                                
+         AGO   .EXIT                                                            
+.EXIT    ANOP                                                                   
+&SYSPLIST8 SETC '&SAVEPLIST8'                                      @L6A         
+&SYSPLIST8ARALETS SETC '&SAVEPLIST8ARALETS'                        @L7A         
+&SYSPLISTARALETS SETC '&SAVEPLISTARALETS'                          @L9A         
+         MEND                                                                   
+**/                                                                             
+*  ATTACHX :       /**************************************************/         
+*/********************************************************************/         
+*/**************** PL/S VERSION OF THE ATTACHX MACRO *****************/         
+*/********************************************************************/         
+* MACRO                                                                         
+*   KEYS( ALCOPY, ASYNCH, DCB, DE, DPMOD, ECB, EP, ESTAI, ETXR,                 
+*         GIVEJPQ, GSPL, GSPV, JSCB, JSTCB,                                     
+*         KEYNINE, KEYZERO, LPMOD, MF,                                          
+*         NOASYNCH, NODISP, NOSVAREA, NOSZERO, NSHSPL, NSHSPV, PARAM,           
+*         PKM, SDWALOC31, BYADDRESS,                          /* @LAC*/         
+*         PURGE, RTCD, SF, SHSPL, SHSPV, SM, STAI, TASKLIB, TCB, TERM,          
+*         TID, VL, RELATED, RSAPF, DISP, ADDRENV, PLIST8,                       
+*         PLIST4);                                            /* @L6C*/         
+*          ANS('?'!!MACLABEL!!'ATTACHXP '!!MACLIST!!MACKEYS!!';'); /*           
+*                                    INVOKE HIGHEST LEVEL            */         
+*%END;                                                                          

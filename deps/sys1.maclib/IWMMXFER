@@ -1,0 +1,2306 @@
+*/**** START OF SPECIFICATIONS **************************************** 00000100
+*                                                                     * 00000200
+*                                                                     * 00000300
+*01* MACRO NAME:  IWMMXFER                              -01/29/13-<1> * 00000400
+*                                                                     * 00000500
+*                                                                     * 00000600
+*01* DESCRIPTIVE NAME:  Monitoring environment transfer               * 00000700
+*                                                                     * 00000800
+*01* PROPRIETARY STATEMENT:                                           * 00000900
+*                                                                     * 00001000
+*     LICENSED MATERIALS - PROPERTY OF IBM                            * 00001100
+*     5650-ZOS COPYRIGHT IBM CORP. 1993, 2013                         * 00001200
+*                                                                     * 00001300
+* STATUS= HBB7790                                                     * 00001400
+*                                                                     * 00001500
+*                                                                     * 00001600
+*                                                                     * 00001700
+*01* FUNCTION:                                                        * 00001800
+*                                                                     * 00001900
+*                                                                     * 00002000
+*      The purpose of this service is to reflect that the delay       * 00002100
+*      information for a work request may now also reside in a        * 00002200
+*      dependent monitoring environment (CONTINUE) OR that delay      * 00002300
+*      information is no longer present in a dependent monitoring     * 00002400
+*      environment (RETURN).                                          * 00002500
+*                                                                     * 00002600
+*      The two monitoring environments referred to above must be      * 00002700
+*      related by a previous IWMMRELA invocation.  This service       * 00002800
+*      requires as input the monitoring token for the dependent       * 00002900
+*      environment, which is accessed, but the parent environment     * 00003000
+*      must also be updated.  This implies that the user must have    * 00003100
+*      addressability and update access to the parent monitoring      * 00003200
+*      environment.  PARENTKEYP and PARENTENV keywords are provided   * 00003300
+*      to accommodate these requirements.  These restrictions apply   * 00003400
+*      even when the Relate was performed using the FINDACTIVE        * 00003500
+*      option, though when the monitoring environment is related to   * 00003600
+*      the address space characteristics, no key or addressability    * 00003700
+*      requirements exist beyond those for the dependent monitoring   * 00003800
+*      environment.                                                   * 00003900
+*                                                                     * 00004000
+*01* EXTERNAL CLASSIFICATION:  GUPI                                   * 00004100
+*                                                                     * 00004200
+*01* END OF EXTERNAL CLASSIFICATION:                                  * 00004300
+*                                                                     * 00004400
+*01* ENVIRONMENT:                                                     * 00004500
+*                                                                     * 00004600
+*                                                                     * 00004700
+*      Dispatchable unit mode: Task or SRB mode.                      * 00004800
+*                                                                     * 00004900
+*      Cross Memory Mode: Any PASN, any HASN, any SASN.               * 00005000
+*                                                                     * 00005100
+*      Minimum authorization:                                         * 00005200
+*                                                                     * 00005300
+*                                                                     * 00005400
+*                        o   Either problem state or supervisor       * 00005500
+*                            state.                                   * 00005600
+*                                                                     * 00005700
+*                        o   PSW key must either be 0 or match the    * 00005800
+*                            value supplied on IWM4MCRE for the       * 00005900
+*                            (dependent) monitoring token.            * 00006000
+*                                                                     * 00006100
+*                        o   PARENTKEYP(VALUE) may only be specified  * 00006200
+*                            in supervisor state or with PKM          * 00006300
+*                            authority to the key specified by        * 00006400
+*                            PARENTKEY.  Note that the key for        * 00006500
+*                            IWMMXFER is located in bit positions 0-3 * 00006600
+*                            (using 0 origin), which is the machine   * 00006700
+*                            orientation to keeping keys, not the     * 00006800
+*                            "natural" way of declaring the key       * 00006900
+*                            value.                                   * 00007000
+*                                                                     * 00007100
+*                        o   PARENTKEYP(UNKNOWN) may only be          * 00007200
+*                            specified in supervisor state or with    * 00007300
+*                            PKM authority to key 0.                  * 00007400
+*                                                                     * 00007500
+*                        o   When PARENTKEYP(PSWKEY) is specified,    * 00007600
+*                            the PSW key must either be 0 or match    * 00007700
+*                            the value supplied on IWM4MCRE for the   * 00007800
+*                            parent monitoring environment.           * 00007900
+*                                                                     * 00008000
+*                        o   If FUNCTION=RETURN is specified and the  * 00008100
+*                            passed MONTKN is associated with an ARM  * 00008200
+*                            work request (EWLM=YES was specified on  * 00008300
+*                            IWMCONN and the monitoring               * 00008400
+*                            environvironment was created using that  * 00008500
+*                            CONNTKN), the caller must be in          * 00008600
+*                            supervisor state or have PKM authority   * 00008700
+*                            to key 0.                                * 00008800
+*                                                                     * 00008900
+*                                                                     * 00009000
+*                                                                     * 00009100
+*      AMODE:            31-bit.                                      * 00009200
+*                                                                     * 00009300
+*      ASC mode:         Primary.                                     * 00009400
+*                                                                     * 00009500
+*      Interrupt status: Enabled for I/O and external interrupts.     * 00009600
+*                                                                     * 00009700
+*      Locks:            No locks held.                               * 00009800
+*                                                                     * 00009900
+*      Control parameters: Control parameters must be in the primary  * 00010000
+*                        address space.                               * 00010100
+*                                                                     * 00010200
+*                                                                     * 00010300
+*                                                                     * 00010400
+*01* PROGRAMMING REQUIREMENTS:                                        * 00010500
+*                                                                     * 00010600
+*                                                                     * 00010700
+*    1.  The macro IWMYCON must be included to use this macro.        * 00010800
+*                                                                     * 00010900
+*    2.  The macro IWMPB must be in the library concatenation, since  * 00011000
+*        it is included by IWMYCON.                                   * 00011100
+*                                                                     * 00011200
+*    3.  Note that the high order halfword of register 0, and the     * 00011300
+*        reason code variable when specified, may be non-zero and     * 00011400
+*        represents diagnostic data which is NOT part of the external * 00011500
+*        interface.  The high order halfword should thus be excluded  * 00011600
+*        from comparison with the reason code values described above. * 00011700
+*        The constant, IWMRSNCODE_MASK_CONST defined in IWMYCON, may  * 00011800
+*        be used for this purpose.                                    * 00011900
+*                                                                     * 00012000
+*    4.  Note that specification of FUNCTION(CONTINUE) produces an    * 00012100
+*        inline expansion rather than an out-of-line service.         * 00012200
+*        Registers 0, 1, 14, and 15 are not preserved across the      * 00012300
+*        expansion.  In the PL/AS form, Register 2 is also destroyed  * 00012400
+*        when BOTH PARENTENV(SECONDARY) and RUNTIME_VER(SHORT_FORM)   * 00012500
+*        are specified (the latter may be defaulted).                 * 00012600
+*                                                                     * 00012700
+*                                                                     * 00012800
+*                                                                     * 00012900
+*01* RESTRICTIONS:                                                    * 00013000
+*                                                                     * 00013100
+*                                                                     * 00013200
+*    1.  This macro may not be used prior to the completion of WLM    * 00013300
+*        address space initialization                                 * 00013400
+*                                                                     * 00013500
+*    2.  This macro may only be used on MVS/ESA (version 3 or         * 00013600
+*        higher), NOT versions 1 or 2 of MVS.                         * 00013700
+*                                                                     * 00013800
+*    3.  If the key specified on IWM4MCRE for the dependent           * 00013900
+*        monitoring environment was a user key (8-F), then primary    * 00014000
+*        addressability must exist to the performance block IWM4MCRE  * 00014100
+*        obtained.  This condition is satisfied by ensuring that      * 00014200
+*        current primary matches primary at the time that IWM4MCRE    * 00014300
+*        was invoked.  If this service is invoked in a subspace, the  * 00014400
+*        condition may be satisfied by ensuring that the performance  * 00014500
+*        block is shared with the base space.                         * 00014600
+*                                                                     * 00014700
+*    4.  If the key specified on IWM4MCRE for the parent environment  * 00014800
+*        was a user key (8-F), then either primary OR secondary       * 00014900
+*        addressability must exist to the performance block for the   * 00015000
+*        parent environment.                                          * 00015100
+*                                                                     * 00015200
+*    5.  When FUNCTION(CONTINUE!RETURN) are used, the caller is       * 00015300
+*        responsible for error recovery                               * 00015400
+*                                                                     * 00015500
+*    6.  When FUNCTION(CONTINUE) is used, the caller is responsible   * 00015600
+*        to ensure that the parent monitoring environment does not    * 00015700
+*        already have a continuation (via a previous IWMMXFER or      * 00015800
+*        IWMMSWCH) to another (or other) dependent monitoring         * 00015900
+*        environment(s).                                              * 00016000
+*                                                                     * 00016100
+*    7.  Both monitoring environments must be established on the same * 00016200
+*        MVS image.                                                   * 00016300
+*                                                                     * 00016400
+*    8.  The caller must serialize to prevent any delay monitoring    * 00016500
+*        services from being invoked concurrently for the dependent   * 00016600
+*        monitoring environment.                                      * 00016700
+*                                                                     * 00016800
+*    9.  The caller and/or the owner of the parent environment must   * 00016900
+*        ensure that parent environment is not deleted while between  * 00017000
+*        the time that IWMMXFER FUNCTION(CONTINUE) is used and the    * 00017100
+*        time that either IWMMXFER FUNCTION(RETURN) is used against   * 00017200
+*        the dependent monitoring environment OR IWMMSWCH             * 00017300
+*        FUNCTION(RETURN) is used against the parent monitoring       * 00017400
+*        environment.                                                 * 00017500
+*                                                                     * 00017600
+*    10. Only limited validity checking is done on the input          * 00017700
+*        monitoring tokens.                                           * 00017800
+*                                                                     * 00017900
+*                                                                     * 00018000
+*                                                                     * 00018100
+*01* INPUT REGISTER INFORMATION:                                      * 00018200
+*                                                                     * 00018300
+*    Before issuing the IWMMXFER macro, the caller does not have to   * 00018400
+*    place any information into any register unless using it in       * 00018500
+*    register notation for a particular parameter, or using it as a   * 00018600
+*    base register.                                                   * 00018700
+*                                                                     * 00018800
+*01* OUTPUT REGISTER INFORMATION:                                     * 00018900
+*                                                                     * 00019000
+*    When control returns to the caller, the GPRs contain:            * 00019100
+*                                                                     * 00019200
+*                                                                     * 00019300
+*    REGISTER  CONTENTS                                               * 00019400
+*                                                                     * 00019500
+*    0         Reason code if GR15 return code is non-zero            * 00019600
+*                                                                     * 00019700
+*    1         Used as work registers by the system                   * 00019800
+*                                                                     * 00019900
+*    2-13      Unchanged                                              * 00020000
+*                                                                     * 00020100
+*    14        Used as work registers by the system                   * 00020200
+*                                                                     * 00020300
+*    15        Return code                                            * 00020400
+*                                                                     * 00020500
+*                                                                     * 00020600
+*                                                                     * 00020700
+*    When control returns to the caller, the ARs contain:             * 00020800
+*                                                                     * 00020900
+*                                                                     * 00021000
+*    REGISTER  CONTENTS                                               * 00021100
+*                                                                     * 00021200
+*    0-1       Used as work registers by the system                   * 00021300
+*                                                                     * 00021400
+*    2-13      Unchanged                                              * 00021500
+*                                                                     * 00021600
+*    14-15     Used as work registers by the system                   * 00021700
+*                                                                     * 00021800
+*                                                                     * 00021900
+*                                                                     * 00022000
+*    Some callers depend on register contents remaining the same      * 00022100
+*    before and after issuing a service.  If the system changes the   * 00022200
+*    contents of registers on which the caller depends, the caller    * 00022300
+*    must save them before issuing the service, and restore them      * 00022400
+*    after the system returns control.                                * 00022500
+*                                                                     * 00022600
+*01* PERFORMANCE IMPLICATIONS:                                        * 00022700
+*                                                                     * 00022800
+*    None                                                             * 00022900
+*                                                                     * 00023000
+*01* SYNTAX:                                                          * 00023100
+*                                                                     * 00023200
+*Ýxlabel¨  IWMMXFER  Ð  FUNCTION=CONTINUE                             * 00023300
+*                    !   ÐÝ,RUNTIME_VER=SHORT_FORM¨                   * 00023400
+*                    !   ¿Ý,RUNTIME_VER=MINIMAL¨                      * 00023500
+*                    ¿ ,FUNCTION=RETURN                               * 00023600
+*                        ÐÝ,RUNTIME_VER=SHORT_FORM¨                   * 00023700
+*                        ¿Ý,RUNTIME_VER=MINIMAL¨                      * 00023800
+*                         Ý,WORKREQ_STA                               * 00023900
+*                                       =»xworkreq_sta!IWMEWLMARMSTAT * 00024000
+*                                       USNONEº¨                      * 00024100
+*                      ,MONTKN=xmontkn                                * 00024200
+*                    Ð ,PARENTKEYP=VALUE                              * 00024300
+*                    !     ,PARENTKEY=xparentkey                      * 00024400
+*                    Ô ,PARENTKEYP=PSWKEY                             * 00024500
+*                    ¿ ,PARENTKEYP=UNKNOWN                            * 00024600
+*                    Ð ,PARENTENV=NOSWITCH                            * 00024700
+*                    ¿ ,PARENTENV=SECONDARY                           * 00024800
+*                    ÐÝ,COMPCODE=YES¨                                 * 00024900
+*                    ¿Ý,COMPCODE=NO¨                                  * 00025000
+*                     Ý,RETCODE=xretcode¨                             * 00025100
+*                     Ý,RSNCODE=xrsncode¨                             * 00025200
+*                     Ý,PLISTVER=»xplistver!IMPLIED_VERSIONº¨         * 00025300
+*                                                                     * 00025400
+*                                                                     * 00025500
+*      Where:                                                         * 00025600
+*                                                                     * 00025700
+*                                                                     * 00025800
+*      Ýxlabel¨                                                       * 00025900
+*          is an optional symbol, starting in column 1, that is the   * 00026000
+*          name on the IWMMXFER macro invocation.  The name must      * 00026100
+*          conform to the rules for an ordinary assembler language    * 00026200
+*          symbol.                                                    * 00026300
+*          DEFAULT: No name.                                          * 00026400
+*                                                                     * 00026500
+*                                                                     * 00026600
+*                                                                     * 00026700
+*                                                                     * 00026800
+*      FUNCTION=»CONTINUE!RETURNº                                     * 00026900
+*          is a required keyword input which indicates whether the    * 00027000
+*          dependent environment is continuing from or returning to   * 00027100
+*          the parent environment.                                    * 00027200
+*                                                                     * 00027300
+*                                                                     * 00027400
+*          FUNCTION=CONTINUE                                          * 00027500
+*              indicates that this is a unique continuation of the    * 00027600
+*              work request which is reflected in the dependent       * 00027700
+*              monitoring environment.                                * 00027800
+*                                                                     * 00027900
+*              Note that the parent environment may continue to be    * 00028000
+*              active on behalf of the work request.                  * 00028100
+*                                                                     * 00028200
+*              Note that specification of FUNCTION(CONTINUE) produces * 00028300
+*              an inline expansion rather than an out-of-line         * 00028400
+*              service.  Registers 0, 1, 14, and 15 are not preserved * 00028500
+*              across the expansion.                                  * 00028600
+*                                                                     * 00028700
+*                                                                     * 00028800
+*              ÝRUNTIME_VER=»SHORT_FORM!MINIMALº¨                     * 00028900
+*                  is an optional keyword input which indicates what  * 00029000
+*                  level of runtime verification will be performed.   * 00029100
+*                  DEFAULT: SHORT_FORM                                * 00029200
+*                                                                     * 00029300
+*                                                                     * 00029400
+*                  ÝRUNTIME_VER=SHORT_FORM¨                           * 00029500
+*                      indicates that checking should verify that a   * 00029600
+*                      monitoring environment is established and      * 00029700
+*                      passes a short form of verification prior to   * 00029800
+*                      being used.                                    * 00029900
+*                                                                     * 00030000
+*                  ÝRUNTIME_VER=MINIMAL¨                              * 00030100
+*                      indicates that checking will only be done to   * 00030200
+*                      verify that a monitoring environment may be    * 00030300
+*                      established, assuming that it would be valid   * 00030400
+*                      and useable if established.                    * 00030500
+*                      DEFAULT: SHORT_FORM indicates that short form  * 00030600
+*                      checking is desired.                           * 00030700
+*                                                                     * 00030800
+*                                                                     * 00030900
+*                                                                     * 00031000
+*                                                                     * 00031100
+*                                                                     * 00031200
+*          FUNCTION=RETURN                                            * 00031300
+*              indicates that the work request is returning to a      * 00031400
+*              previously established parent monitoring environment.  * 00031500
+*                                                                     * 00031600
+*              Use of this option indicates that the dependent        * 00031700
+*              environment no longer represents the work request.     * 00031800
+*                                                                     * 00031900
+*              Note that specification of FUNCTION(RETURN) produces   * 00032000
+*              an inline expansion rather than an out-of-line         * 00032100
+*              service.  Registers 0, 1, 14, and 15 are not preserved * 00032200
+*              across the expansion.                                  * 00032300
+*                                                                     * 00032400
+*                                                                     * 00032500
+*              ÝRUNTIME_VER=»SHORT_FORM!MINIMALº¨                     * 00032600
+*                  is an optional keyword input which indicates what  * 00032700
+*                  level of runtime verification will be performed.   * 00032800
+*                  DEFAULT: SHORT_FORM                                * 00032900
+*                                                                     * 00033000
+*                                                                     * 00033100
+*                  ÝRUNTIME_VER=SHORT_FORM¨                           * 00033200
+*                      indicates that checking should verify that a   * 00033300
+*                      monitoring environment is established and      * 00033400
+*                      passes a short form of verification prior to   * 00033500
+*                      being used.                                    * 00033600
+*                                                                     * 00033700
+*                  ÝRUNTIME_VER=MINIMAL¨                              * 00033800
+*                      indicates that checking will only be done to   * 00033900
+*                      verify that a monitoring environment may be    * 00034000
+*                      established, assuming that it would be valid   * 00034100
+*                      and useable if established.                    * 00034200
+*                      DEFAULT: SHORT_FORM indicates that short form  * 00034300
+*                      checking is desired.                           * 00034400
+*                                                                     * 00034500
+*                                                                     * 00034600
+*                                                                     * 00034700
+*                                                                     * 00034800
+*                                                                     * 00034900
+*                                                                     * 00035000
+*              ÝWORKREQ_STA=»xworkreq_sta!IWMEWLMARMSTATUSNONEº¨      * 00035100
+*                  is the name (RS-type), or address in register      * 00035200
+*                  (2)-(12), of an optional fullword input which      * 00035300
+*                  contains the completion status code of the work    * 00035400
+*                  request.  Available completion status codes        * 00035500
+*                  (defined in macro IWMYCON) are:                    * 00035600
+*                  * IwmEwlmArmStatusGood(0),                         * 00035700
+*                  * IwmEwlmArmStatusAborted(1),                      * 00035800
+*                  * IwmEwlmArmStatusFailed(2) or                     * 00035900
+*                  * IwmEwlmArmStatusUnknown(3)                       * 00036000
+*                  The codes above correspond to status codes in the  * 00036100
+*                  OpenGroup ARM 4.0 Standard (for the meaning of the * 00036200
+*                  status codes see the ARM 4.0 Standard at           * 00036300
+*                  http://www.opengroup.org/management/arm).          * 00036400
+*                                                                     * 00036500
+*                  DEFAULT: IWMEWLMARMSTATUSNONE                      * 00036600
+*                  indicates that internal information in the         * 00036700
+*                  Monitoring Environment will be examined to         * 00036800
+*                  determine the status of the work request: if no    * 00036900
+*                  abnormal event was recorded for the monitoring     * 00037000
+*                  environment via the IWMMABNL service, the          * 00037100
+*                  completion status IwmEwlmArmStatusGood will be     * 00037200
+*                  reported to EWLM. If an abnormal event was         * 00037300
+*                  reported via IWMMABNL, the completion status       * 00037400
+*                  IwmEwlmArmStatusFailed will be reported to EWLM.   * 00037500
+*                                                                     * 00037600
+*                                                                     * 00037700
+*                                                                     * 00037800
+*                                                                     * 00037900
+*                                                                     * 00038000
+*                                                                     * 00038100
+*                                                                     * 00038200
+*                                                                     * 00038300
+*      MONTKN=xmontkn                                                 * 00038400
+*          is the name (RS-type), or address in register (2)-(12), of * 00038500
+*          a required 32 bit input which contains the delay           * 00038600
+*          monitoring token for the dependent environment.            * 00038700
+*                                                                     * 00038800
+*                                                                     * 00038900
+*                                                                     * 00039000
+*                                                                     * 00039100
+*      PARENTKEYP=»VALUE!PSWKEY!UNKNOWNº                              * 00039200
+*          is a required keyword input which describes whether a key  * 00039300
+*          switch is needed to access the parent monitoring           * 00039400
+*          environment.                                               * 00039500
+*                                                                     * 00039600
+*                                                                     * 00039700
+*          PARENTKEYP=VALUE                                           * 00039800
+*                                                                     * 00039900
+*              indicates that the key is being passed explicitly via  * 00040000
+*              PARENTKEY.                                             * 00040100
+*                                                                     * 00040200
+*                                                                     * 00040300
+*              PARENTKEY=xparentkey                                   * 00040400
+*                  is the name (RS-type), or address in register      * 00040500
+*                  (2)-(12), of a required 8 bit input which contains * 00040600
+*                  the key in which the parent monitoring environment * 00040700
+*                  must be accessed.  Use of this keyword value       * 00040800
+*                  requires that the invoker be in supervisor state   * 00040900
+*                  or that the caller have PKM authority to the key   * 00041000
+*                  specified.  The high order 4 bits (i.e. bits 0-3)  * 00041100
+*                  contain the key value.                             * 00041200
+*                                                                     * 00041300
+*                  Note that this is different from the "natural" way * 00041400
+*                  of declaring the key, and uses the machine         * 00041500
+*                  orientation for keeping the storage key in the     * 00041600
+*                  high order bits.                                   * 00041700
+*                                                                     * 00041800
+*                                                                     * 00041900
+*                                                                     * 00042000
+*          PARENTKEYP=PSWKEY                                          * 00042100
+*                                                                     * 00042200
+*              indicates that the current PSW key should be used.     * 00042300
+*              Use of this keyword value requires that the parent     * 00042400
+*              monitoring environment was established with the same   * 00042500
+*              key as the current PSW.                                * 00042600
+*                                                                     * 00042700
+*          PARENTKEYP=UNKNOWN                                         * 00042800
+*                                                                     * 00042900
+*              indicates that the key associated with the parent      * 00043000
+*              monitoring environment is unknown.  Use of this        * 00043100
+*              keyword value requires that the invoker be in          * 00043200
+*              supervisor state or that the caller have PKM authority * 00043300
+*              to key 0.                                              * 00043400
+*                                                                     * 00043500
+*                                                                     * 00043600
+*                                                                     * 00043700
+*                                                                     * 00043800
+*                                                                     * 00043900
+*                                                                     * 00044000
+*      PARENTENV=»NOSWITCH!SECONDARYº                                 * 00044100
+*          is a required keyword input which describes whether a      * 00044200
+*          space switch is needed to access the parent monitoring     * 00044300
+*          environment.                                               * 00044400
+*                                                                     * 00044500
+*                                                                     * 00044600
+*          PARENTENV=NOSWITCH                                         * 00044700
+*                                                                     * 00044800
+*              indicates that NO space switch is needed to access the * 00044900
+*              parent monitoring environment.  This would be          * 00045000
+*              appropriate if the parent monitoring environment was   * 00045100
+*              established (by IWM4MCRE) to be used by routines in a  * 00045200
+*              specific system key or if it was established to be     * 00045300
+*              used in a specific user key in the current primary.    * 00045400
+*                                                                     * 00045500
+*          PARENTENV=SECONDARY                                        * 00045600
+*                                                                     * 00045700
+*              indicates that the parent monitoring environment was   * 00045800
+*              established in current secondary (for use by a         * 00045900
+*              specific user key).                                    * 00046000
+*                                                                     * 00046100
+*                                                                     * 00046200
+*                                                                     * 00046300
+*                                                                     * 00046400
+*                                                                     * 00046500
+*                                                                     * 00046600
+*      ÝCOMPCODE=»YES!NOº¨                                            * 00046700
+*          is an optional keyword input which indicates whether       * 00046800
+*          completion status for this service is needed.              * 00046900
+*          DEFAULT: YES                                               * 00047000
+*                                                                     * 00047100
+*                                                                     * 00047200
+*          ÝCOMPCODE=YES¨                                             * 00047300
+*              indicates that completion status is needed.            * 00047400
+*                                                                     * 00047500
+*          ÝCOMPCODE=NO¨                                              * 00047600
+*              indicates that completion status is not needed.        * 00047700
+*              Registers 0, 15 cannot be used as reason code and      * 00047800
+*              return code registers upon completion of the macro     * 00047900
+*              expansion. For this reason neither RETCODE NOR RSNCODE * 00048000
+*              may be specified when COMPCODE(NO) is specified.       * 00048100
+*              DEFAULT: YES indicates that completion status is       * 00048200
+*              needed.                                                * 00048300
+*                                                                     * 00048400
+*                                                                     * 00048500
+*                                                                     * 00048600
+*                                                                     * 00048700
+*                                                                     * 00048800
+*                                                                     * 00048900
+*      ÝRETCODE=xretcode¨                                             * 00049000
+*          is the name (RS-type) of an optional fullword output       * 00049100
+*          variable, or register (2)-(12) or (15), into which the     * 00049200
+*          return code is to be copied from GPR 15.  If you specify   * 00049300
+*          15, GPR15, REG15, or R15 (within or without parentheses),  * 00049400
+*          the value will be left in GPR 15.                          * 00049500
+*                                                                     * 00049600
+*                                                                     * 00049700
+*                                                                     * 00049800
+*                                                                     * 00049900
+*      ÝRSNCODE=xrsncode¨                                             * 00050000
+*          is the name (RS-type) of an optional fullword output       * 00050100
+*          variable into which the reason code is to be copied from   * 00050200
+*          GPR 0.  If you specify 0, 00, GPR0, GPR00, REG0, REG00, or * 00050300
+*          R0 (within or without parentheses), the value will be left * 00050400
+*          in GPR 0.                                                  * 00050500
+*                                                                     * 00050600
+*                                                                     * 00050700
+*                                                                     * 00050800
+*                                                                     * 00050900
+*      ÝPLISTVER=»xplistver!IMPLIED_VERSIONº¨                         * 00051000
+*          is an optional byte input decimal value in the "0-1" range * 00051100
+*          that specifies the macro version.  PLISTVER determines     * 00051200
+*          which parameter list is generated.  The macro keys         * 00051300
+*          associated with each supported version of the macro are    * 00051400
+*          listed in MACRO USAGE NOTE 2.  Note that MAX may be        * 00051500
+*          specified instead of a number, and the parameter list will * 00051600
+*          be of the largest size currently supported. This size may  * 00051700
+*          grow from release to release (thus possibly affecting the  * 00051800
+*          amount of storage needed by your program).                 * 00051900
+*          DEFAULT: IMPLIED_VERSION.  When PLISTVER is omitted, the   * 00052000
+*          default is the lowest version which allows all of the      * 00052100
+*          parameters specified on the invocation to be processed.    * 00052200
+*                                                                     * 00052300
+*                                                                     * 00052400
+*                                                                     * 00052500
+*01* ABEND CODES:  None.                                              * 00052600
+*                                                                     * 00052700
+*01* RETURN CODES:                                                    * 00052800
+*                                                                     * 00052900
+*                                                                     * 00053000
+*            0    Name: IwmRetCodeOk                                  * 00053100
+*                                                                     * 00053200
+*                 Meaning: Successful completion.                     * 00053300
+*                                                                     * 00053400
+*                 Action: None required.                              * 00053500
+*                                                                     * 00053600
+*            4    Name: IwmRetCodeWarning                             * 00053700
+*                                                                     * 00053800
+*                 Meaning: Successful completion, unusual conditions  * 00053900
+*                 noted.                                              * 00054000
+*                                                                     * 00054100
+*                                                                     * 00054200
+*                 HEX REASON  MEANING/ACTION                          * 00054300
+*                 CODE                                                * 00054400
+*                                                                     * 00054500
+*                 xxxx0402    Name: IwmRsnCodeNoMonEnv                * 00054600
+*                                                                     * 00054700
+*                             Meaning:  Input monitoring token        * 00054800
+*                             indicates no monitoring environment was * 00054900
+*                             established.                            * 00055000
+*                                                                     * 00055100
+*                             Action: None required.                  * 00055200
+*                                                                     * 00055300
+*                                                                     * 00055400
+*                                                                     * 00055500
+*            8    Name: IwmRetCodeInvocError                          * 00055600
+*                                                                     * 00055700
+*                 Meaning: Invalid invocation environment or          * 00055800
+*                 parameters.                                         * 00055900
+*                                                                     * 00056000
+*                                                                     * 00056100
+*                 HEX REASON  MEANING/ACTION                          * 00056200
+*                 CODE                                                * 00056300
+*                                                                     * 00056400
+*                 xxxx081F    Name: IwmRsnCodeNoRelate                * 00056500
+*                                                                     * 00056600
+*                             Meaning:  NO Parent environment exists  * 00056700
+*                             since Relate Function(Continue) has not * 00056800
+*                             been performed or has not been          * 00056900
+*                             performed subsequent to a Relate        * 00057000
+*                             Function(Delete).                       * 00057100
+*                                                                     * 00057200
+*                             Action: Check for possible storage      * 00057300
+*                             overlay and whether Relate              * 00057400
+*                             Function(Continue) has been used        * 00057500
+*                             properly.                               * 00057600
+*                                                                     * 00057700
+*                 xxxx0820    Name: IwmRsnCodeBadMonEnv               * 00057800
+*                                                                     * 00057900
+*                             Meaning:  Monitoring environment does   * 00058000
+*                             not pass verification.                  * 00058100
+*                                                                     * 00058200
+*                 xxxx0822    IwmRsnCodeBadParEnv:  Parent monitoring * 00058300
+*                             environment does not pass verification. * 00058400
+*                                                                     * 00058500
+*                             Action: Check for possible storage      * 00058600
+*                             overlay.                                * 00058700
+*                                                                     * 00058800
+*                 xxxx0895    Name: IwmRsnCodeEWLMServNotEnabled      * 00058900
+*                                                                     * 00059000
+*                             Meaning: Service is not enabled because * 00059100
+*                             monitoring environment can not be       * 00059200
+*                             associated with EWLM work requests.     * 00059300
+*                                                                     * 00059400
+*                             Action: Specify the parameter           * 00059500
+*                             WORKREQ_STA only when the monitoring    * 00059600
+*                             environment is created with IWMMCREA    * 00059700
+*                             EWLM=YES or the address space is        * 00059800
+*                             connected with IWMCONN EWLM=YES and the * 00059900
+*                             connect token is passed to IWMMCREA     * 00060000
+*                             when creating the monitoring            * 00060100
+*                             environment.                            * 00060200
+*                                                                     * 00060300
+*                 xxxx0897    Name: IwmRsnCodeTranStatusInvalid       * 00060400
+*                                                                     * 00060500
+*                             Meaning: Passed work request completion * 00060600
+*                             status is not valid.                    * 00060700
+*                                                                     * 00060800
+*                             Action: Check the EWLM ARM interface    * 00060900
+*                             specification for valid completion      * 00061000
+*                             status values.                          * 00061100
+*                                                                     * 00061200
+*                                                                     * 00061300
+*                                                                     * 00061400
+*                                                                     * 00061500
+*                                                                     * 00061600
+*01* REASON CODES:                                                    * 00061700
+*                                                                     * 00061800
+*       A unique reason code will be returned whenever the return     * 00061900
+*       code is non-zero.  Reason codes, as appropriate, are defined  * 00062000
+*       under their corresponding return code.  Reason code and       * 00062100
+*       return code constants are defined within IWMYCON.  Note that  * 00062200
+*       the high order halfword of register 0, and the reason code    * 00062300
+*       variable when specified, may be non-zero and represents       * 00062400
+*       diagnostic data which is NOT part of the external interface.  * 00062500
+*       The high order halfword should thus be excluded from          * 00062600
+*       comparison with the reason code values described above.  The  * 00062700
+*       constant, IWMRSNCODE_MASK_CONST defined in IWMYCON, may be    * 00062800
+*       used for this purpose.                                        * 00062900
+*                                                                     * 00063000
+*01* MODULE TYPE:  ASSEM MACRO                                        * 00063100
+*                                                                     * 00063200
+*02*   PROCESSOR:  ASSEM                                              * 00063300
+*                                                                     * 00063400
+*01* COMPONENT:  SCWLM                                                * 00063500
+*                                                                     * 00063600
+*01* DISTRIBUTION LIBRARY: AMACLIB                                    * 00063700
+*                                                                     * 00063800
+*01* EXAMPLES:                                                        * 00063900
+*                                                                     * 00064000
+*01* MACRO USAGE NOTES:                                               * 00064100
+*                                                                     * 00064200
+*                                                                     * 00064300
+*    1.  Printing of the macro expansion is controlled by the ZPRINT  * 00064400
+*        global macro variable.  Any value other than 'NO' will       * 00064500
+*        result in the macro expansion being printed.  The default is * 00064600
+*        'YES'.  The following examples illustrate how the ZPRINT     * 00064700
+*        variable should be set.                                      * 00064800
+*                                                                     * 00064900
+*                    GBLC &ZPRINT                                     * 00065000
+*            &ZPRINT SETC 'YES'          &ZPRINT SETC 'NO'            * 00065100
+*                                                                     * 00065200
+*                                                                     * 00065300
+*    2.  The IWMMXFER macro supports multiple versions. The macro key * 00065400
+*        list  below  contains the version level in which the key was * 00065500
+*        first  introduced.  Positionals  are  identified by the word * 00065600
+*        'Positional'  followed by the numeric value of its position. * 00065700
+*        Nested  positionals  are  preceded  by their outer key.  The * 00065800
+*        lowest value represents the original version and the highest * 00065900
+*        value  represents  the  most  recent version of the IWMMXFER * 00066000
+*        macro.    When  specifying  PLISTVER,  be sure that it is at * 00066100
+*        least  as high as the highest version number of all the keys * 00066200
+*        being used.                                                  * 00066300
+*                                                                     * 00066400
+*        VERSION   KEY                                                * 00066500
+*                                                                     * 00066600
+*              0      COMPCODE                                        * 00066700
+*                     FUNCTION                                        * 00066800
+*                     MONTKN                                          * 00066900
+*                     PARENTENV                                       * 00067000
+*                     PARENTKEY                                       * 00067100
+*                     PARENTKEYP                                      * 00067200
+*                     RUNTIME_VER                                     * 00067300
+*              1      WORKREQ_STA                                     * 00067400
+*                                                                     * 00067500
+*                                                                     * 00067600
+*                                                                     * 00067700
+*01* CHANGE ACTIVITY:                                                 * 00067800
+*                                                                     * 00067900
+*   Flag LineItem  FMID    Date   ID    Comment                       * 00068000
+*                                                                     * 00068100
+*    $L0=WLMI     HBB5510 920309 PD16:  Workload Manager I            * 00068200
+*    $L1=WLMP     HBB6603 950612 PD16:  Propagate service class for   * 00068300
+*                                         Related PBs                 * 00068400
+*    $L2=TTRACE   JBB6609 980924 PD88DA:  Copy Transaction Trace      * 00068500
+*                                         Token.                      * 00068600
+*    $P1=PWY0297  JBB6609 990430 PD88DA:  PARENTKEY should be         * 00068700
+*                                         XPARENTKEY.                 * 00068800
+*    $P2=ME01176  HBB7720 040924 3241DW:  Doc changes only.  Service  * 00068900
+*                                         names changed to reflect    * 00069000
+*                                         the 64bit name.             * 00069100
+*    $P3=WLMPERS  HBB7730 050302 3241KK:  EWLM CICS/IMS support       * 00069200
+*    $P4=BLDCHKE  HBB7730 050919 3241BH:  No code change. ToolReq     * 00069300
+*                                         5983 -                      * 00069400
+*                                         B390.HBB7730.DRIVER5A.OC    * 00069500
+*                                         OCHKE fixes.                * 00069600
+*    $L3=LPBABV   HBB7790 111020 3241AH:  IWM4MXFR created. Please do * 00069700
+*                                         not change this macro any   * 00069800
+*                                         longer.                     * 00069900
+****** END OF SPECIFICATIONS *****************************************/ 00070000
+*/********************************************************************* 00070100
+         MACRO                                                          00070200
+&XLABEL  IWMMXFER &FUNCTION=,&RUNTIME_VER=,&WORKREQ_STA=,&MONTKN=,     *00070300
+               &PARENTKEYP=,&PARENTKEY=,&PARENTENV=,&COMPCODE=,        *00070400
+               &RETCODE=,&RSNCODE=,&PLISTVER=                           00070500
+.*                                                                      00070600
+*                 MACDATE -01/29/13-<1>                                 00070700
+.*                                                                      00070800
+.*******************************************************************    00070900
+.***AB.02  GLOBAL VARIABLES TO CONTROL PRINT AND CODE GENERATION        00071000
+.*******************************************************************    00071100
+                 GBLC  &ZPRINT     YES=PRINT NO=NO PRINT                00071200
+                 GBLC  &ZTEST      YES=TEST NO=NO TEST                  00071300
+                 GBLC  &ZSYSTEM    PCCODE10, MVS, SAK, VM, XAX          00071400
+.*                                                                      00071500
+                 GBLC  &ZIWMMXFER  YES=MACRO USED AT LEAST ONCE         00071600
+.*******************************************************************    00071700
+.***AB.03  COMMONLY USED LOCAL MACRO VARIABLES                          00071800
+.*******************************************************************    00071900
+                 LCLC  &ZMS        ERROR MESSAGE WORK AREA              00072000
+                 LCLC  &ZCNDX      SYSNDX CHARACTERS                    00072100
+                 LCLC  &ZCLNG      USED WHEN LENGTH IS NEEDED           00072200
+                 LCLC  &ZCGPR      USED WHEN VALUE IS IN A GPR          00072300
+                 LCLC  &ZCVAL      USED TO CONTAIN FIXED VALUE          00072400
+                 LCLA  &ZAWRK      USED AS A WORK AREA                  00072500
+                 LCLA  &ZASIZ      USED FOR SIZE OF VALUE               00072600
+                 LCLA  &ZN         NUMERIC WORK VARIABLE                00072700
+                 LCLC  &ZC         CHARACTER WORK VARIABLE              00072800
+                 LCLC  &ZTLC       CHARACTER TOO LONG VARIABLE          00072900
+                 LCLA  &ZTLA       VALUE TOO LONG VARIABLE              00073000
+                 LCLC  &ZMAC_G     "G" or null                          00073100
+&ZMAC_G          SETC  ''                                               00073200
+                 LCLC  &ZMAC_LR                                         00073300
+&ZMAC_LR         SETC  'LR'                                             00073400
+                 LCLC  &ZMAC_L                                          00073500
+&ZMAC_L          SETC  'L'                                              00073600
+                 LCLC  &ZMAC_ST                                         00073700
+&ZMAC_ST         SETC  'ST'                                             00073800
+                 LCLC  &ZMAC_LLGT                                       00073900
+&ZMAC_LLGT       SETC  'L'                                              00074000
+                 LCLC  &ZMAC_LGR                                        00074100
+&ZMAC_LGR        SETC  'LR'                                             00074200
+                 LCLC  &ZMAC_LG                                         00074300
+&ZMAC_LG         SETC  'L'                                              00074400
+                 LCLC  &ZMAC_STG                                        00074500
+&ZMAC_STG        SETC  'ST'                                             00074600
+                 LCLA  &ZMACRET    MACRO RETURN CODE                    00074700
+&ZMACRET         SETA  0           ASSUME NO ERRORS                     00074800
+.*                                                                      00074900
+                 LCLC  &ZCSYSLIST(255)          NONXKEY, POS ARRAY      00075000
+                 LCLA  &ZASYSLNDX  WORK INDEX FOR ZCSYSLIST()           00075100
+                 LCLA  &ZPLLEN     PARAMETER LIST LENGTH                00075200
+                 LCLC  &ZENDBASEPL              End of base PL          00075300
+                 LCLA  &ZPLWORKA   PARAMETER LIST LENGTH                00075400
+.*******************************************************************    00075500
+.***AB.04  MACRO VARIABLES FOR RANGES AND SETS OF ARGUMENTS             00075600
+.*******************************************************************    00075700
+                 LCLA  &ZI         INDEX FOR ARRAY                      00075800
+                 LCLA  &ZJ         INDEX FOR PARMS                      00075900
+                 LCLA  &ZK         INDEX FOR PARSE                      00076000
+                 LCLA  &ZLO        LOW RANGE VALUE                      00076100
+                 LCLA  &ZHI        HIGH RANGE VALUE                     00076200
+                 LCLC  &ZW         WORK AREA FOR PARM                   00076300
+.*******************************************************************    00076400
+.***AB.07  DEFINE ALL MACRO VARIABLES                                   00076500
+.*******************************************************************    00076600
+                 LCLC  &XFUNCTION  ++ VALUE                             00076700
+                 LCLC  &XRUNTIME_VER            ++ VALUE                00076800
+                 LCLC  &XWORKREQ_STA            ++ NAME                 00076900
+                 LCLC  &XMONTKN    ++ NAME                              00077000
+                 LCLC  &XPARENTKEYP             ++ VALUE                00077100
+                 LCLC  &XPARENTKEY              ++ NAME                 00077200
+                 LCLC  &XPARENTENV              ++ VALUE                00077300
+                 LCLC  &XCOMPCODE  ++ VALUE                             00077400
+                 LCLC  &XRETCODE   ++ NAME                              00077500
+                 LCLC  &XRSNCODE   ++ NAME                              00077600
+                 LCLA  &XPLISTVER  ++ VALUE                             00077700
+.*******************************************************************    00077800
+.***AB.13  DEFINE MACRO VARIABLES FOR INPUT/OUTPUT PROCESSING           00077900
+.*******************************************************************    00078000
+                 LCLC  &ZXFUNCTION              ++ INPUT VALUE          00078100
+                 LCLC  &ZXRUNTIME_VER           ++ INPUT VALUE          00078200
+                 LCLC  &ZXWORKREQ_STA           ++ INPUT NAME           00078300
+                 LCLC  &ZXMONTKN   ++ INPUT NAME                        00078400
+                 LCLC  &ZXPARENTKEYP            ++ INPUT VALUE          00078500
+                 LCLC  &ZXPARENTKEY             ++ INPUT NAME           00078600
+                 LCLC  &ZXPARENTENV             ++ INPUT VALUE          00078700
+                 LCLC  &ZXCOMPCODE              ++ INPUT VALUE          00078800
+                 LCLC  &ZXRETCODE  ++ OUTPUT NAME                       00078900
+                 LCLC  &ZXRSNCODE  ++ OUTPUT NAME                       00079000
+                 LCLC  &ZXPLISTVER              ++ INPUT VALUE          00079100
+.********************************************************************   00079200
+.***AC.PLV01  PROCESS PLISTVER                                      *   00079300
+.********************************************************************   00079400
+&XPLISTVER      SETA  0                                                 00079500
+                AIF   (K'&PLISTVER(1) LE 0).ZPLV0                       00079600
+                AIF   ('&PLISTVER(1)' NE 'MAX').ZPLV0                   00079700
+&XPLISTVER      SETA  1                                                 00079800
+.ZPLV0          ANOP  ,                                                 00079900
+.*                                                                      00080000
+                AIF   ('&WORKREQ_STA' EQ '').ZPLV1E                     00080100
+                AIF   (&XPLISTVER GE 1).ZPLV1E                          00080200
+&XPLISTVER      SETA  1                                                 00080300
+.ZPLV1E         ANOP  ,                                                 00080400
+.*                                                                      00080500
+                AIF   (K'&PLISTVER(1) LE 0).ZPVCKE                      00080600
+                AIF   ('&PLISTVER(1)' EQ 'IMPLIED_VERSION').ZPVCKE      00080700
+                AIF   ('&PLISTVER(1)' EQ 'MAX').ZPVCKE                  00080800
+.*-------------------------------------------------------------------   00080900
+                AIF   (N'&PLISTVER LE 1).ZPVCK3  CK NUM                 00081000
+&ZMS            SETC  '"PLISTVER='                                      00081100
+&ZMS            SETC  '&ZMS.&PLISTVER"'                                 00081200
+&ZMS            SETC  '&ZMS "PLISTVER"'                                 00081300
+                MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'               00081400
+&ZMACRET        SETA  8      SET MACRO ERROR RETURN CODE                00081500
+                AGO   .ZPVCK2                                           00081600
+.ZPVCK3         ANOP  ,                                                 00081700
+.*-------------------------------------------------------------------   00081800
+                AIF   ('&PLISTVER'(1,1) NE '(').ZPVCK2                  00081900
+&ZMS            SETC  '"PLISTVER='                                      00082000
+&ZMS            SETC  '&ZMS.&PLISTVER"'                                 00082100
+&ZMS            SETC  '&ZMS CONTAINS GPR NOTATION WHICH IS NOT'         00082200
+                MNOTE 8,' &ZMS ALLOWED FOR ARGUMENT 1.'                 00082300
+&ZMACRET        SETA  8      SET MACRO ERROR RETURN CODE                00082400
+                AGO   .ZPVCKE                                           00082500
+.ZPVCK2         ANOP  ,                                                 00082600
+.*-------------------------------------------------------------------   00082700
+&ZCVAL          SETC  '&PLISTVER(1)'                                    00082800
+                AIF   ('&ZCVAL'(1,1) EQ '(').ZPVCKE  IN GPR             00082900
+                AIF   (T'&ZCVAL NE 'N').ZPVCK6  NUMERIC ERR             00083000
+&ZN             SETA   &PLISTVER(1)        CONVERT TO ARITHMETIC        00083100
+                AIF   (&ZN LT 0).ZPVCK6    TOO LOW                      00083200
+                AIF   (&ZN LE 1).ZPVCK4A   NOT HIGH                     00083300
+.ZPVCK6         ANOP  ,                                                 00083400
+&ZMS            SETC  '"PLISTVER='                                      00083500
+&ZMS            SETC  '&ZMS.&PLISTVER"'                                 00083600
+&ZMS            SETC  '&ZMS THE RANGE IS "0-1"'                         00083700
+                MNOTE 8,' &ZMS FOR ARGUMENT 1.'                         00083800
+&ZMACRET        SETA  8      SET MACRO ERROR RETURN CODE                00083900
+&XPLISTVER      SETA  1                                                 00084000
+                AGO   .ZPVCKE                                           00084100
+.*-------------------------------------------------------------------   00084200
+.ZPVCK4A        ANOP  ,                                                 00084300
+                AIF   (&ZN GE &XPLISTVER).ZPVCK4                        00084400
+&ZMS            SETC  'PLISTVER='                                       00084500
+&ZMS            SETC  '&ZMS.&PLISTVER(1)'                               00084600
+&ZMS            SETC  '&ZMS., BUT PLISTVER OF'                          00084700
+&ZMS            SETC  '&ZMS &XPLISTVER'                                 00084800
+                MNOTE 8,' &ZMS IS REQUIRED.'                            00084900
+&ZMACRET        SETA  8      SET MACRO ERROR RETURN CODE                00085000
+                AGO   .ZPVCK5                                           00085100
+.ZPVCK4         ANOP  ,                                                 00085200
+&XPLISTVER      SETA  &PLISTVER(1)                                      00085300
+.ZPVCK5         ANOP  ,                                                 00085400
+.ZPVCKE         ANOP  ,                                                 00085500
+.********************************************************************   00085600
+.***AG.MF02  FULL MACRO SYNTAX CHECKING                                 00085700
+.********************************************************************   00085800
+                 ACTR  10000                                            00085900
+.*------------------------------------------------------------------    00086000
+.***AG.KKCTL01 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00086100
+&XFUNCTION       SETC  ''          INITIALIZE XVARIABLE                 00086200
+.*-------------------------------------------------------------------   00086300
+.***AG.KKCTL02 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00086400
+.ZG3             ANOP  ,                                                00086500
+                 AIF   (K'&FUNCTION(1) LE 0).ZG3A                       00086600
+&ZTLC            SETC 'CONTINUE'                                        00086700
+                 AIF   ('&FUNCTION(1)' NE '&ZTLC').ZG9                  00086800
+&XFUNCTION       SETC  'CONTINUE'  SET KEYWORD                          00086900
+                 AIF   (N'&FUNCTION LE 1).ZG3A  CK NUM                  00087000
+&ZMS             SETC  '"FUNCTION='                                     00087100
+&ZMS             SETC  '&ZMS.&FUNCTION"'                                00087200
+&ZMS             SETC  '&ZMS "FUNCTION"'                                00087300
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00087400
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00087500
+.ZG3A            ANOP  ,                                                00087600
+.*------------------------------------------------------------------    00087700
+.***AG.KKCTL03 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00087800
+&ZCVAL           SETC ''           CLEAR ERROR KEY ACCUMULATOR          00087900
+.ZG3A0           AIF   (K'&WORKREQ_STA LE 0).ZG3A1  OK                  00088000
+&ZCVAL           SETC '&ZCVAL WORKREQ_STA'      INCORRECT KEY USED      00088100
+.ZG3A1           AIF   (K'&ZCVAL LE 0).ZG3A2    OK                      00088200
+&ZCVAL           SETC '&ZCVAL'(2,K'&ZCVAL-1)                            00088300
+&ZMS             SETC  '"FUNCTION'                                      00088400
+&ZMS             SETC  '&ZMS.=&FUNCTION"'                               00088500
+&ZMS             SETC  '&ZMS DOES NOT ALLOW THE USE OF THE'             00088600
+                 MNOTE 8,' &ZMS FOLLOWING KEY(S) "&ZCVAL".'             00088700
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00088800
+.ZG3A2           ANOP  ,                                                00088900
+.*------------------------------------------------------------------    00089000
+.***AG.KKCTL01 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00089100
+&XRUNTIME_VER    SETC  ''          INITIALIZE XVARIABLE                 00089200
+.*-------------------------------------------------------------------   00089300
+.***AG.KKCTL02 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00089400
+.ZG6             ANOP  ,                                                00089500
+                 AIF   (K'&RUNTIME_VER(1) LE 0).ZG6A                    00089600
+&ZTLC            SETC 'SHORT_FORM'                                      00089700
+                 AIF   ('&RUNTIME_VER(1)' NE '&ZTLC').ZG7               00089800
+&XRUNTIME_VER    SETC  'SHORT_FORM'             SET KEYWORD             00089900
+                 AIF   (N'&RUNTIME_VER LE 1).ZG6A  CK NUM               00090000
+&ZMS             SETC  '"RUNTIME_VER='                                  00090100
+&ZMS             SETC  '&ZMS.&RUNTIME_VER"'                             00090200
+&ZMS             SETC  '&ZMS "RUNTIME_VER"'                             00090300
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00090400
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00090500
+.ZG6A            ANOP  ,                                                00090600
+.*-------------------------------------------------------------------   00090700
+.***AG.KKCTL02 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00090800
+.ZG7             ANOP  ,                                                00090900
+&ZTLC            SETC 'MINIMAL'                                         00091000
+                 AIF   ('&RUNTIME_VER(1)' NE '&ZTLC').ZG8               00091100
+&XRUNTIME_VER    SETC  'MINIMAL'   SET KEYWORD                          00091200
+                 AIF   (N'&RUNTIME_VER LE 1).ZG7A  CK NUM               00091300
+&ZMS             SETC  '"RUNTIME_VER='                                  00091400
+&ZMS             SETC  '&ZMS.&RUNTIME_VER"'                             00091500
+&ZMS             SETC  '&ZMS "RUNTIME_VER"'                             00091600
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00091700
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00091800
+.ZG7A            ANOP  ,                                                00091900
+.*------------------------------------------------------------------    00092000
+.***AG.KKCTL04 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00092100
+.ZG8             ANOP  ,                                                00092200
+&ZXRUNTIME_VER   SETC  'INPUT'     SET IN/OUTPUT                        00092300
+                 AIF   (K'&XRUNTIME_VER GT 0).ZG8E  VALID ARG           00092400
+                 AIF   (T'&RUNTIME_VER EQ 'O').ZG8D  OMITTED            00092500
+&ZASYSLNDX       SETA  0                                                00092600
+.ZG8A            ANOP  ,           POSITIONAL MACRO KEY                 00092700
+&ZASYSLNDX       SETA  &ZASYSLNDX+1                                     00092800
+                 AIF   (&ZASYSLNDX GT N'&SYSLIST).ZG8C                  00092900
+&ZTLC            SETC 'RUNTIME_VER'                                     00093000
+                 AIF   ('&SYSLIST(&ZASYSLNDX)' NE '&ZTLC').ZG8A         00093100
+.ZG8B            ANOP  ,                                                00093200
+&ZXRUNTIME_VER   SETC  ''          RESET IN/OUTPUT                      00093300
+&ZMS             SETC  'THE "RUNTIME_VER" KEY'                          00093400
+&ZMS             SETC  '&ZMS MUST CONTAIN ONE'                          00093500
+                 MNOTE 8,' &ZMS (OR MORE) ARGUMENT(S).'                 00093600
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00093700
+                 AGO   .ZG8E                                            00093800
+.ZG8C            ANOP  ,                                                00093900
+&ZXRUNTIME_VER   SETC  ''          RESET IN/OUTPUT                      00094000
+&ZMS             SETC  '"RUNTIME_VER='                                  00094100
+&ZMS             SETC  '&ZMS.&RUNTIME_VER"'                             00094200
+&ZMS             SETC  '&ZMS ARGUMENT 1 IS AN UNKNOWN KEYWORD. '        00094300
+&ZMS             SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'              00094400
+&ZMS             SETC  '&ZMS "SHORT_FORM"'                              00094500
+&ZMS             SETC  '&ZMS OR "MINIMAL".'                             00094600
+                 MNOTE 8,' &ZMS '                                       00094700
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00094800
+                 AGO   .ZG8E                                            00094900
+.ZG8D            ANOP  ,                                                00095000
+&XRUNTIME_VER    SETC  'SHORT_FORM'             SET DEFAULT KEYWORD     00095100
+.ZG8E            ANOP  ,                                                00095200
+.*-------------------------------------------------------------------   00095300
+.***AG.KKCTL02 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00095400
+.ZG9             ANOP  ,                                                00095500
+&ZTLC            SETC 'RETURN'                                          00095600
+                 AIF   ('&FUNCTION(1)' NE '&ZTLC').ZG18                 00095700
+&XFUNCTION       SETC  'RETURN'    SET KEYWORD                          00095800
+                 AIF   (N'&FUNCTION LE 1).ZG9A  CK NUM                  00095900
+&ZMS             SETC  '"FUNCTION='                                     00096000
+&ZMS             SETC  '&ZMS.&FUNCTION"'                                00096100
+&ZMS             SETC  '&ZMS "FUNCTION"'                                00096200
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00096300
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00096400
+.ZG9A            ANOP  ,                                                00096500
+.*------------------------------------------------------------------    00096600
+.***AG.KKCTL01 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00096700
+&XRUNTIME_VER    SETC  ''          INITIALIZE XVARIABLE                 00096800
+.*-------------------------------------------------------------------   00096900
+.***AG.KKCTL02 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00097000
+.ZG12            ANOP  ,                                                00097100
+                 AIF   (K'&RUNTIME_VER(1) LE 0).ZG12A                   00097200
+&ZTLC            SETC 'SHORT_FORM'                                      00097300
+                 AIF   ('&RUNTIME_VER(1)' NE '&ZTLC').ZG13              00097400
+&XRUNTIME_VER    SETC  'SHORT_FORM'             SET KEYWORD             00097500
+                 AIF   (N'&RUNTIME_VER LE 1).ZG12A  CK NUM              00097600
+&ZMS             SETC  '"RUNTIME_VER='                                  00097700
+&ZMS             SETC  '&ZMS.&RUNTIME_VER"'                             00097800
+&ZMS             SETC  '&ZMS "RUNTIME_VER"'                             00097900
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00098000
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00098100
+.ZG12A           ANOP  ,                                                00098200
+.*-------------------------------------------------------------------   00098300
+.***AG.KKCTL02 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00098400
+.ZG13            ANOP  ,                                                00098500
+&ZTLC            SETC 'MINIMAL'                                         00098600
+                 AIF   ('&RUNTIME_VER(1)' NE '&ZTLC').ZG14              00098700
+&XRUNTIME_VER    SETC  'MINIMAL'   SET KEYWORD                          00098800
+                 AIF   (N'&RUNTIME_VER LE 1).ZG13A  CK NUM              00098900
+&ZMS             SETC  '"RUNTIME_VER='                                  00099000
+&ZMS             SETC  '&ZMS.&RUNTIME_VER"'                             00099100
+&ZMS             SETC  '&ZMS "RUNTIME_VER"'                             00099200
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00099300
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00099400
+.ZG13A           ANOP  ,                                                00099500
+.*------------------------------------------------------------------    00099600
+.***AG.KKCTL04 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00099700
+.ZG14            ANOP  ,                                                00099800
+&ZXRUNTIME_VER   SETC  'INPUT'     SET IN/OUTPUT                        00099900
+                 AIF   (K'&XRUNTIME_VER GT 0).ZG14E  VALID ARG          00100000
+                 AIF   (T'&RUNTIME_VER EQ 'O').ZG14D  OMITTED           00100100
+&ZASYSLNDX       SETA  0                                                00100200
+.ZG14A           ANOP  ,           POSITIONAL MACRO KEY                 00100300
+&ZASYSLNDX       SETA  &ZASYSLNDX+1                                     00100400
+                 AIF   (&ZASYSLNDX GT N'&SYSLIST).ZG14C                 00100500
+&ZTLC            SETC 'RUNTIME_VER'                                     00100600
+                 AIF   ('&SYSLIST(&ZASYSLNDX)' NE '&ZTLC').ZG14A        00100700
+.ZG14B           ANOP  ,                                                00100800
+&ZXRUNTIME_VER   SETC  ''          RESET IN/OUTPUT                      00100900
+&ZMS             SETC  'THE "RUNTIME_VER" KEY'                          00101000
+&ZMS             SETC  '&ZMS MUST CONTAIN ONE'                          00101100
+                 MNOTE 8,' &ZMS (OR MORE) ARGUMENT(S).'                 00101200
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00101300
+                 AGO   .ZG14E                                           00101400
+.ZG14C           ANOP  ,                                                00101500
+&ZXRUNTIME_VER   SETC  ''          RESET IN/OUTPUT                      00101600
+&ZMS             SETC  '"RUNTIME_VER='                                  00101700
+&ZMS             SETC  '&ZMS.&RUNTIME_VER"'                             00101800
+&ZMS             SETC  '&ZMS ARGUMENT 1 IS AN UNKNOWN KEYWORD. '        00101900
+&ZMS             SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'              00102000
+&ZMS             SETC  '&ZMS "SHORT_FORM"'                              00102100
+&ZMS             SETC  '&ZMS OR "MINIMAL".'                             00102200
+                 MNOTE 8,' &ZMS '                                       00102300
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00102400
+                 AGO   .ZG14E                                           00102500
+.ZG14D           ANOP  ,                                                00102600
+&XRUNTIME_VER    SETC  'SHORT_FORM'             SET DEFAULT KEYWORD     00102700
+.ZG14E           ANOP  ,                                                00102800
+.*----------------------------------------------------------------***   00102900
+.***AG.KXVAR05 NAME, OPT INPUT, KEYS -XVARIABLE KEY                     00103000
+                 AIF   (N'&WORKREQ_STA LE 1).ZG16A  CK NUM              00103100
+&ZMS             SETC  '"WORKREQ_STA='                                  00103200
+&ZMS             SETC  '&ZMS.&WORKREQ_STA"'                             00103300
+&ZMS             SETC  '&ZMS "WORKREQ_STA"'                             00103400
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00103500
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00103600
+.ZG16A           ANOP  ,                                                00103700
+.*-------------------------------------------------------------------   00103800
+.***AG.KXVAR13 NAME, OPT INPUT, KEYS -XVARIABLE                         00103900
+&ZXWORKREQ_STA   SETC  'INPUT'     SET IN/OUTPUT                        00104000
+&XWORKREQ_STA    SETC  'IWMEWLMARMSTATUSNONE'                           00104100
+                 AIF   (K'&WORKREQ_STA(1) LE 0).ZG16B  PARM             00104200
+&XWORKREQ_STA    SETC  '&WORKREQ_STA(1)'        SET XVARIABLE           00104300
+                 AIF   (N'&WORKREQ_STA GT 1).ZG16B  MULTI               00104400
+&XWORKREQ_STA    SETC  '&WORKREQ_STA'           SET XVARIABLE           00104500
+.ZG16B           ANOP  ,                                                00104600
+.*-------------------------------------------------------------------   00104700
+.***AG.KCK02 NAME, OPT INPUT, KEYS -GPR OUT OF RANGE                    00104800
+                 AIF   (K'&ZXWORKREQ_STA LE 0).ZG16R  NOT I/O           00104900
+         AIF   ('&XWORKREQ_STA' EQ 'IWMEWLMARMSTATUSNONE').ZG16R        00105000
+                 AIF   ('&XWORKREQ_STA'(1,1) NE '(').ZG16R              00105100
+&ZCGPR           SETC  '&XWORKREQ_STA'(2,K'&XWORKREQ_STA-2)             00105200
+                 AIF   ('&ZCGPR'(1,1) NE '0').ZG16P                     00105300
+                 AIF   (K'&ZCGPR GT 2).ZG16Q                            00105400
+                 AIF   ('&ZCGPR' EQ '0').ZG16Q                          00105500
+&ZCGPR           SETC  '&ZCGPR'(2,1)                                    00105600
+                 AIF   (T'&ZCGPR NE 'N').ZG16Q  INVALID REG NAME        00105700
+.ZG16P           ANOP  ,                                                00105800
+                 AIF   (T'&ZCGPR NE 'N').ZG16R  NON NUMERIC             00105900
+                 AIF   ('&ZCGPR' LT '2').ZG16Q                          00106000
+                 AIF   ('&ZCGPR' LE '12').ZG16R                         00106100
+.ZG16Q           ANOP  ,                                                00106200
+&ZMS             SETC  '"WORKREQ_STA='                                  00106300
+&ZMS             SETC  '&ZMS.&WORKREQ_STA"'                             00106400
+&ZMS             SETC  '&ZMS ARGUMENT 1 MUST SPECIFY A REGISTER'        00106500
+                 MNOTE 8,' &ZMS IN THE RANGE (2)-(12).'                 00106600
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00106700
+.ZG16R           ANOP  ,                                                00106800
+.*------------------------------------------------------------------    00106900
+.***AG.KKCTL04 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00107000
+.ZG18            ANOP  ,                                                00107100
+&ZXFUNCTION      SETC  'INPUT'     SET IN/OUTPUT                        00107200
+                 AIF   (K'&XFUNCTION GT 0).ZG18E  VALID ARG             00107300
+                 AIF   (T'&FUNCTION EQ 'O').ZG18D  OMITTED              00107400
+&ZASYSLNDX       SETA  0                                                00107500
+.ZG18A           ANOP  ,           POSITIONAL MACRO KEY                 00107600
+&ZASYSLNDX       SETA  &ZASYSLNDX+1                                     00107700
+                 AIF   (&ZASYSLNDX GT N'&SYSLIST).ZG18C                 00107800
+&ZTLC            SETC 'FUNCTION'                                        00107900
+                 AIF   ('&SYSLIST(&ZASYSLNDX)' NE '&ZTLC').ZG18A        00108000
+.ZG18B           ANOP  ,                                                00108100
+&ZXFUNCTION      SETC  ''          RESET IN/OUTPUT                      00108200
+&ZMS             SETC  'THE "FUNCTION" KEY'                             00108300
+&ZMS             SETC  '&ZMS MUST CONTAIN ONE'                          00108400
+                 MNOTE 8,' &ZMS (OR MORE) ARGUMENT(S).'                 00108500
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00108600
+                 AGO   .ZG18E                                           00108700
+.ZG18C           ANOP  ,                                                00108800
+&ZXFUNCTION      SETC  ''          RESET IN/OUTPUT                      00108900
+&ZMS             SETC  '"FUNCTION='                                     00109000
+&ZMS             SETC  '&ZMS.&FUNCTION"'                                00109100
+&ZMS             SETC  '&ZMS ARGUMENT 1 IS AN UNKNOWN KEYWORD. '        00109200
+&ZMS             SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'              00109300
+&ZMS             SETC  '&ZMS "CONTINUE"'                                00109400
+&ZMS             SETC  '&ZMS OR "RETURN".'                              00109500
+                 MNOTE 8,' &ZMS '                                       00109600
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00109700
+                 AGO   .ZG18E                                           00109800
+.ZG18D           ANOP  ,                                                00109900
+&XFUNCTION       SETC  'CONTINUE'  SET DEFAULT KEYWORD                  00110000
+.ZG18E           ANOP  ,                                                00110100
+.*------------------------------------------------------------------    00110200
+.***AG.KKCTL05 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00110300
+                 AIF   (K'&FUNCTION(1) GT 0).ZG18F  PARM                00110400
+&XFUNCTION       SETC  ''          ENSURE NULL KEYWORD                  00110500
+&ZXFUNCTION      SETC  ''          RESET IN/OUTPUT                      00110600
+&ZMS             SETC  'THE'                                            00110700
+&ZMS             SETC  '&ZMS "FUNCTION" KEY AND ITS'                    00110800
+&ZMS             SETC  '&ZMS ARGUMENT ARE REQUIRED.'                    00110900
+&ZMS             SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'              00111000
+&ZMS             SETC  '&ZMS "CONTINUE"'                                00111100
+&ZMS             SETC  '&ZMS OR "RETURN".'                              00111200
+                 MNOTE 8,' &ZMS '                                       00111300
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00111400
+.ZG18F           ANOP  ,                                                00111500
+.*----------------------------------------------------------------***   00111600
+.***AG.KXVAR05 NAME, RQD INPUT, KEYS -XVARIABLE KEY                     00111700
+                 AIF   (N'&MONTKN LE 1).ZG20A   CK NUM                  00111800
+&ZMS             SETC  '"MONTKN='                                       00111900
+&ZMS             SETC  '&ZMS.&MONTKN"'                                  00112000
+&ZMS             SETC  '&ZMS "MONTKN"'                                  00112100
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00112200
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00112300
+.ZG20A           ANOP  ,                                                00112400
+.*-------------------------------------------------------------------   00112500
+.***AG.KXVAR06 NAME, RQD INPUT, KEYS -XVARIABLE                         00112600
+&ZXMONTKN        SETC  'INPUT'     SET IN/OUTPUT                        00112700
+&XMONTKN         SETC  '&MONTKN(1)'             SET XVARIABLE           00112800
+                 AIF   (N'&MONTKN GT 1).ZG20B   MULTI PARMS             00112900
+&XMONTKN         SETC  '&MONTKN'   SET XVARIABLE                        00113000
+.ZG20B           AIF   (K'&MONTKN(1) GT 0).ZG20C                        00113100
+&ZXMONTKN        SETC  ''          RESET IN/OUTPUT                      00113200
+&ZMS             SETC  ' '                                              00113300
+&ZMS             SETC  '&ZMS "MONTKN" KEY AND ITS'                      00113400
+                 MNOTE 8,' &ZMS ARGUMENT ARE REQUIRED.'                 00113500
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00113600
+.ZG20C           ANOP  ,                                                00113700
+.*-------------------------------------------------------------------   00113800
+.***AG.KCK02 NAME, RQD INPUT, KEYS -GPR OUT OF RANGE                    00113900
+                 AIF   (K'&ZXMONTKN LE 0).ZG20R  NOT I/O                00114000
+                 AIF   ('&XMONTKN'(1,1) NE '(').ZG20R                   00114100
+&ZCGPR           SETC  '&XMONTKN'(2,K'&XMONTKN-2)                       00114200
+                 AIF   ('&ZCGPR'(1,1) NE '0').ZG20P                     00114300
+                 AIF   (K'&ZCGPR GT 2).ZG20Q                            00114400
+                 AIF   ('&ZCGPR' EQ '0').ZG20Q                          00114500
+&ZCGPR           SETC  '&ZCGPR'(2,1)                                    00114600
+                 AIF   (T'&ZCGPR NE 'N').ZG20Q  INVALID REG NAME        00114700
+.ZG20P           ANOP  ,                                                00114800
+                 AIF   (T'&ZCGPR NE 'N').ZG20R  NON NUMERIC             00114900
+                 AIF   ('&ZCGPR' LT '2').ZG20Q                          00115000
+                 AIF   ('&ZCGPR' LE '12').ZG20R                         00115100
+.ZG20Q           ANOP  ,                                                00115200
+&ZMS             SETC  '"MONTKN='                                       00115300
+&ZMS             SETC  '&ZMS.&MONTKN"'                                  00115400
+&ZMS             SETC  '&ZMS ARGUMENT 1 MUST SPECIFY A REGISTER'        00115500
+                 MNOTE 8,' &ZMS IN THE RANGE (2)-(12).'                 00115600
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00115700
+.ZG20R           ANOP  ,                                                00115800
+.*------------------------------------------------------------------    00115900
+.***AG.KKCTL01 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00116000
+&XPARENTKEYP     SETC  ''          INITIALIZE XVARIABLE                 00116100
+.*-------------------------------------------------------------------   00116200
+.***AG.KKCTL02 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00116300
+.ZG24            ANOP  ,                                                00116400
+                 AIF   (K'&PARENTKEYP(1) LE 0).ZG24A                    00116500
+&ZTLC            SETC 'VALUE'                                           00116600
+                 AIF   ('&PARENTKEYP(1)' NE '&ZTLC').ZG28               00116700
+&XPARENTKEYP     SETC  'VALUE'     SET KEYWORD                          00116800
+                 AIF   (N'&PARENTKEYP LE 1).ZG24A  CK NUM               00116900
+&ZMS             SETC  '"PARENTKEYP='                                   00117000
+&ZMS             SETC  '&ZMS.&PARENTKEYP"'                              00117100
+&ZMS             SETC  '&ZMS "PARENTKEYP"'                              00117200
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00117300
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00117400
+.ZG24A           ANOP  ,                                                00117500
+.*----------------------------------------------------------------***   00117600
+.***AG.KXVAR05 NAME, RQD INPUT, KEYS -XVARIABLE KEY                     00117700
+                 AIF   (N'&PARENTKEY LE 1).ZG26A  CK NUM                00117800
+&ZMS             SETC  '"PARENTKEY='                                    00117900
+&ZMS             SETC  '&ZMS.&PARENTKEY"'                               00118000
+&ZMS             SETC  '&ZMS "PARENTKEY"'                               00118100
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00118200
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00118300
+.ZG26A           ANOP  ,                                                00118400
+.*-------------------------------------------------------------------   00118500
+.***AG.KXVAR06 NAME, RQD INPUT, KEYS -XVARIABLE                         00118600
+&ZXPARENTKEY     SETC  'INPUT'     SET IN/OUTPUT                        00118700
+&XPARENTKEY      SETC  '&PARENTKEY(1)'          SET XVARIABLE           00118800
+                 AIF   (N'&PARENTKEY GT 1).ZG26B  MULTI PARMS           00118900
+&XPARENTKEY      SETC  '&PARENTKEY'             SET XVARIABLE           00119000
+.ZG26B           AIF   (K'&PARENTKEY(1) GT 0).ZG26C                     00119100
+&ZXPARENTKEY     SETC  ''          RESET IN/OUTPUT                      00119200
+&ZMS             SETC  ' '                                              00119300
+&ZMS             SETC  '&ZMS "PARENTKEY" KEY AND ITS'                   00119400
+                 MNOTE 8,' &ZMS ARGUMENT ARE REQUIRED.'                 00119500
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00119600
+.ZG26C           ANOP  ,                                                00119700
+.*-------------------------------------------------------------------   00119800
+.***AG.KCK02 NAME, RQD INPUT, KEYS -GPR OUT OF RANGE                    00119900
+                 AIF   (K'&ZXPARENTKEY LE 0).ZG26R  NOT I/O             00120000
+                 AIF   ('&XPARENTKEY'(1,1) NE '(').ZG26R                00120100
+&ZCGPR           SETC  '&XPARENTKEY'(2,K'&XPARENTKEY-2)                 00120200
+                 AIF   ('&ZCGPR'(1,1) NE '0').ZG26P                     00120300
+                 AIF   (K'&ZCGPR GT 2).ZG26Q                            00120400
+                 AIF   ('&ZCGPR' EQ '0').ZG26Q                          00120500
+&ZCGPR           SETC  '&ZCGPR'(2,1)                                    00120600
+                 AIF   (T'&ZCGPR NE 'N').ZG26Q  INVALID REG NAME        00120700
+.ZG26P           ANOP  ,                                                00120800
+                 AIF   (T'&ZCGPR NE 'N').ZG26R  NON NUMERIC             00120900
+                 AIF   ('&ZCGPR' LT '2').ZG26Q                          00121000
+                 AIF   ('&ZCGPR' LE '12').ZG26R                         00121100
+.ZG26Q           ANOP  ,                                                00121200
+&ZMS             SETC  '"PARENTKEY='                                    00121300
+&ZMS             SETC  '&ZMS.&PARENTKEY"'                               00121400
+&ZMS             SETC  '&ZMS ARGUMENT 1 MUST SPECIFY A REGISTER'        00121500
+                 MNOTE 8,' &ZMS IN THE RANGE (2)-(12).'                 00121600
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00121700
+.ZG26R           ANOP  ,                                                00121800
+.*-------------------------------------------------------------------   00121900
+.***AG.KKCTL02 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00122000
+.ZG28            ANOP  ,                                                00122100
+&ZTLC            SETC 'PSWKEY'                                          00122200
+                 AIF   ('&PARENTKEYP(1)' NE '&ZTLC').ZG29               00122300
+&XPARENTKEYP     SETC  'PSWKEY'    SET KEYWORD                          00122400
+                 AIF   (N'&PARENTKEYP LE 1).ZG28A  CK NUM               00122500
+&ZMS             SETC  '"PARENTKEYP='                                   00122600
+&ZMS             SETC  '&ZMS.&PARENTKEYP"'                              00122700
+&ZMS             SETC  '&ZMS "PARENTKEYP"'                              00122800
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00122900
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00123000
+.ZG28A           ANOP  ,                                                00123100
+.*------------------------------------------------------------------    00123200
+.***AG.KKCTL03 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00123300
+&ZCVAL           SETC ''           CLEAR ERROR KEY ACCUMULATOR          00123400
+.ZG28A0          AIF   (K'&PARENTKEY LE 0).ZG28A1  OK                   00123500
+&ZCVAL           SETC '&ZCVAL PARENTKEY'        INCORRECT KEY USED      00123600
+.ZG28A1          AIF   (K'&ZCVAL LE 0).ZG28A2   OK                      00123700
+&ZCVAL           SETC '&ZCVAL'(2,K'&ZCVAL-1)                            00123800
+&ZMS             SETC  '"PARENTKEYP'                                    00123900
+&ZMS             SETC  '&ZMS.=&PARENTKEYP"'                             00124000
+&ZMS             SETC  '&ZMS DOES NOT ALLOW THE USE OF THE'             00124100
+                 MNOTE 8,' &ZMS FOLLOWING KEY(S) "&ZCVAL".'             00124200
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00124300
+.ZG28A2          ANOP  ,                                                00124400
+.*-------------------------------------------------------------------   00124500
+.***AG.KKCTL02 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00124600
+.ZG29            ANOP  ,                                                00124700
+&ZTLC            SETC 'UNKNOWN'                                         00124800
+                 AIF   ('&PARENTKEYP(1)' NE '&ZTLC').ZG30               00124900
+&XPARENTKEYP     SETC  'UNKNOWN'   SET KEYWORD                          00125000
+                 AIF   (N'&PARENTKEYP LE 1).ZG29A  CK NUM               00125100
+&ZMS             SETC  '"PARENTKEYP='                                   00125200
+&ZMS             SETC  '&ZMS.&PARENTKEYP"'                              00125300
+&ZMS             SETC  '&ZMS "PARENTKEYP"'                              00125400
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00125500
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00125600
+.ZG29A           ANOP  ,                                                00125700
+.*------------------------------------------------------------------    00125800
+.***AG.KKCTL03 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00125900
+&ZCVAL           SETC ''           CLEAR ERROR KEY ACCUMULATOR          00126000
+.ZG29A0          AIF   (K'&PARENTKEY LE 0).ZG29A1  OK                   00126100
+&ZCVAL           SETC '&ZCVAL PARENTKEY'        INCORRECT KEY USED      00126200
+.ZG29A1          AIF   (K'&ZCVAL LE 0).ZG29A2   OK                      00126300
+&ZCVAL           SETC '&ZCVAL'(2,K'&ZCVAL-1)                            00126400
+&ZMS             SETC  '"PARENTKEYP'                                    00126500
+&ZMS             SETC  '&ZMS.=&PARENTKEYP"'                             00126600
+&ZMS             SETC  '&ZMS DOES NOT ALLOW THE USE OF THE'             00126700
+                 MNOTE 8,' &ZMS FOLLOWING KEY(S) "&ZCVAL".'             00126800
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00126900
+.ZG29A2          ANOP  ,                                                00127000
+.*------------------------------------------------------------------    00127100
+.***AG.KKCTL04 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00127200
+.ZG30            ANOP  ,                                                00127300
+&ZXPARENTKEYP    SETC  'INPUT'     SET IN/OUTPUT                        00127400
+                 AIF   (K'&XPARENTKEYP GT 0).ZG30E  VALID ARG           00127500
+                 AIF   (T'&PARENTKEYP EQ 'O').ZG30D  OMITTED            00127600
+&ZASYSLNDX       SETA  0                                                00127700
+.ZG30A           ANOP  ,           POSITIONAL MACRO KEY                 00127800
+&ZASYSLNDX       SETA  &ZASYSLNDX+1                                     00127900
+                 AIF   (&ZASYSLNDX GT N'&SYSLIST).ZG30C                 00128000
+&ZTLC            SETC 'PARENTKEYP'                                      00128100
+                 AIF   ('&SYSLIST(&ZASYSLNDX)' NE '&ZTLC').ZG30A        00128200
+.ZG30B           ANOP  ,                                                00128300
+&ZXPARENTKEYP    SETC  ''          RESET IN/OUTPUT                      00128400
+&ZMS             SETC  'THE "PARENTKEYP" KEY'                           00128500
+&ZMS             SETC  '&ZMS MUST CONTAIN ONE'                          00128600
+                 MNOTE 8,' &ZMS (OR MORE) ARGUMENT(S).'                 00128700
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00128800
+                 AGO   .ZG30E                                           00128900
+.ZG30C           ANOP  ,                                                00129000
+&ZXPARENTKEYP    SETC  ''          RESET IN/OUTPUT                      00129100
+&ZMS             SETC  '"PARENTKEYP='                                   00129200
+&ZMS             SETC  '&ZMS.&PARENTKEYP"'                              00129300
+&ZMS             SETC  '&ZMS ARGUMENT 1 IS AN UNKNOWN KEYWORD. '        00129400
+&ZMS             SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'              00129500
+&ZMS             SETC  '&ZMS "VALUE",'                                  00129600
+&ZMS             SETC  '&ZMS "PSWKEY",'                                 00129700
+&ZMS             SETC  '&ZMS OR "UNKNOWN".'                             00129800
+                 MNOTE 8,' &ZMS '                                       00129900
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00130000
+                 AGO   .ZG30E                                           00130100
+.ZG30D           ANOP  ,                                                00130200
+&XPARENTKEYP     SETC  'VALUE'     SET DEFAULT KEYWORD                  00130300
+.ZG30E           ANOP  ,                                                00130400
+.*------------------------------------------------------------------    00130500
+.***AG.KKCTL05 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00130600
+                 AIF   (K'&PARENTKEYP(1) GT 0).ZG30F  PARM              00130700
+&XPARENTKEYP     SETC  ''          ENSURE NULL KEYWORD                  00130800
+&ZXPARENTKEYP    SETC  ''          RESET IN/OUTPUT                      00130900
+&ZMS             SETC  'THE'                                            00131000
+&ZMS             SETC  '&ZMS "PARENTKEYP" KEY AND ITS'                  00131100
+&ZMS             SETC  '&ZMS ARGUMENT ARE REQUIRED.'                    00131200
+&ZMS             SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'              00131300
+&ZMS             SETC  '&ZMS "VALUE",'                                  00131400
+&ZMS             SETC  '&ZMS "PSWKEY",'                                 00131500
+&ZMS             SETC  '&ZMS OR "UNKNOWN".'                             00131600
+                 MNOTE 8,' &ZMS '                                       00131700
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00131800
+.ZG30F           ANOP  ,                                                00131900
+.*------------------------------------------------------------------    00132000
+.***AG.KKCTL01 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00132100
+&XPARENTENV      SETC  ''          INITIALIZE XVARIABLE                 00132200
+.*-------------------------------------------------------------------   00132300
+.***AG.KKCTL02 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00132400
+.ZG33            ANOP  ,                                                00132500
+                 AIF   (K'&PARENTENV(1) LE 0).ZG33A                     00132600
+&ZTLC            SETC 'NOSWITCH'                                        00132700
+                 AIF   ('&PARENTENV(1)' NE '&ZTLC').ZG34                00132800
+&XPARENTENV      SETC  'NOSWITCH'  SET KEYWORD                          00132900
+                 AIF   (N'&PARENTENV LE 1).ZG33A  CK NUM                00133000
+&ZMS             SETC  '"PARENTENV='                                    00133100
+&ZMS             SETC  '&ZMS.&PARENTENV"'                               00133200
+&ZMS             SETC  '&ZMS "PARENTENV"'                               00133300
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00133400
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00133500
+.ZG33A           ANOP  ,                                                00133600
+.*-------------------------------------------------------------------   00133700
+.***AG.KKCTL02 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00133800
+.ZG34            ANOP  ,                                                00133900
+&ZTLC            SETC 'SECONDARY'                                       00134000
+                 AIF   ('&PARENTENV(1)' NE '&ZTLC').ZG35                00134100
+&XPARENTENV      SETC  'SECONDARY'              SET KEYWORD             00134200
+                 AIF   (N'&PARENTENV LE 1).ZG34A  CK NUM                00134300
+&ZMS             SETC  '"PARENTENV='                                    00134400
+&ZMS             SETC  '&ZMS.&PARENTENV"'                               00134500
+&ZMS             SETC  '&ZMS "PARENTENV"'                               00134600
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00134700
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00134800
+.ZG34A           ANOP  ,                                                00134900
+.*------------------------------------------------------------------    00135000
+.***AG.KKCTL04 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00135100
+.ZG35            ANOP  ,                                                00135200
+&ZXPARENTENV     SETC  'INPUT'     SET IN/OUTPUT                        00135300
+                 AIF   (K'&XPARENTENV GT 0).ZG35E  VALID ARG            00135400
+                 AIF   (T'&PARENTENV EQ 'O').ZG35D  OMITTED             00135500
+&ZASYSLNDX       SETA  0                                                00135600
+.ZG35A           ANOP  ,           POSITIONAL MACRO KEY                 00135700
+&ZASYSLNDX       SETA  &ZASYSLNDX+1                                     00135800
+                 AIF   (&ZASYSLNDX GT N'&SYSLIST).ZG35C                 00135900
+&ZTLC            SETC 'PARENTENV'                                       00136000
+                 AIF   ('&SYSLIST(&ZASYSLNDX)' NE '&ZTLC').ZG35A        00136100
+.ZG35B           ANOP  ,                                                00136200
+&ZXPARENTENV     SETC  ''          RESET IN/OUTPUT                      00136300
+&ZMS             SETC  'THE "PARENTENV" KEY'                            00136400
+&ZMS             SETC  '&ZMS MUST CONTAIN ONE'                          00136500
+                 MNOTE 8,' &ZMS (OR MORE) ARGUMENT(S).'                 00136600
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00136700
+                 AGO   .ZG35E                                           00136800
+.ZG35C           ANOP  ,                                                00136900
+&ZXPARENTENV     SETC  ''          RESET IN/OUTPUT                      00137000
+&ZMS             SETC  '"PARENTENV='                                    00137100
+&ZMS             SETC  '&ZMS.&PARENTENV"'                               00137200
+&ZMS             SETC  '&ZMS ARGUMENT 1 IS AN UNKNOWN KEYWORD. '        00137300
+&ZMS             SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'              00137400
+&ZMS             SETC  '&ZMS "NOSWITCH"'                                00137500
+&ZMS             SETC  '&ZMS OR "SECONDARY".'                           00137600
+                 MNOTE 8,' &ZMS '                                       00137700
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00137800
+                 AGO   .ZG35E                                           00137900
+.ZG35D           ANOP  ,                                                00138000
+&XPARENTENV      SETC  'NOSWITCH'  SET DEFAULT KEYWORD                  00138100
+.ZG35E           ANOP  ,                                                00138200
+.*------------------------------------------------------------------    00138300
+.***AG.KKCTL05 VALUE, RQD INPUT, ME KYWRDCTL -KEYWORD CONTROL           00138400
+                 AIF   (K'&PARENTENV(1) GT 0).ZG35F  PARM               00138500
+&XPARENTENV      SETC  ''          ENSURE NULL KEYWORD                  00138600
+&ZXPARENTENV     SETC  ''          RESET IN/OUTPUT                      00138700
+&ZMS             SETC  'THE'                                            00138800
+&ZMS             SETC  '&ZMS "PARENTENV" KEY AND ITS'                   00138900
+&ZMS             SETC  '&ZMS ARGUMENT ARE REQUIRED.'                    00139000
+&ZMS             SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'              00139100
+&ZMS             SETC  '&ZMS "NOSWITCH"'                                00139200
+&ZMS             SETC  '&ZMS OR "SECONDARY".'                           00139300
+                 MNOTE 8,' &ZMS '                                       00139400
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00139500
+.ZG35F           ANOP  ,                                                00139600
+.*------------------------------------------------------------------    00139700
+.***AG.KKCTL01 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00139800
+&XCOMPCODE       SETC  ''          INITIALIZE XVARIABLE                 00139900
+.*-------------------------------------------------------------------   00140000
+.***AG.KKCTL02 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00140100
+.ZG38            ANOP  ,                                                00140200
+                 AIF   (K'&COMPCODE(1) LE 0).ZG38A                      00140300
+&ZTLC            SETC 'YES'                                             00140400
+                 AIF   ('&COMPCODE(1)' NE '&ZTLC').ZG39                 00140500
+&XCOMPCODE       SETC  'YES'       SET KEYWORD                          00140600
+                 AIF   (N'&COMPCODE LE 1).ZG38A  CK NUM                 00140700
+&ZMS             SETC  '"COMPCODE='                                     00140800
+&ZMS             SETC  '&ZMS.&COMPCODE"'                                00140900
+&ZMS             SETC  '&ZMS "COMPCODE"'                                00141000
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00141100
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00141200
+.ZG38A           ANOP  ,                                                00141300
+.*-------------------------------------------------------------------   00141400
+.***AG.KKCTL02 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00141500
+.ZG39            ANOP  ,                                                00141600
+&ZTLC            SETC 'NO'                                              00141700
+                 AIF   ('&COMPCODE(1)' NE '&ZTLC').ZG40                 00141800
+&XCOMPCODE       SETC  'NO'        SET KEYWORD                          00141900
+                 AIF   (N'&COMPCODE LE 1).ZG39A  CK NUM                 00142000
+&ZMS             SETC  '"COMPCODE='                                     00142100
+&ZMS             SETC  '&ZMS.&COMPCODE"'                                00142200
+&ZMS             SETC  '&ZMS "COMPCODE"'                                00142300
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00142400
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00142500
+.ZG39A           ANOP  ,                                                00142600
+.*------------------------------------------------------------------    00142700
+.***AG.KKCTL04 VALUE, OPT INPUT, ME KYWRDCTL -KEYWORD CONTROL           00142800
+.ZG40            ANOP  ,                                                00142900
+&ZXCOMPCODE      SETC  'INPUT'     SET IN/OUTPUT                        00143000
+                 AIF   (K'&XCOMPCODE GT 0).ZG40E  VALID ARG             00143100
+                 AIF   (T'&COMPCODE EQ 'O').ZG40D  OMITTED              00143200
+&ZASYSLNDX       SETA  0                                                00143300
+.ZG40A           ANOP  ,           POSITIONAL MACRO KEY                 00143400
+&ZASYSLNDX       SETA  &ZASYSLNDX+1                                     00143500
+                 AIF   (&ZASYSLNDX GT N'&SYSLIST).ZG40C                 00143600
+&ZTLC            SETC 'COMPCODE'                                        00143700
+                 AIF   ('&SYSLIST(&ZASYSLNDX)' NE '&ZTLC').ZG40A        00143800
+.ZG40B           ANOP  ,                                                00143900
+&ZXCOMPCODE      SETC  ''          RESET IN/OUTPUT                      00144000
+&ZMS             SETC  'THE "COMPCODE" KEY'                             00144100
+&ZMS             SETC  '&ZMS MUST CONTAIN ONE'                          00144200
+                 MNOTE 8,' &ZMS (OR MORE) ARGUMENT(S).'                 00144300
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00144400
+                 AGO   .ZG40E                                           00144500
+.ZG40C           ANOP  ,                                                00144600
+&ZXCOMPCODE      SETC  ''          RESET IN/OUTPUT                      00144700
+&ZMS             SETC  '"COMPCODE='                                     00144800
+&ZMS             SETC  '&ZMS.&COMPCODE"'                                00144900
+&ZMS             SETC  '&ZMS ARGUMENT 1 IS AN UNKNOWN KEYWORD. '        00145000
+&ZMS             SETC  '&ZMS VALID KEYWORD CHOICE(S) ARE:'              00145100
+&ZMS             SETC  '&ZMS "YES"'                                     00145200
+&ZMS             SETC  '&ZMS OR "NO".'                                  00145300
+                 MNOTE 8,' &ZMS '                                       00145400
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00145500
+                 AGO   .ZG40E                                           00145600
+.ZG40D           ANOP  ,                                                00145700
+&XCOMPCODE       SETC  'YES'       SET DEFAULT KEYWORD                  00145800
+.ZG40E           ANOP  ,                                                00145900
+.*----------------------------------------------------------------***   00146000
+.***AG.KXVAR05 NAME, OPT OUTPUT, KEYS -XVARIABLE KEY                    00146100
+                 AIF   (N'&RETCODE LE 1).ZG42A  CK NUM                  00146200
+&ZMS             SETC  '"RETCODE='                                      00146300
+&ZMS             SETC  '&ZMS.&RETCODE"'                                 00146400
+&ZMS             SETC  '&ZMS "RETCODE"'                                 00146500
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00146600
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00146700
+.ZG42A           ANOP  ,                                                00146800
+.*-------------------------------------------------------------------   00146900
+.***AG.KXVAR14 NAME, OPT OUTPUT, KEYS -XVARIABLE                        00147000
+                 AIF   (K'&RETCODE(1) LE 0).ZG42C  NO PARM              00147100
+&ZXRETCODE       SETC  'OUTPUT'    SET OUTPUT                           00147200
+&XRETCODE        SETC  '&RETCODE(1)'            SET XVARIABLE           00147300
+                 AIF   (N'&RETCODE GT 1).ZG42C                          00147400
+&XRETCODE        SETC  '&RETCODE'  SET XVARIABLE                        00147500
+.ZG42C           ANOP  ,                                                00147600
+.*-------------------------------------------------------------------   00147700
+.***AG.KCK02 NAME, OPT OUTPUT, KEYS -GPR OUT OF RANGE                   00147800
+                 AIF   (K'&ZXRETCODE LE 0).ZG42R  NOT I/O               00147900
+                 AIF   ('&XRETCODE'(1,1) NE '(').ZG42R                  00148000
+&ZCGPR           SETC  '&XRETCODE'(2,K'&XRETCODE-2)                     00148100
+                 AIF   ('&ZCGPR'(1,1) NE '0').ZG42P                     00148200
+                 AIF   (K'&ZCGPR GT 2).ZG42Q                            00148300
+                 AIF   ('&ZCGPR' EQ '0').ZG42Q                          00148400
+&ZCGPR           SETC  '&ZCGPR'(2,1)                                    00148500
+                 AIF   (T'&ZCGPR NE 'N').ZG42Q  INVALID REG NAME        00148600
+.ZG42P           ANOP  ,                                                00148700
+                 AIF   (T'&ZCGPR NE 'N').ZG42R  NON NUMERIC             00148800
+                 AIF   ('&ZCGPR' EQ '15').ZG42R                         00148900
+                 AIF   ('&ZCGPR' LT '2').ZG42Q                          00149000
+                 AIF   ('&ZCGPR' LE '12').ZG42R                         00149100
+.ZG42Q           ANOP  ,                                                00149200
+&ZMS             SETC  '"RETCODE='                                      00149300
+&ZMS             SETC  '&ZMS.&RETCODE"'                                 00149400
+&ZMS             SETC  '&ZMS ARGUMENT 1 MUST SPECIFY A REGISTER'        00149500
+                 MNOTE 8,' &ZMS IN THE RANGE (2)-(12) OR (15).'         00149600
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00149700
+.ZG42R           ANOP  ,                                                00149800
+.*----------------------------------------------------------------***   00149900
+.***AG.KXVAR05 NAME, OPT OUTPUT, KEYS -XVARIABLE KEY                    00150000
+                 AIF   (N'&RSNCODE LE 1).ZG45A  CK NUM                  00150100
+&ZMS             SETC  '"RSNCODE='                                      00150200
+&ZMS             SETC  '&ZMS.&RSNCODE"'                                 00150300
+&ZMS             SETC  '&ZMS "RSNCODE"'                                 00150400
+                 MNOTE 8,' &ZMS CAN HAVE ONLY 1 ARGUMENT.'              00150500
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00150600
+.ZG45A           ANOP  ,                                                00150700
+.*-------------------------------------------------------------------   00150800
+.***AG.KXVAR14 NAME, OPT OUTPUT, KEYS -XVARIABLE                        00150900
+                 AIF   (K'&RSNCODE(1) LE 0).ZG45C  NO PARM              00151000
+&ZXRSNCODE       SETC  'OUTPUT'    SET OUTPUT                           00151100
+&XRSNCODE        SETC  '&RSNCODE(1)'            SET XVARIABLE           00151200
+                 AIF   (N'&RSNCODE GT 1).ZG45C                          00151300
+&XRSNCODE        SETC  '&RSNCODE'  SET XVARIABLE                        00151400
+.ZG45C           ANOP  ,                                                00151500
+.*-------------------------------------------------------------------   00151600
+.***AG.KCK02 NAME, OPT OUTPUT, KEYS -GPR OUT OF RANGE                   00151700
+                 AIF   (K'&ZXRSNCODE LE 0).ZG45R  NOT I/O               00151800
+                 AIF   ('&XRSNCODE'(1,1) NE '(').ZG45R                  00151900
+&ZCGPR           SETC  '&XRSNCODE'(2,K'&XRSNCODE-2)                     00152000
+                 AIF   ('&ZCGPR'(1,1) NE '0').ZG45P                     00152100
+                 AIF   (K'&ZCGPR GT 2).ZG45Q                            00152200
+                 AIF   ('&ZCGPR' EQ '0').ZG45R                          00152300
+&ZCGPR           SETC  '&ZCGPR'(2,1)                                    00152400
+                 AIF   (T'&ZCGPR NE 'N').ZG45Q  INVALID REG NAME        00152500
+.ZG45P           ANOP  ,                                                00152600
+                 AIF   (T'&ZCGPR NE 'N').ZG45R  NON NUMERIC             00152700
+                 AIF   ('&ZCGPR' EQ '0').ZG45R                          00152800
+                 AIF   ('&ZCGPR' LT '2').ZG45Q                          00152900
+                 AIF   ('&ZCGPR' LE '12').ZG45R                         00153000
+.ZG45Q           ANOP  ,                                                00153100
+&ZMS             SETC  '"RSNCODE='                                      00153200
+&ZMS             SETC  '&ZMS.&RSNCODE"'                                 00153300
+&ZMS             SETC  '&ZMS ARGUMENT 1 MUST SPECIFY A REGISTER'        00153400
+                 MNOTE 8,' &ZMS IN THE RANGE (0) OR (2)-(12).'          00153500
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00153600
+.ZG45R           ANOP  ,                                                00153700
+.******************************************************************     00153800
+.***AH.P00 CHECK STANDALONE POSITIONAL VARIABLES                        00153900
+.******************************************************************     00154000
+                 ACTR  10000                                            00154100
+.*----------------------------------------------------------------***   00154200
+.***AH.P02 EXTRA POSITIONALS                                            00154300
+                 AIF   (N'&SYSLIST LE 0).ZGLISTX  NO EXTRAS             00154400
+                 AIF   (N'&SYSLIST NE 2).ZGLISTX1  NOT NULL             00154500
+                 AIF   ('&SYSLIST(1)' NE '').ZGLISTX1  NOT NULL         00154600
+                 AIF   ('&SYSLIST(2)' EQ '').ZGLISTX  NOT NULL          00154700
+.ZGLISTX1        ANOP  ,                                                00154800
+&ZCVAL           SETC  ''          ERROR FIELD                          00154900
+&ZAWRK           SETA  0           POSITIONAL NUMBER                    00155000
+.ZGLIST2         ANOP  ,                                                00155100
+&ZAWRK           SETA  &ZAWRK+1    NEXT POSITIONAL                      00155200
+                 AIF   (&ZAWRK GT N'&SYSLIST).ZGLIST3  DONE             00155300
+&ZCVAL           SETC '&ZCVAL,&SYSLIST(&ZAWRK)'  EXTRA                  00155400
+                 AGO   .ZGLIST2                                         00155500
+.*                                                                      00155600
+.ZGLIST3         ANOP  ,                                                00155700
+&ZCVAL           SETC '&ZCVAL'(2,K'&ZCVAL-1)    STRIP COMMA             00155800
+&ZMS             SETC  'POSITIONAL ARGUMENT(S),'                        00155900
+&ZMS             SETC  '&ZMS "&ZCVAL"'                                  00156000
+&ZMS             SETC  '&ZMS CANNOT BE USED.'                           00156100
+&ZMS             SETC  '&ZMS NO POSITIONAL ARGUMENTS'                   00156200
+                 MNOTE 8,' &ZMS ARE ALLOWED.'                           00156300
+&ZMACRET         SETA  8           SET MACRO ERROR RETURN CODE          00156400
+.ZGLISTX         ANOP  ,                                                00156500
+&ZASYSLNDX       SETA  0                                                00156600
+.*******************************************************************    00156700
+.***AE.ZMR01 NO CODE GENERATED IF ERRORS DETECTED                       00156800
+.*******************************************************************    00156900
+                 AIF   (&ZMACRET NE 0).ZLX2     ERROR DETECTED          00157000
+.*******************************************************************    00157100
+.***AE.01  START OF IWMMXFER MACRO CODE                                 00157200
+.*******************************************************************    00157300
+                 LCLC  &M0M0001                 NAME                    00157400
+&M0M0001         SETC  '&XLABEL'                SET NAME                00157500
+                 AIF   (K'&XLABEL NE 0).XLAB2                           00157600
+&M0M0001         SETC  'M00M&SYSNDX'            DEFAULT NAME            00157700
+.*                                                                      00157800
+.XLAB2           ANOP  ,                                                00157900
+&M0M0001 DS    0H                             IWMMXFER-1                00158000
+.*******************************************************************    00158100
+.***AE.PR01 PRINT CONTROLS, DEFAULT IS YES                              00158200
+.*******************************************************************    00158300
+              PUSH  PRINT                                               00158400
+                 AIF   ('&ZPRINT' NE 'NO').ZPRINTX  TURN PRINT ON       00158500
+                 PRINT OFF         ++ PR01                              00158600
+                 AGO   .ZPRNTXX                                         00158700
+.ZPRINTX         PRINT ON                                               00158800
+.ZPRNTXX         ANOP  ,                                                00158900
+.*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*  00159000
+         GBLC  &SYSAM64                                             @P2 00159100
+         GBLA  &SYSALVL                                             @P2 00159200
+         LCLC  &T1                                                      00159300
+         AIF   ('&XCOMPCODE' EQ 'YES').STARTLOGIC                       00159400
+         AIF   ('&XRETCODE' EQ '').RSNCODECHK                           00159500
+&T1      SETC  'RETCODE, RSNCODE MAY NOT BE USED WITH COMPCODE(NO)'     00159600
+         MNOTE 8,'&T1'                                                  00159700
+         MEXIT                                                          00159800
+.RSNCODECHK ANOP                                                        00159900
+         AIF   ('&XRSNCODE' EQ '').STARTLOGIC                           00160000
+&T1      SETC  'RETCODE, RSNCODE MAY NOT BE USED WITH COMPCODE(NO)'     00160100
+         MNOTE 8,'&T1'                                                  00160200
+         MEXIT                                                          00160300
+.STARTLOGIC ANOP                                                        00160400
+&T1      SETC  '&MONTKN'                                                00160500
+         AIF   ('&MONTKN'(1,1) NE '(').MONTKNRS                         00160600
+&T1      SETC  '&MONTKN'(2,K'&MONTKN-2)                                 00160700
+&T1      SETC  '0(&T1.)'                                                00160800
+.MONTKNRS  ANOP                                                         00160900
+.* &T1 IS NOW A VALID BASE-DISPLACEMENT EXPRESSION                      00161000
+         ICM   14,15,&T1               FETCH MONITORING TOKEN           00161100
+.* GENERATE CODE WHICH DEPENDS ON HOW COMPCODE WAS SPECIFIED            00161200
+         AIF   ('&XCOMPCODE' NE 'YES').NOCOMPCODE1                      00161300
+.*                                                                      00161400
+.********************************************************************** 00161500
+.*                                                                      00161600
+.*       COMPCODE(YES) code expansion follows                           00161700
+.*       This block of code determines whether the input montkn=0,      00161800
+.*        and for Runtime_Ver(Short_Form) also checks the eye-catcher.  00161900
+.*                                                                      00162000
+.********************************************************************** 00162100
+.*                                                                      00162200
+         BNZ   MONENV&SYSNDX           BRANCH WHEN MON ENV IS PRESENT   00162300
+         LA    0,IWMRSNCODENOMONENV    SET REASON CODE = NO MON ENV     00162400
+         LA    15,IWMRETCODEWARNING    SET WARNING RETURN CODE          00162500
+         B     END&SYSNDX              BRANCH TO END LABEL              00162600
+MONENV&SYSNDX DS    0H                 BRANCH LABEL FOR MON ENV PRESENT 00162700
+         AIF   ('&XRUNTIME_VER' EQ 'MINIMAL').ENDCOMPCODE1              00162800
+         CLC   PB_ID-PB(4,14),=CL4'PB  '                                00162900
+         BE    MONENVOK&SYSNDX         BRANCH WHEN MON ENV PASSES       00163000
+         LA    0,IWMRSNCODEBADMONENV   SET REASON CODE = BAD MON ENV    00163100
+         LA    15,IWMRETCODEINVOCERROR SET INVOCATION ERROR RETURN CODE 00163200
+         B     END&SYSNDX              BRANCH TO END LABEL              00163300
+MONENVOK&SYSNDX DS    0H               BRANCH LABEL FOR MON ENV OK      00163400
+                AGO .ENDCOMPCODE1                                       00163500
+.*                                                                      00163600
+.********************************************************************** 00163700
+.*                                                                      00163800
+.*       COMPCODE(NO) code expansion follows                            00163900
+.*       This block of code determines whether the input montkn=0,      00164000
+.*        and for Runtime_Ver(Short_Form) also checks the eye-catcher.  00164100
+.*                                                                      00164200
+.********************************************************************** 00164300
+.*                                                                      00164400
+.NOCOMPCODE1    ANOP                                                    00164500
+         BZ    END&SYSNDX              BRANCH TO END LABEL              00164600
+         AIF   ('&XRUNTIME_VER' EQ 'MINIMAL').ENDCOMPCODE1              00164700
+         CLC   PB_ID-PB(4,14),=CL4'PB  '                                00164800
+         BNE   END&SYSNDX              BRANCH TO END LABEL              00164900
+.ENDCOMPCODE1    ANOP                                                   00165000
+.*                                                                      00165100
+.********************************************************************** 00165200
+.*                                                                      00165300
+.*       COMMON code expansion follows                                  00165400
+.*       This block of code determines whether the input PB is related  00165500
+.*        to a parent PB (i.e. high order bit is set),                  00165600
+.*        or to an ASID/Enclave (high order bit off, but parent tkn^=0) 00165700
+.*        or not related at all (parent tkn=0)                          00165800
+.*                                                                      00165900
+.********************************************************************** 00166000
+.*                                                                      00166100
+         USING PB,14                                                    00166200
+.*                                                                      00166300
+         ICM   15,15,PB_PARENT_MONTKN  EXTRACT PARENT MONITORING TOKEN  00166400
+         BC    4,IWMMXFER_PAR_EXISTS&SYSNDX BRANCH IF PARENT ENV EXISTS 00166500
+         BC    2,IWMMXFER_HOME&SYSNDX  BRANCH IF RELATED TO HOME SPACE  00166600
+*                                      PB_PARENT_MONTKN IS ALL ZEROS    00166700
+         AIF   ('&XCOMPCODE' NE 'YES').NOCOMPCODE11                     00166800
+         LA    0,IWMRSNCODENORELATE    SET REASON CODE = NO RELATE DONE 00166900
+         LA    15,IWMRETCODEINVOCERROR SET RC = INVOCATION ERROR        00167000
+.NOCOMPCODE11   ANOP                                                    00167100
+         B     END&SYSNDX              BRANCH TO END LABEL              00167200
+IWMMXFER_PAR_EXISTS&SYSNDX DS 0H       BRANCH LABEL FOR PAR ENV EXISTS  00167300
+.*                                                                      00167400
+.*                                                                      00167500
+          LCLC  &DMIRTVAL1                                              00167600
+          LCLC  &DMIRTVAL2                                              00167700
+          LCLC  &DMONTVAL1                                              00167800
+          LCLC  &DMONTVAL2                                              00167900
+          LCLC  &STATEVAL1                                              00168000
+          LCLC  &STATEVAL2                                              00168100
+          LCLC  &KEYVALUE                                               00168200
+&KEYVALUE SETC  'NO'                                                    00168300
+         AIF   ('&XFUNCTION' NE 'CONTINUE').ENDCONTINUE                 00168400
+.*                                                                      00168500
+.*******************************************************************    00168600
+.*                                                                      00168700
+.*       FOLLOWING IS LOGIC FOR FUNCTION(CONTINUE)                      00168800
+.*                                                                      00168900
+.*       This block of code sets up the instructions for                00169000
+.*        extracting the mirror token of the dependent (input) PB,      00169100
+.*        saving the dependent (input) montkn in the parent PB, and     00169200
+.*        setting the state to active in the dependent (input) PB       00169300
+.*                                                                      00169400
+.*******************************************************************    00169500
+.*                                                                      00169600
+&DMIRTVAL1 SETC  'L'                                                    00169700
+&DMIRTVAL2 SETC  '1,PB_MIRROR_TKN-PB(14,0)'                             00169800
+.*                                                                      00169900
+&DMONTVAL1 SETC  'ST'                                                   00170000
+&DMONTVAL2 SETC  '14,PB_DEP_MONTKN-PB(0,15)'                            00170100
+.*                                                                      00170200
+&STATEVAL1 SETC  'MVI'                                                  00170300
+&STATEVAL2 SETC  'PB_STATE,PB_STATE_ACTIVE'                             00170400
+        AGO   .EXPANSION                                                00170500
+.ENDCONTINUE    ANOP                                                    00170600
+.*                                                                      00170700
+.*******************************************************************    00170800
+.*                                                                      00170900
+.*       FOLLOWING IS LOGIC FOR FUNCTION(RETURN)                        00171000
+.*                                                                      00171100
+.*       This block of code sets up the instructions for                00171200
+.*        clearing the dep. mirror token in the parent PB,              00171300
+.*        clearing the dependent (input) montkn in the parent PB, and   00171400
+.*        setting the state to free in the parent PB                    00171500
+.*                                                                      00171600
+.*******************************************************************    00171700
+&DMIRTVAL1 SETC  'SLR'                                                  00171800
+&DMIRTVAL2 SETC  '1,1'                                                  00171900
+.*                                                                      00172000
+&DMONTVAL1 SETC  'ST'                                                   00172100
+&DMONTVAL2 SETC  '1,PB_DEP_MONTKN-PB(0,15)'                             00172200
+.*                                                                      00172300
+&STATEVAL1 SETC  'MVI'                                                  00172400
+&STATEVAL2 SETC  'PB_STATE,PB_STATE_FREE'                               00172500
+.*                                                                      00172600
+.EXPANSION      ANOP                                                    00172700
+.*                                                                      00172800
+.*******************************************************************    00172900
+.*                                                                      00173000
+.*       FOLLOWING IS LOGIC FOR FUNCTION(CONTINUE!RETURN)               00173100
+.*                                                                      00173200
+.*       This block of code sets up the default instructions for        00173300
+.*        changing addressability (DS 0H).                              00173400
+.*        These symbolic substitutions will be updated below, as        00173500
+.*        needed, to SAC to the correct ASC mode.                       00173600
+.*                                                                      00173700
+.*******************************************************************    00173800
+.*                                                                      00173900
+         LCLC  &SACTO1                                                  00174000
+         LCLC  &SACTO2                                                  00174100
+         LCLC  &SACBACK1                                                00174200
+         LCLC  &SACBACK2                                                00174300
+&SACTO1  SETC  'DS'                                                     00174400
+&SACTO2  SETC  '0H'                                                     00174500
+&SACBACK1 SETC  'DS'                                                    00174600
+&SACBACK2 SETC  '0H'                                                    00174700
+.*                                                                      00174800
+         AIF   ('&XPARENTENV' NE 'NOSWITCH').ENDNOSWITCH1               00174900
+.*                                                                      00175000
+.*******************************************************************    00175100
+.*                                                                      00175200
+.*       Code expansion for PARENTENV(NOSWITCH) follows                 00175300
+.*          for either Function(Continue ! Return)                      00175400
+.*          and RUNTIME_VER(SHORT_FORM ! MINIMAL)                       00175500
+.*                                                                      00175600
+.*******************************************************************    00175700
+.*                                                                      00175800
+         AIF   ('&XRUNTIME_VER' EQ 'MINIMAL').MINVERCONT1               00175900
+.*                                                                      00176000
+.*******************************************************************    00176100
+.*                                                                      00176200
+.*       Code expansion for PARENTENV(NOSWITCH) follows                 00176300
+.*          for either Function(Continue ! Return)                      00176400
+.*          with RUNTIME_VER(SHORT_FORM)                                00176500
+.*                                                                      00176600
+.*******************************************************************    00176700
+.*                                                                      00176800
+         CLC   PB_ID-PB(4,15),=CL4'PB  '                                00176900
+         AGO   .COMMONSFVER1                                            00177000
+.*                                                                      00177100
+.ENDNOSWITCH1   ANOP                                                    00177200
+.*                                                                      00177300
+.*                                                                      00177400
+.*******************************************************************    00177500
+.*                                                                      00177600
+.*       Code expansion for PARENTENV(SECONDARY) follows                00177700
+.*          for either Function(Continue ! Return)                      00177800
+.*          and RUNTIME_VER(MINIMAL ! SHORT_FORM)                       00177900
+.*                                                                      00178000
+.*******************************************************************    00178100
+.*                                                                      00178200
+         AIF   ('&XFUNCTION' EQ 'CONTINUE').SKIPEXTABN                  00178300
+         ICM  14,15,PB_ABNORMAL_FLAGS  SAVE DEPENDENT PB ABNORMAL FLAGS 00178400
+         DROP 14          RELEASE REGISTER 14                           00178500
+.SKIPEXTABN ANOP                                                        00178600
+.*                                                                      00178700
+.*******************************************************************    00178800
+.*       The following block of code sets up the SAC to secondary       00178900
+.*******************************************************************    00179000
+.*                                                                      00179100
+&SACTO1  SETC  'SAC'                                                    00179200
+&SACTO2  SETC  '256'                                                    00179300
+&SACBACK1 SETC  'SAC'                                                   00179400
+&SACBACK2 SETC  '0'                                                     00179500
+         AIF   ('&XRUNTIME_VER' EQ 'MINIMAL').MINVERCONT1               00179600
+.*                                                                      00179700
+.*******************************************************************    00179800
+.*                                                                      00179900
+.*       Code expansion for RUNTIME_VER(SHORT_FORM) follows             00180000
+.*          for Parentenv(Secondary)                                    00180100
+.*          and either Function(Continue ! Return)                      00180200
+.*                                                                      00180300
+.*******************************************************************    00180400
+.*                                                                      00180500
+.*       THE PB ACRONYM, REFERENCED AS A LITERAL, RESIDES IN CURRENT    00180600
+.*         PRIMARY, AND MUST BE LOADED BEFORE CHANGING PSWKEY (SINCE    00180700
+.*         THE MODULE MAY BE IN FETCH-PROTECTED STORAGE) AND BEFORE     00180800
+.*         CHANGING ASC MODES.                                          00180900
+.*                                                                      00181000
+.*                       LOGIC:                                         00181100
+.*       REG 0 HAS PB_ID (ALL FLOWS FOR SECONDARY)                      00181200
+.*       PARENTKEYP(VALUE) ==> REG 1 HAS KEY NEEDED TO UPDATE PARENT    00181300
+.*                             SET UP AR15 FOR PARENT PB                00181400
+.*                             SAC TO AR                                00181500
+.*                             SET REG 1 TO DEPENDENT MIRROR TOKEN      00181600
+.*                                 USING INDEX REGISTER NOTATION        00181700
+.*                                                                      00181800
+.*       PARENTKEYP(PSWKEY!UNKNOWN) ==> SET REG 1 TO DEP MIRROR TOKEN   00181900
+.*                             SAC TO SECONDARY                         00182000
+.*                                                                      00182100
+         L     0,=CL4'PB  '                                             00182200
+         AIF   ('&PARENTKEYP' NE 'VALUE').ENDVALUE   BRANCH IF ^VALUE   00182300
+.*                                                                      00182400
+.*******************************************************************    00182500
+.*       The following block of code handles Parentkeyp(Value)          00182600
+.*******************************************************************    00182700
+.*                                                                      00182800
+         LA    1,1                                                      00182900
+         SAR   15,1                    SET AR15 FOR SECONDARY           00183000
+.*                                                                      00183100
+.*       MUST ANTICIPATE NEED TO CHANGE PSW KEY,KEPT IN CURRENT PRIMARY 00183200
+.*                                                                      00183300
+&T1      SETC  '&PARENTKEY'                                             00183400
+         AIF   ('&PARENTKEY'(1,1) NE '(').PARENTKEY1                    00183500
+&T1      SETC  '&PARENTKEY'(2,K'&PARENTKEY-2)                           00183600
+&T1      SETC  '0(&T1.)'                                                00183700
+.PARENTKEY1 ANOP                                                        00183800
+.* &T1 IS NOW A VALID BASE-DISPLACEMENT EXPRESSION                      00183900
+         IC    1,&T1                                                    00184000
+.*                                                                      00184100
+.*******************************************************************    00184200
+.*       The following block of code sets up the SAC to AR mode         00184300
+.*        for PARENTKEYP(VALUE) and Parentenv(Secondary)                00184400
+.*******************************************************************    00184500
+.*                                                                      00184600
+&SACTO1  SETC  'SAC'                                                    00184700
+&SACTO2  SETC  '512'                                                    00184800
+&KEYVALUE SETC  'YES'                                                   00184900
+.*                                                                      00185000
+         AGO  .COMSECSFVER1                                             00185100
+.ENDVALUE    ANOP                                                       00185200
+.*                                                                      00185300
+.*******************************************************************    00185400
+.*       The following block of code handles Parentkeyp(Unknown!Pswkey) 00185500
+.*       The following instruction either extracts/clears the           00185600
+.*        value of the dependent mirror token.                          00185700
+.*******************************************************************    00185800
+.*                                                                      00185900
+         &DMIRTVAL1 &DMIRTVAL2                                          00186000
+&DMIRTVAL1 SETC  'DS'                                                   00186100
+&DMIRTVAL2 SETC  '0H'                                                   00186200
+.COMSECSFVER1 ANOP                                                      00186300
+.*                                                                      00186400
+.*********************************************************************  00186500
+.*                                                                      00186600
+.* COMMON CODE FOR RUNTIME_VER(SHORT_FORM) WITH PARENTENV(SECONDARY)    00186700
+.* This code establishes addressability, as needed, to the parent env.  00186800
+.*  and checks the eye-catcher in the parent PB.                        00186900
+.*                                                                      00187000
+.*********************************************************************  00187100
+.*                                                                      00187200
+         &SACTO1 &SACTO2                                                00187300
+&SACTO1  SETC  'DS'                                                     00187400
+&SACTO2  SETC  '0H'                                                     00187500
+         CL    0,PB_ID-PB(0,15)                                         00187600
+.*                                                                      00187700
+.COMMONSFVER1 ANOP                                                      00187800
+.*                                                                      00187900
+.*******************************************************************    00188000
+.*                                                                      00188100
+.*             COMMON CODE FOR SHORT-FORM VERIFICATION                  00188200
+.*          for either Function(Continue ! Return)                      00188300
+.*          and either Parentenv(Noswitch ! Secondary)                  00188400
+.*                                                                      00188500
+.*          This block of code reacts to the earlier test of the        00188600
+.*           parent PB eyecatcher, and restores addressability,         00188700
+.*           as needed, to current primary.                             00188800
+.*                                                                      00188900
+.*******************************************************************    00189000
+.*                                                                      00189100
+         BE    PARENVOK&SYSNDX         BRANCH WHEN PARENT ENV PASSES    00189200
+         &SACBACK1 &SACBACK2                                            00189300
+         AIF   ('&XCOMPCODE' NE 'YES').NOCOMPCODE12                     00189400
+         LA    0,IWMRSNCODEBADPARENV   SET REASON CODE = BAD PAR ENV    00189500
+         LA    15,IWMRETCODEINVOCERROR SET INVOCATION ERROR RETURN CODE 00189600
+.NOCOMPCODE12   ANOP                                                    00189700
+         B     END&SYSNDX              BRANCH TO END LABEL              00189800
+PARENVOK&SYSNDX DS    0H               BRANCH LABEL FOR MON ENV OK      00189900
+.*                                                                      00190000
+.*******************************************************************    00190100
+.*                                                                      00190200
+.*       Code expansion for RUNTIME_VER(SHORT_FORM ! MINIMAL) follows   00190300
+.*          for either Function(Continue ! Return)                      00190400
+.*          and Parentenv(Noswitch ! Secondary)                         00190500
+.*                                                                      00190600
+.*       This block of code performs the PSW key manipulations needed.  00190700
+.*                                                                      00190800
+.*******************************************************************    00190900
+.*                                                                      00191000
+.MINVERCONT1 ANOP                                                       00191100
+.*                                                                      00191200
+.*     THE CODE TO SET THE PSW KEY MUST TOLERATE RUNNING IN AR MODE.    00191300
+.*     FOR THIS REASON, THE ADDRESS OF THE BYTE CONTAINING THE KEY      00191400
+.*        HAS BEEN SAVED IN GPR01 WHEN NECESSARY (I.E. KEYVALUE=YES)    00191500
+.*                                                                      00191600
+         AIF   ('&PARENTKEYP' EQ 'PSWKEY').PSWKEY   BRANCH IF PSWKEY OK 00191700
+         LR    0,2                 SAVE GPR 2 BEFORE USING IPK          00191800
+         IPK                       SAVE PSWKEY IN BITS 24-27 OF GPR2    00191900
+         AIF   ('&KEYVALUE' EQ 'YES').SPKAINST      BRANCH IF KEY IN R1 00192000
+         AIF   ('&PARENTKEYP' EQ 'VALUE').VALUE     BRANCH IF VALUE     00192100
+         SPKA  0(0)                SET THE PSW KEY TO 0                 00192200
+         AGO   .PSWKEY                                                  00192300
+.*                                                                      00192400
+.VALUE   ANOP                                                           00192500
+&T1      SETC  '&PARENTKEY'                                             00192600
+         AIF   ('&PARENTKEY'(1,1) NE '(').PARENTKEY                     00192700
+&T1      SETC  '&PARENTKEY'(2,K'&PARENTKEY-2)                           00192800
+&T1      SETC  '0(&T1.)'                                                00192900
+.PARENTKEY ANOP                                                         00193000
+.* &T1 IS NOW A VALID BASE-DISPLACEMENT EXPRESSION                      00193100
+         IC    1,&T1                                                    00193200
+.SPKAINST ANOP                                                          00193300
+         SPKA  0(1)               SET THE PSW KEY FROM GPR 1 BITS 24-27 00193400
+.*                                                                      00193500
+.PSWKEY ANOP                                                            00193600
+.*                                                                      00193700
+.********************************************************************** 00193800
+.*       The following block of code                                    00193900
+.*        sets/clears the dep mirror token value,                       00194000
+.*        establishes addressability, as needed to the parent PB,       00194100
+.*        saves the dep mirror token value in the parent PB, and        00194200
+.*        saves the dep monitor token value in the parent PB.           00194300
+.********************************************************************** 00194400
+.*                                                                      00194500
+         &DMIRTVAL1 &DMIRTVAL2                                          00194600
+         &SACTO1 &SACTO2                                                00194700
+         ST    1,PB_DEP_MIRROR_TKN-PB(0,15) SET DEPENDENT MIRROR TOKEN  00194800
+         &DMONTVAL1 &DMONTVAL2 SET DEPENDENT MONITORING TOKEN           00194900
+         AIF   ('&XFUNCTION' EQ 'CONTINUE').EXTRACTSCL                  00195000
+.*                                                                      00195100
+.********************************************************************** 00195200
+.*                                                                      00195300
+.*       Function(Return) code expansion follows                        00195400
+.*       This block of code is responsible for propagating the abnormal 00195500
+.*        flags from the dependent PB to the parent PB (ORs the two).   00195600
+.*                                                                      00195700
+.********************************************************************** 00195800
+.*                                                                      00195900
+         AIF   ('&XPARENTENV' EQ 'SECONDARY').GENABNSEC                 00196000
+         L     1,PB_ABNORMAL_FLAGS-PB(0,15)  GET ABNORMAL FLAG          00196100
+         O     1,PB_ABNORMAL_FLAGS  OR IN ABNORMAL FLAG FROM DEP PB     00196200
+         ST    1,PB_ABNORMAL_FLAGS-PB(0,15)  STORE IN NEW ABNORMAL FLAG 00196300
+         AGO   .SKIPGENABN                                              00196400
+.GENABNSEC ANOP                                                         00196500
+         L     1,PB_ABNORMAL_FLAGS-PB(0,15)  GET ABNORMAL FLAG          00196600
+         OR    1,14                 OR IN ABNORMAL FLAG FROM DEP PB     00196700
+         ST    1,PB_ABNORMAL_FLAGS-PB(0,15)  STORE IN NEW ABNORMAL FLAG 00196800
+         AGO   .SKIPGENABN                                              00196900
+.*                                                                      00197000
+.********************************************************************** 00197100
+.*                                                                      00197200
+.*       Function(Continue) code expansion follows                      00197300
+.*       This block of code is responsible for extracting the scl token 00197400
+.*                                                                      00197500
+.********************************************************************** 00197600
+.*                                                                      00197700
+.EXTRACTSCL ANOP                                                        00197800
+         L     15,PB_SC_TKN-PB(0,15)  GET SERVICE CLASS TOKEN           00197900
+.*                                                                      00198000
+.*                                                                      00198100
+.********************************************************************** 00198200
+.*                                                                      00198300
+.*       Function(Continue ! Return) code expansion follows             00198400
+.*       This block of code restores addressability to current primary, 00198500
+.*        and restores the original PSW key.                            00198600
+.*                                                                      00198700
+.********************************************************************** 00198800
+.*                                                                      00198900
+.SKIPGENABN ANOP                                                        00199000
+         &SACBACK1 &SACBACK2                                            00199100
+.*                                                                      00199200
+         AIF   ('&PARENTKEYP' EQ 'PSWKEY').PSWKEY2 BRANCH IF PSWKEY OK  00199300
+         SPKA  0(2)                    RESTORE PSWKEY FROM GPR 2        00199400
+         LR    2,0                     RESTORE GPR 2 TO ORIGINAL VALUE  00199500
+.*                                                                      00199600
+.PSWKEY2       ANOP                                                     00199700
+         AIF   ('&XFUNCTION' EQ 'CONTINUE').SAVESCLTKN                  00199800
+.*                                                                      00199900
+.********************************************************************** 00200000
+.*                                                                      00200100
+.*       Function(Return) code expansion follows                        00200200
+.*                                                                      00200300
+.********************************************************************** 00200400
+.*                                                                      00200500
+         AIF   ('&XPARENTENV' EQ 'NOSWITCH').SKIPRESTORE                00200600
+&T1      SETC  '&MONTKN'                                                00200700
+         AIF   ('&MONTKN'(1,1) NE '(').MONTKNRS2                        00200800
+&T1      SETC  '&MONTKN'(2,K'&MONTKN-2)                                 00200900
+&T1      SETC  '0(&T1.)'                                                00201000
+.MONTKNRS2 ANOP                                                         00201100
+.* &T1 IS NOW A VALID BASE-DISPLACEMENT EXPRESSION                      00201200
+         ICM   14,15,&T1             REFETCH MONITORING TOKEN           00201300
+         USING PB,14                 SET BASING FOR PB                  00201400
+.SKIPRESTORE    ANOP                                                    00201500
+         SLR   15,15                                                    00201600
+         ST    15,PB_SC_TKN            CLEAR SERVICE CLASS TOKEN        00201700
+         CLI   PB_VERSION,3            Check if PB is at leaset ver 3   00201800
+         BL    LOW1PBVERSION&SYSNDX     PB version lower then 3         00201900
+         XC    PB_TRANS_TTOKEN,PB_TRANS_TTOKEN  Clear Trans Trace Token 00202000
+LOW1PBVERSION&SYSNDX DS    0H                                           00202100
+         AGO   .HOMELABEL                                               00202200
+.*                                                                      00202300
+.********************************************************************** 00202400
+.*                                                                      00202500
+.*       Function(Continue) code expansion follows                      00202600
+.*                                                                      00202700
+.********************************************************************** 00202800
+.*                                                                      00202900
+.SAVESCLTKN  ANOP                                                       00203000
+         ST    15,PB_SC_TKN           SAVE SERVICE CLASS TOKEN          00203100
+         CLI   PB_VERSION,3           Check if PB is at least ver 3     00203200
+         BL    LOW2PBVERSION&SYSNDX   PB version lower then 3           00203300
+         ICM   15,15,PB_PARENT_MONTKN EXTRACT PARENT MONITORING TOKEN   00203400
+         AIF   ('&XPARENTENV' EQ 'SECONDARY').MVCPSEC                   00203500
+         MVC   PB_TRANS_TTOKEN,PB_TRANS_TTOKEN-PB(15)            SAVE  *00203600
+                                      THE TRANSACTION TRACE TOKEN       00203700
+         AGO   .NOMVCPSEC                                               00203800
+.MVCPSEC     ANOP                                                       00203900
+         AIF   ('&PARENTKEYP' NE 'PSWKEY').NOPSWKEY PSWKEY LOGIC        00204000
+         LR    1,2                 SAVE GPR 2 BEFORE USING IPK          00204100
+         IPK                       SAVE PSWKEY IN BITS 24-27 OF GPR2    00204200
+         LR    0,2                 SAVE PSWKEY IN GPR 1                 00204300
+         LR    2,1                 RESTORE GPR 2 VALUE                  00204400
+         AGO   .MVCPSEC1                                                00204500
+.NOPSWKEY    ANOP                                                       00204600
+         AIF   ('&PARENTKEYP' NE 'VALUE').NOVALUE VALUE LOGIC           00204700
+&T1      SETC  '&PARENTKEY'                                             00204800
+         AIF   ('&PARENTKEY'(1,1) NE '(').PARENTKEY2                    00204900
+&T1      SETC  '&PARENTKEY'(2,K'&PARENTKEY-2)                           00205000
+&T1      SETC  '0(&T1.)'                                                00205100
+.PARENTKEY2 ANOP                                                        00205200
+.* &T1 IS NOW A VALID BASE-DISPLACEMENT EXPRESSION                      00205300
+         IC    0,&T1                                                    00205400
+         AGO   .MVCPSEC1                                                00205500
+.NOVALUE     ANOP                                                       00205600
+         LA    0,0                    SET MVCP PSW KEY TO ZERO          00205700
+.MVCPSEC1    ANOP                                                       00205800
+         LA    1,32                   LENGTH OF TRANSACTION TRACE TOKEN 00205900
+         MVCP  PB_TRANS_TTOKEN(1),PB_TRANS_TTOKEN-PB(15),0             *00206000
+                                      SAVE THE TRANSACTION TRACE TOKEN  00206100
+.NOMVCPSEC   ANOP                                                       00206200
+LOW2PBVERSION&SYSNDX DS    0H                                           00206300
+.*                                                                      00206400
+.********************************************************************** 00206500
+.*                                                                      00206600
+.*       Function(Continue ! Return) code expansion follows             00206700
+.*                                                                      00206800
+.********************************************************************** 00206900
+.*                                                                      00207000
+.HOMELABEL ANOP                                                         00207100
+IWMMXFER_HOME&SYSNDX DS 0H                                              00207200
+*                                                                       00207300
+         &STATEVAL1 &STATEVAL2                                          00207400
+         AIF   ('&XCOMPCODE' NE 'YES').ENDINLINE                        00207500
+         LA    15,IWMRETCODEOK SET RETURN CODE = OK                     00207600
+.ENDINLINE ANOP                                                         00207700
+.*                                                                      00207800
+.* THE FOLLOWING CODE HANDLES EWLM Reporting          @WLMPERS          00207900
+.* THE MONTKN PB CAN BE HOME RELATED. IF SO, WE WILL DO NOTHING.        00208000
+.*                                                                      00208100
+*                                                                       00208200
+*   BEGIN EWLM REPORT SUPPORT                                           00208300
+*                                                                       00208400
+         LCLC  &T2                                                      00208500
+         CLI   PB_VERSION,PB_VERSION6                                   00208600
+         BL    ENDRPTEWLM&SYSNDX      BRANCH IF EWLM IS NOT SUPPORTED   00208700
+         ICM   1,15,PB_PARENT_MONTKN  EXTRACT PARENT MONITORING TOKEN   00208800
+.*  A MONITOR TOKEN HAS HIGH ORDER BIT ON, I.E. <0                      00208900
+         BH    ENDRPTEWLM&SYSNDX    BRANCH IF RELATED TO HOME SPACE(>0) 00209000
+         MVI   PB_EWLM_REQUEST,PB_EWLM_REQUEST_XFER_&XFUNCTION._&XPAREN*00209100
+               TENV                                                     00209200
+         AIF   ('&XFUNCTION' NE 'RETURN').EWLMXFER2                     00209300
+         AIF   (N'&WORKREQ_STA LE 0).EWLMXFER1                          00209400
+&T2      SETC  '&WORKREQ_STA'                                           00209500
+         AIF   ('&WORKREQ_STA'(1,1) NE '(').WORKREQRS                   00209600
+&T2      SETC  '&WORKREQ_STA'(2,K'&WORKREQ_STA-2)                       00209700
+&T2      SETC  '0(&T2.)'                                                00209800
+.* &T2 IS NOW A VALID BASE-DISPLACEMENT EXPRESSION                      00209900
+.WORKREQRS ANOP                                                         00210000
+         MVC   PB_EWLM_WORKREQ_STA,&T2                                  00210100
+         AGO   .EWLMXFER2                                               00210200
+.EWLMXFER1 ANOP                                                         00210300
+.*       LA    1,IWMEWLMARMSTATUSNONE                                   00210400
+         SLR   1,1                                                      00210500
+         BCTR  1,0                                                      00210600
+         ST    1,PB_EWLM_WORKREQ_STA  WORKREQ_STA NOT SPECIFIED=-1      00210700
+.EWLMXFER2 ANOP                                                         00210800
+         LR    1,14                   GPR1  ->  PB                      00210900
+         L     14,16(0,0)             GET  CVT  ADDRESS                 00211000
+         L     14,X'8C'(14,0)         GET  ECVT ADDRESS                 00211100
+         L     14,X'C4'(14,0)         GET  WMVT ADDRESS                 00211200
+         L     15,X'140'(14,0)        GET  XFER EWLM SERVICE ENTRY ADDR 00211300
+         BASR  14,15                  CALL XFER EWLM SERVICE ROUTINE    00211400
+         LR    14,1                   GPR14 ->  PB                      00211500
+ENDRPTEWLM&SYSNDX DS  0H                                                00211600
+*                                                                       00211700
+*     END EWLM REPORT SUPPORT                                           00211800
+*                                                                       00211900
+.*                                                                      00212000
+.* END EWLM Reporting                                 @WLMPERS          00212100
+.*                                                                      00212200
+         DROP  14                                                       00212300
+END&SYSNDX DS    0H                    END LABEL                        00212400
+.*******************************************************************    00212500
+.***        RETURN CODE PROCESSING                                      00212600
+.*******************************************************************    00212700
+         AIF   (N'&RETCODE LE 0).IWMMXFER_ENDRC_EXP                     00212800
+         AIF   ('&XRETCODE'(1,1) EQ '(').IWMMXFER_RC_REG                00212900
+         AIF   ('&XRETCODE' EQ 'GPR15').IWMMXFER_ENDRC_EXP              00213000
+         AIF   ('&XRETCODE' EQ 'REG15').IWMMXFER_ENDRC_EXP              00213100
+         AIF   ('&XRETCODE' EQ 'R15').IWMMXFER_ENDRC_EXP                00213200
+         AIF   ('&XRETCODE' EQ '15').IWMMXFER_ENDRC_EXP                 00213300
+         ST    15,&XRETCODE                                             00213400
+         AGO   .IWMMXFER_ENDRC_EXP                                      00213500
+.*                                                                      00213600
+.IWMMXFER_RC_REG      ANOP  ,                                           00213700
+&T1      SETC  '&XRETCODE'(2,K'&XRETCODE-2)                             00213800
+         AIF   ('&T1' EQ 'GPR15').IWMMXFER_ENDRC_EXP                    00213900
+         AIF   ('&T1' EQ 'REG15').IWMMXFER_ENDRC_EXP                    00214000
+         AIF   ('&T1' EQ 'R15').IWMMXFER_ENDRC_EXP                      00214100
+         AIF   ('&T1' EQ '15').IWMMXFER_ENDRC_EXP                       00214200
+         LR    &T1,15                                                   00214300
+.IWMMXFER_ENDRC_EXP   ANOP  ,                                           00214400
+.*******************************************************************    00214500
+.***        REASON CODE PROCESSING                                      00214600
+.*******************************************************************    00214700
+         AIF   (N'&RSNCODE LE 0).IWMMXFER_ENDRSN_EXP                    00214800
+         AIF   ('&XRSNCODE'(1,1) EQ '(').IWMMXFER_RSN_REG               00214900
+         AIF   ('&XRSNCODE' EQ 'GPR0').IWMMXFER_ENDRSN_EXP              00215000
+         AIF   ('&XRSNCODE' EQ 'GPR00').IWMMXFER_ENDRSN_EXP             00215100
+         AIF   ('&XRSNCODE' EQ 'REG0').IWMMXFER_ENDRSN_EXP              00215200
+         AIF   ('&XRSNCODE' EQ 'REG00').IWMMXFER_ENDRSN_EXP             00215300
+         AIF   ('&XRSNCODE' EQ 'R0').IWMMXFER_ENDRSN_EXP                00215400
+         AIF   ('&XRSNCODE' EQ '0').IWMMXFER_ENDRSN_EXP                 00215500
+         AIF   ('&XRSNCODE' EQ '00').IWMMXFER_ENDRSN_EXP                00215600
+         ST    0,&XRSNCODE                                              00215700
+         AGO   .IWMMXFER_ENDRSN_EXP                                     00215800
+.*                                                                      00215900
+.IWMMXFER_RSN_REG     ANOP  ,                                           00216000
+&T1      SETC '&XRSNCODE'(2,K'&XRSNCODE-2)                              00216100
+         AIF  ('&ZCGPR' EQ 'GPR0').IWMMXFER_ENDRSN_EXP                  00216200
+         AIF  ('&ZCGPR' EQ 'GPR00').IWMMXFER_ENDRSN_EXP                 00216300
+         AIF  ('&ZCGPR' EQ 'REG0').IWMMXFER_ENDRSN_EXP                  00216400
+         AIF  ('&ZCGPR' EQ 'REG00').IWMMXFER_ENDRSN_EXP                 00216500
+         AIF  ('&ZCGPR' EQ 'R0').IWMMXFER_ENDRSN_EXP                    00216600
+         AIF  ('&ZCGPR' EQ '0').IWMMXFER_ENDRSN_EXP                     00216700
+         AIF  ('&ZCGPR' EQ '00').IWMMXFER_ENDRSN_EXP                    00216800
+         LR   &T1,0                                                     00216900
+.IWMMXFER_ENDRSN_EXP  ANOP  ,                                           00217000
+.*******************************************************************    00217100
+&ZIWMMXFER            SETC  'YES'          SET IWMMXFER USED            00217200
+         POP   PRINT                                                    00217300
+*                                            IWMMXFER END               00217400
+         SPACE 1                                                        00217500
+         MEXIT                                                          00217600
+.NOCODENEEDED ANOP                                                      00217700
+.*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*  00217800
+.********************************************************************   00217900
+.***AL.A01  INTERNAL ARRAY TO PRODUCE FORMATTED CODE                    00218000
+.********************************************************************   00218100
+                      LCLA  &ZOPN          LIST INSTRUCTION INDEX       00218200
+                      LCLA  &ZOPN1         INVOCATION INDEX             00218300
+                      LCLC  &ZOPL(4095)    LABEL                        00218400
+                      LCLC  &ZOPO(4095)    OPERATION                    00218500
+                      LCLC  &ZOPV(4095)    VALUE                        00218600
+                      LCLC  &ZOPD(4095)    DESCRIPTION                  00218700
+.*                                                                      00218800
+&ZOPN                 SETA  0              INITIAL INST INDEX VALUE     00218900
+.*******************************************************************    00219000
+.***AO.X02  RETURN CODE PROCESSING                                      00219100
+.*******************************************************************    00219200
+                      AIF   (N'&RETCODE LE 0).ZMRETX                    00219300
+                      AIF   ('&XRETCODE'(1,1) EQ '(').ZMRET2            00219400
+                      AIF   ('&XRETCODE' EQ 'GPR15').ZMRETX             00219500
+                      AIF   ('&XRETCODE' EQ 'REG15').ZMRETX             00219600
+                      AIF   ('&XRETCODE' EQ 'R15').ZMRETX               00219700
+                      AIF   ('&XRETCODE' EQ '15').ZMRETX                00219800
+&ZOPN                 SETA  &ZOPN+1                                     00219900
+&ZOPL(&ZOPN)          SETC  ' '                                         00220000
+&ZOPO(&ZOPN)          SETC  'ST'                                        00220100
+&ZOPV(&ZOPN)          SETC  '15,&XRETCODE'                              00220200
+&ZOPD(&ZOPN)          SETC  '++ SET RETURN CODE'                        00220300
+                      AGO   .ZMRETX                                     00220400
+.*                                                                      00220500
+.ZMRET2               ANOP  ,                                           00220600
+&ZCGPR                SETC  '&XRETCODE'(2,K'&XRETCODE-2)                00220700
+                      AIF   ('&ZCGPR' EQ 'GPR15').ZMRETX                00220800
+                      AIF   ('&ZCGPR' EQ 'REG15').ZMRETX                00220900
+                      AIF   ('&ZCGPR' EQ 'R15').ZMRETX                  00221000
+                      AIF   ('&ZCGPR' EQ '15').ZMRETX                   00221100
+&ZOPN                 SETA  &ZOPN+1                                     00221200
+&ZOPL(&ZOPN)          SETC  ' '                                         00221300
+&ZOPO(&ZOPN)          SETC  '&ZMAC_LR'                                  00221400
+&ZOPV(&ZOPN)          SETC  '&ZCGPR,15'                                 00221500
+&ZOPD(&ZOPN)          SETC  '++ SET RETURN CODE'                        00221600
+.ZMRETX               ANOP  ,                                           00221700
+.*******************************************************************    00221800
+.***AO.X03  REASON CODE PROCESSING                                      00221900
+.*******************************************************************    00222000
+                      AIF   (N'&RSNCODE LE 0).ZMRSNX                    00222100
+                      AIF   ('&XRSNCODE'(1,1) EQ '(').ZMRSN2            00222200
+                      AIF   ('&XRSNCODE' EQ 'GPR0').ZMRSNX              00222300
+                      AIF   ('&XRSNCODE' EQ 'GPR00').ZMRSNX             00222400
+                      AIF   ('&XRSNCODE' EQ 'REG0').ZMRSNX              00222500
+                      AIF   ('&XRSNCODE' EQ 'REG00').ZMRSNX             00222600
+                      AIF   ('&XRSNCODE' EQ 'R0').ZMRSNX                00222700
+                      AIF   ('&XRSNCODE' EQ '0').ZMRSNX                 00222800
+                      AIF   ('&XRSNCODE' EQ '00').ZMRSNX                00222900
+&ZOPN                 SETA  &ZOPN+1                                     00223000
+&ZOPL(&ZOPN)          SETC  ' '                                         00223100
+&ZOPO(&ZOPN)          SETC  'ST'                                        00223200
+&ZOPV(&ZOPN)          SETC  '0,&XRSNCODE'                               00223300
+&ZOPD(&ZOPN)          SETC  '++ SET REASON CODE'                        00223400
+                      AGO   .ZMRSNX                                     00223500
+.*                                                                      00223600
+.ZMRSN2               ANOP  ,                                           00223700
+&ZCGPR                SETC  '&XRSNCODE'(2,K'&XRSNCODE-2)                00223800
+                      AIF   ('&ZCGPR' EQ 'GPR0').ZMRSNX                 00223900
+                      AIF   ('&ZCGPR' EQ 'GPR00').ZMRSNX                00224000
+                      AIF   ('&ZCGPR' EQ 'REG0').ZMRSNX                 00224100
+                      AIF   ('&ZCGPR' EQ 'REG00').ZMRSNX                00224200
+                      AIF   ('&ZCGPR' EQ 'R0').ZMRSNX                   00224300
+                      AIF   ('&ZCGPR' EQ '0').ZMRSNX                    00224400
+                      AIF   ('&ZCGPR' EQ '00').ZMRSNX                   00224500
+&ZOPN                 SETA  &ZOPN+1                                     00224600
+&ZOPL(&ZOPN)          SETC  ' '                                         00224700
+&ZOPO(&ZOPN)          SETC  '&ZMAC_LR'                                  00224800
+&ZOPV(&ZOPN)          SETC  '&ZCGPR,0'                                  00224900
+&ZOPD(&ZOPN)          SETC  '++ SET REASON CODE'                        00225000
+.ZMRSNX               ANOP  ,                                           00225100
+.*******************************************************************    00225200
+.***AO.X05  FORMAT GENERATED INSTRUCTIONS                               00225300
+.*******************************************************************    00225400
+                      ACTR  10000                                       00225500
+.*                                                                      00225600
+                      LCLA  &ZLC           COLUMN POSITION              00225700
+                      LCLA  &ZOPX          LIST TABLE INDEX             00225800
+                      LCLC  &ZLL           LABEL                        00225900
+                      LCLC  &ZLOP          OPERATION                    00226000
+                      LCLC  &ZLV           VALUE                        00226100
+                      LCLC  &ZLD           DESCRIPTION                  00226200
+.*                                                                      00226300
+&ZOPX                 SETA  1                                           00226400
+.*******************************************************************    00226500
+.***AP.X01  FORMAT GENERATED CODE                                       00226600
+.ZL21                 AIF   (&ZOPX GT &ZOPN).ZLX1  B IF DONE            00226700
+&ZLL                  SETC  '&ZOPL(&ZOPX)'                              00226800
+&ZLOP                 SETC  '&ZOPO(&ZOPX)'                              00226900
+&ZLV                  SETC  '&ZOPV(&ZOPX)'                              00227000
+&ZLD                  SETC  '&ZOPD(&ZOPX)'                              00227100
+                      AIF   (K'&ZLD LE 0).ZL51                          00227200
+&ZLC                  SETA  35             COMMENT COLUMN               00227300
+                      AIF   ('&ZLD'(1,1) NE '*').ZL31                   00227400
+&ZLC                  SETA  33             COMMENT COLUMN               00227500
+.ZL31                 AIF   (K'&ZLV GE &ZLC-16-1).ZL41                  00227600
+&ZLV                  SETC  '&ZLV'.' '                                  00227700
+                      AGO   .ZL31                                       00227800
+.*                                                                      00227900
+.ZL41                 ANOP  ,                                           00228000
+&ZLV                  SETC  '&ZLV'.' '                                  00228100
+.ZL51                 ANOP  ,                                           00228200
+&ZLV                  SETC  '&ZLV'.'&ZLD'                               00228300
+.*                                                                      00228400
+&ZLL     &ZLOP &ZLV                                                     00228500
+.*                                                                      00228600
+&ZOPX                 SETA  &ZOPX+1        NEXT STRUCTURE               00228700
+                      AGO   .ZL21          CONTINUE LOOPING             00228800
+.*                                                                      00228900
+.ZLX1                 ANOP  ,                                           00229000
+.*******************************************************************    00229100
+.***AP.X02  END OF IWMMXFER MACRO                                       00229200
+&ZIWMMXFER            SETC  'YES'          SET IWMMXFER USED            00229300
+         POP   PRINT                                                    00229400
+*                                            IWMMXFER-1                 00229500
+         SPACE 1                                                        00229600
+.ZLX2                 ANOP  ,                                           00229700
+         MEND                                                           00229800
+**********************************************************************/ 00229900
+*/*PB.OC01 INVOKE MACRO---------------------------------------------*/  00230000
+*%IWMMXFER: MACRO KEYS(FUNCTION,RUNTIME_VER,WORKREQ_STA,MONTKN,         00230100
+*                 PARENTKEYP,PARENTKEY,PARENTENV,COMPCODE,RETCODE,      00230200
+*                 RSNCODE,PLISTVER);                                    00230300
+*  ANS('?'!!MACLABEL!!' '!!'IWMMXFEP '!!MACLIST!!                       00230400
+*         ' '!!MACKEYS!!';') COL(MACLMAR);                              00230500
+*%END IWMMXFER;                                                         00230600

@@ -1,0 +1,538 @@
+*        %GOTO VLOKPRO ;          /* Bilingual header                           
+         MACRO                                                                  
+         BPXYVLOK &DSECT=YES,&LIST=YES,&PTR64=NO                                
+         GBLB  &VLOK411                                                         
+         AIF   (&VLOK411 EQ 1).E411                                             
+&VLOK411 SETB  1                                                                
+         AIF   ('&LIST' EQ 'YES').A411                                          
+         PUSH  PRINT  BPXYVLOK: Vnode Byte Range Locking Structure              
+         PRINT OFF                                                              
+         AGO   .A411                                                            
+*                                  */                                           
+*%VLOKPRO : ;                                                                   
+*/****START OF SPECIFICATIONS******************************************         
+*                                                                               
+*    $MAC (BPXYVLOK) COMP(SCPX1) PROD(BPX):                                     
+*                                                                               
+*01* MACRO NAME: BPXYVLOK                                                       
+*                                                                               
+*01* DSECT NAME: VLOK                                                           
+*                                                                               
+*01* DESCRIPTIVE NAME: Vnode Services Byte Range Locking Structure              
+*                                                                               
+*02*   ACRONYM: VLOK                                                            
+**/                                                                             
+*/*01* PROPRIETARY STATEMENT=                                        */         
+*/***PROPRIETARY_STATEMENT********************************************/         
+*/*                                                                  */         
+*/*                                                                  */         
+*/* LICENSED MATERIALS - PROPERTY OF IBM                             */         
+*/* 5650-ZOS COPYRIGHT IBM CORP. 1993, 2021                          */         
+*/*                                                                  */         
+*/* STATUS= HBB77D0                                                  */         
+*/*                                                                  */         
+*/***END_OF_PROPRIETARY_STATEMENT*************************************/         
+*/*                                                                             
+*01* EXTERNAL CLASSIFICATION:                                                   
+*02*            PI: BASE                                                        
+*02*         NOTPI: FIELDS                                                      
+*                   VlokServerPIDByte2                                          
+*                   VlokLockerTok1                                              
+*                   VlokLockerTok2                                              
+*                   VlokAioExt                                                  
+*                   VlokUnLoadLocksExt                                          
+*                   VlokPurgeExt                                                
+*                   Vlok#InvalidToken                                           
+*                   Vlok#Close                                                  
+*                   Vlok#Getown                                                 
+*                   Vlok#MoveFs                                                 
+*                   Vlok#NfscObjCl                                              
+*                   Vlok#FLK                                                    
+*                   Vlok#OpenModes                                              
+*                   VlokRngLock                                                 
+*                   VlokRngOwner                                                
+*                   VlokRngOffLen                                               
+*                   VlokRngFlags                                                
+*                   VlokRngWaiter                                               
+*                   VlokRngOpenAcc                                              
+*                   VlokRngOpenDeny                                             
+*                   VlokRngRlAccess                                             
+*                   VlokObjectVP                                                
+*                   VlokObject1                                                 
+*                   VlokObject2                                                 
+*                   VlokObjTokVP                                                
+*                   VlokObjTok1                                                 
+*                   VlokObjTok2                                                 
+*01* END OF EXTERNAL CLASSIFICATION:                                            
+*                                                                               
+*01* FUNCTION:                                                                  
+*                                                                               
+*      To pass locking information on the V_lockctl interface.                  
+*                                                                               
+*01* METHOD OF ACCESS:                                                          
+*                                                                               
+*02*   PL/X:                                                                    
+*                                                                               
+*        %INCLUDE SYSLIB(BPXYVLOK)                                              
+*        By default, the VLOK is based on VLOKPtr. If                           
+*        other basing is desired, use %VLOKBASE='BASED(XXXXXX)'.                
+*        If %VLOKBASE='BASED(VLOKPtr)' is coded, a Declare for                  
+*        VLOKPtr is also generated.                                             
+*                                                                               
+*        Typical Syscall usage: %VLOKBASE = 'Based(Addr(InputVLOK))'            
+*                                                                               
+*        For Amode64 usage:                                    @P8A             
+*           Issue 'ASAXMAC SetEsameInfo' to define the                          
+*           appropriate 8-byte data type for %AsaxmacP64,                       
+*           or set the macro variable yourself.                                 
+*           The Default is Char(8) for Amode(31) usage                          
+*           where the full field is not used.                                   
+*                                                                               
+*02*   ASM:                                                                     
+*        With DSECT=NO, storage is allocated in line                            
+*        and addressability is provided thru that DSECT or CSECT.               
+*        With DSECT=YES, a DSECT is produced and "USING VLOK,reg"               
+*        is required for addressability.  Here "reg" contains the               
+*        address of VLOK#LENGTH bytes of storage.                               
+*        The default is DSECT=YES.                                              
+*                                                                               
+*        With PTR64=NO, VLOKBLOCKINGLOCK is a fullword address.                 
+*        With PTR64=YES, VLOKBLOCKINGLOCK is a doubleword address.              
+*        The default is PTR64=NO.                                 @D5A          
+*                                                                               
+*01* SIZE: VLOK#LENGTH                                                          
+*                                                                               
+*01* POINTED TO BY: VLOKPtr                                                     
+*                                                                               
+*01* CREATED BY: Storage obtained by caller of system call                      
+*                                                                               
+*01* DELETED BY: Caller of system call                                          
+*                                                                               
+*01* STORAGE ATTRIBUTES:                                                        
+*02*   SUBPOOL/DATASPACE:  N/A                                                  
+*02*   KEY:                N/A                                                  
+*02*   RESIDENCY:          N/A                                                  
+*                                                                               
+*01* FREQUENCY: 1 per v_lockctl syscall                                         
+*                                                                               
+*01* SERIALIZATION: N/A                                                         
+*                                                                               
+*01* DEPENDENCIES: None                                                         
+*                                                                               
+*01* NOTES:                                                                     
+*           BPXYVFSI is a C program interface for the BPX1V (v_)                
+*           services.  The VLOCK structure in BPXYVFSI matches                  
+*           the BPXYVLOK structure.                                             
+*                                                                               
+*01* COMPONENT:  OpenMVS (SCPX1)                                                
+*                                                                               
+*01* DISTRIBUTION LIBRARY:  AMACLIB                                             
+*                                                                               
+*01* EYE-CATCHER: VLOK                                                          
+*02*   OFFSET:  0                                                               
+*02*   LENGTH:  4                                                               
+*                                                                               
+*01* CHANGE-ACTIVITY:                                                           
+*                                                                               
+* $D0=DOAA009, HOM1120, 931209, PDFZ: NFS Support       - DCR A009.05           
+* $01=       , JBB6609, 990131, PDJS: vn_lockctl support - dword bdy            
+* $02=OW41706  JBB6609, 991101, PDMX: support brl#close across sysplex          
+* $03=PXV0136, HBB7704, 000427, PD2R: D omvs,pid=,brl sysplex support           
+* $P1=PYN0220  HBB7708  020301  PDFO: Bilingual fixup                           
+* $D1=DYKA627  HBB7709  030401  PDMX: Moveable Brlm                             
+* $D2=DxxA630  HBB7720  031020  PDJT: NFS V4                                    
+* $P2=ME00770  HBB7720  040520  PDNU: New MSG TYPEs for BRLM                    
+* $P3=ME01912  HBB7720  041012  PDJT: ASM Updates, Remove VlokUllDebug          
+* $D3=DCRA857  HBB7730  050704  PDMX: Recoverable Brlm                          
+* $P4=ME05333  HBB7730  060112  PDMJ: Recognize DSECT=NO                        
+* $D4=DCRB242  HBB7750  070425  PDKY: Extensions to vn_lockctl for NFS          
+*                                     V4 Client Locking                         
+* $P5=ME10633  HBB7750  070709  PDKY: Remove restrictedf material               
+*                                     statement in prolog                       
+* $P6=ME11356  HBB7750  070925  PDKY: Correct position VlokUllMaskLen           
+* $P7=ME22211  HBB7790  110803  PDJT: LP64 NFSS                                 
+* $P8=ME22329  HBB7790  110821  PDJT: Finish LP64 NFSS support                  
+* $P9=ME24315  HBB7790  120620  PDX8: Fix typo of ASM VlokNoSplitMerge          
+* $D5=DCRC595  HBB77A0  130328  PDSK: AMODE64 64-bit autodata                   
+* $PA=ME28117  HBB77A0  150105  PDX8: Add VlokPfsBrlm bit                       
+* $D6=W401048  HBB77D0  211222  PDTN: Support Flock Object Class                
+*                                                                               
+****END OF SPECIFICATIONS*********************************************/         
+*        %GOTO VLOKPLS  ;         /* Bilingual header                           
+.A411    ANOP  ,                                                                
+** BPXYVLOK: VLOK - Vnode Service Byte Range Locking structure                  
+         AIF   ('&DSECT' EQ 'NO').B411                                          
+VLOK                 DSECT ,                                                    
+         AGO   .C411                                                            
+.B411    ANOP  ,                                                                
+                     DS    0D                 Clear storage                     
+VLOK                 DC    XL(VLOK#LENGTH)'00'                                  
+                     ORG   VLOK                                                 
+.C411    ANOP  ,                                                                
+VLOKBEGIN            DS    0D                                                   
+*                                                                               
+VLOKID               DC    C'VLOK'            Eye catcher                       
+VLOKLEN              DC    AL4(VLOK#LENGTH)   Length of the structure           
+VLOKLOCKER           DS    0F                 Locker                            
+VLOKSERVERPID        DS    F                    Server's Process ID             
+VLOKCLIENTPID        DS    F                    Server's Client's PID           
+VLOKLOCKERTOK        DS    CL8                Locker Token                      
+VLOKCLIENTTID        DS    CL8                Client's Thread ID                
+VLOKOBJECT           DS    0F                 Object - a locked file            
+VLOKOBJCLASS         DS    F                    Object Class                    
+VLOKOBJID            DS    0CL12                Object ID          @D1C         
+VLOKOBJDEV           DS    CL4                    Object Device ID              
+VLOKOBJFID           DS    CL8                    Object File ID                
+VLOKOBJTOK           DS    CL8                Object token                      
+*  We are taking back these 2 fields:                                           
+*   VLOKDOSMODE                                                                 
+*   VLOKDOSACCESS                                                               
+VLOKFLAGS            DS    CL1                                    @D4A          
+VLOKSPCLTVNTOK       EQU   X'80'     IUO - Sysplex Client VnTok passed          
+*                                                                 @D4A          
+VOLKNOSPLITMERGE     EQU   X'40'      Do not split or merge ranges@D4A          
+VLOKNOSPLITMERGE     EQU   X'40'      Do not split or merge ranges@P9A          
+VLOKPFSBRLM          EQU   X'20'      call PFS for brlm fuctions  @PAA          
+VLOKRSVD1            DS    CL1                                    @D4C          
+VLOKBLKLOCKLEN       DS    CL1                VlokBlockingLock length           
+VLOKSUBFUNCTION      DS    CL1                Internal SubFunction              
+VLOKRSVD             DS    CL4                Reserved                          
+VLOKVNTOKEN          DS    CL8                Vnode Token                       
+VLOKBRLK             DS    CL24               Lock Information mapped           
+*                                             by BPXYBRLK                       
+VLOKENDVER1          DS    0F              --- END OF VERSION 1 -------         
+         AIF   ('&PTR64' EQ 'YES').AM64A                           @D5A         
+                     DS    F                                                    
+VLOKBLOCKINGLOCK     DS    A                  Ptr to Ret Blocking Lock          
+         AGO   .AM64B                                              @D5A         
+.AM64A   ANOP  ,                                                   @D5A         
+VLOKBLOCKINGLOCK     DS    D              Ptr to Ret Blocking Lock @D5A         
+.AM64B   ANOP  ,                                                   @D5A         
+*   Union of three extensions: Async, UnLoad, Purge                             
+VLOKUNION            DS    0CL12                                                
+*     Async Locking Extension                                                   
+VLOKAIOEXT           ORG VLOKUNION    Async Extension                           
+VLOKAIOCB64          DS    D            Async Locking Aiocb Ptr64 @P7A          
+                     ORG VLOKAIOEXT                               @P7A          
+                     DS    F                                                    
+VLOKAIOCB            DS    A            Async Locking Aiocb Ptr31               
+VLOKAIOCBLEN         DS    F            Async Aiocb Length                      
+*     Unload Locks Extension                                                    
+VLOKUNLOADLOCKSEXT   ORG VLOKUNION    Unload Locks Extension                    
+VLOKULLINMASKPTR64   DS    D            Input Mask Ptr64          @P8A          
+                     ORG VLOKUNION                                @P8A          
+                     DS    F                                                    
+VLOKULLINMASKPTR     DS    A            Input Mask Ptr31      @P8M@D4A          
+                     ORG VLOKULLINMASKPTR                     @P8C@D4A          
+VLOKULLOUTLISTPTR    DS    A            Output List Ptr                         
+VLOKULLSUBPOOL       DS    CL1          Storage Subpool                         
+VLOKULLMASKLEN       DS    CL1          Input Mask Length         @D4A          
+VLOKULLRETWAITERS    DS    CL1          Return Waiters too                      
+*     Purge Locks Extension                                                     
+VLOKPURGEEXT         ORG VLOKUNION    Purge Locks Mask Ext                      
+VLOKPGMASKS64        DS    D            Purge Locks Masks Ptr64   @P8A          
+                     ORG VLOKUNION                                @P8A          
+                     DS    F                                                    
+VLOKPGMASKS          DS    A            VlokObjOwnMasks Ptr31                   
+VLOKPGMASKSLEN       DS    F            Length of the two masks                 
+*                                                                               
+                     DS    CL12                                                 
+VLOKENDVER2          DS    0F         --- End of Version 2 -------              
+*                                                                               
+*   Constants                                                                   
+*                                                                               
+VLOK#LENGTH          EQU   *-VLOKBEGIN        Length of VLOK                    
+VLOK#HFS             EQU   0                  HFS Object Class                  
+VLOK#MVS             EQU   1                  MVS Object Class                  
+VLOK#LFSESA          EQU   2                  LFS/ESA Object Class              
+*                                                                               
+*   Constants for V_lockctl commands                                            
+*                                                                               
+VLOK#REGLOCKER       EQU   1               Register Locker                      
+VLOK#UNREGLOCKER     EQU   2               Unregister Locker                    
+VLOK#LOCK            EQU   3               Lock object's byte range             
+VLOK#LOCKWAIT        EQU   4               Lock object's byte range    +        
+                                           - wait if blocked                    
+VLOK#UNLOCK          EQU   5               UnLock object's byte range           
+VLOK#QUERY           EQU   6               Query byte range for locks           
+VLOK#PURGE           EQU   7               Purge all locks for a locker         
+VLOK#LOCKASY         EQU   8               Lock Asynchronously                  
+VLOK#LOCKCANCEL      EQU   9               Cancel Async Lock                    
+VLOK#UNLOADLOCKS     EQU  10               Unload BRLM Locks                    
+*                                                                               
+*   Constants for UnLoadLocks                                                   
+*                                                                               
+VLOK#RETHELDONLY     EQU   0               Ret Held Locks Only     @D4A         
+VLOK#RETWAITERS      EQU   1               Ret Held & Waiters                   
+VLOK#RETALLOBJ       EQU   3               Total UnLoad                         
+*                                                                               
+*   Mask structure for Purge Locks                                              
+*                                                                               
+         AIF   ('&DSECT' EQ 'NO').B412                             @P4A         
+VLOKOBJOWNMASKS      DSECT ,                                                    
+         AGO   .C412                                               @P4A         
+.B412    ANOP  ,                                                   @P4A         
+VLOKOBJOWNMASKS      DS  0F                                        @P4A         
+.C412    ANOP  ,                                                   @P4A         
+VLOKOBJECTMASK       DS  0CL16             Object Id Mask                       
+VLOKOBJCLASSMASK     DS  CL4                Object Class                        
+VLOKOBJDEVMASK       DS  CL4                Object Devno (HFS)                  
+VLOKOBJFIDMASK       DS  CL8                Object Fid   (HFS)                  
+VLOKOWNERMASK        DS  0CL16              Owner Id Mask                       
+VLOKLOCKERMASK       DS  0CL8              Locker Mask                          
+VLOKSPIDMASK         DS  CL4                Server PID Mask                     
+VLOKCPIDMASK         DS  CL4                Client PID Mask                     
+VLOKTIDMASK          DS  CL8               Thread Id Mask                       
+*                                                                               
+** BPXYVLOK END                                                                 
+         SPACE 3                                                                
+         AIF   ('&LIST' EQ 'YES').E411                        6@D1A             
+         POP   PRINT                                                            
+.E411    ANOP  ,                                                                
+         MEND  ,                  Terminating PL/X comment           */         
+*                                                                               
+*%VLOKPLS : ;                                                                   
+*                                                                               
+*%DCL ASABEGIN_AMODE CHAR EXTERNAL;                           /* @D5A*/         
+*%DCL PTR_64         CHAR EXTERNAL;                           /* @D5A*/         
+*                                                                               
+*%IF VLOKBASE = '' %THEN                                                        
+*  %DO;                                                                         
+*    %VLOKBASE = 'BASED(VlokPtr)';                                              
+*  %END;                                                                        
+*%IF Translate(VLOKBASE) = 'BASED(VLOKPTR)' %THEN                               
+*  %DO;                                                                         
+*  %IF ASABEGIN_AMODE='64' ! PTR_64 = 'YES' %THEN             /* @D5A*/         
+*   %DO;                                                      /* @D5A*/         
+*    DCL VlokPtr Ptr(64);         /* 64bit pointer to the VLOK   @D5A*/         
+*   %END;                                                     /* @D5A*/         
+*  %ELSE                                                      /* @D5A*/         
+*   %DO;                                                      /* @D5A*/         
+*    DCL VlokPtr Ptr(31);         /* Pointer to the VLOK             */         
+*   %END;                                                     /* @D5A*/         
+*  %END;                                                                        
+*                                                                               
+* %IF AsaxmacP64 = ''                  /* Set data types for     @P8A*/         
+*    %Then %AsaxmacP64 = 'Char(8)';    /*   down lvl systems.    @P8A*/         
+*                                                                               
+* ?ASAADMAC Name(BPXYBRLK);                                                     
+*DCL                                                                            
+* 1 Vlok VLOKBASE Bdy(Dword),     /* V_lockctl Byte Range Lock Info  */         
+*                                                                               
+*   3 VlokId        Char(4),      /* Eye catcher - 'VLOK '           */         
+*   3 VlokLen       Fixed(31),    /* Length of structure             */         
+*                                                                               
+*   3 VlokLocker Bdy(Dword),      /* Locker                      @01C*/         
+*     5 VlokServerPID Fixed(32),  /*   Server's Process ID           */         
+*       7 * Char(1),              /*                                 */         
+*       7 VlokServerPIDByte2 Char(1), /* sysplex system number   @D1A*/         
+*     5 VlokClientPID Fixed(32),  /*   Server's Client's PID         */         
+*                                 /* +10 */                                     
+*   3 VlokLockerTok Char(8)       /* Locker token                @01C*/         
+*         Bdy(Dword),                                         /* @01A*/         
+*     5 VlokLockerTok1 Ptr(31),   /* For CDS                     @01A*/         
+*     5 VlokLockerTok2 Ptr(31),   /* For CDS                     @01A*/         
+*   3 VlokClientTID Char(8)       /* Client's Thread ID          @01C*/         
+*         Bdy(Dword),                                         /* @01A*/         
+*                                 /* +20 */                                     
+*   3 VlokObject,                 /* Object - a locked file          */         
+*     5 VlokObjClass  Fixed(32),  /*   Object Class                  */         
+*     5 VlokObjID Char(12),       /* Object ID -unique within Class  */         
+*       7 VlokObjDev    Char(4),  /*     Device ID for HFS file      */         
+*       7 VlokObjFid    Char(8),  /*     File ID for HFS file        */         
+*                                 /* +30 */                                     
+*   3 VlokObjTok    Char(8),      /* Object token                    */         
+*                                                                               
+*       ] The fields below were never used and are being left    @D2A           
+*       ] here so old programs that may have referenced them     @D2A           
+*       ] will not suffer compile failures with this new macro.  @D2A           
+*       ]------------------------------------------------------- @D2A           
+*       ] We are taking back these 2 fields:                     @D4A           
+*       ] vl_dosmode                                             @D4A           
+*       ] vl_dosaccess                                           @D4A           
+*       ] Have advised FVT on the disappearing of these fields   @D4A           
+*       ] Repplace VLOKDOSMODE with VLOKSPCLTVNTOK               @D4A           
+*       ]------------------------------------------------------- @D2A           
+*   3 VlokFlags     Bit(8),           /* Vlock Flags             @D4A*/         
+*     5 VlokSpCltVnTok   Bit(1), /* IUO - Sysplex Client VnTok passed           
+*                                                                @D4A*/         
+*     5 VlokNoSplitMerge Bit(1),   /*Do not split or merge ranges@D4A*/         
+*     5 VlokPfsBrlm      Bit(1),   /*call PFS for brlm functions @PAA*/         
+*     5 *                Bit(5),                               /*@D4A*/         
+*   3 *                 Char(1),                          /*@D2C @D4C*/         
+*   3 VlokBlkLockLen  Fixed(8),   /* Length for VlokBlockingLock @D2A*/         
+*   3 VlokSubFunction Fixed(8),   /* Optional internal sub function             
+*                                    codes - see below           @02A*/         
+*   3 *             Char(4),      /* Reserved for expansion          */         
+*                                 /* +40 */                                     
+*   3 VlokVnToken   Char(8),      /* Vnode Token                 @D2A*/         
+*                                 /* +48 */                                     
+*   3 VlokBrlk Char(Length(Brlk)),/* Lock Information - BPXYBRLK     */         
+*                                                                               
+*   3 VlokEndVer1   Char(0), /* +60 --- End of Version 1 ------- @D2A*/         
+* %IF ASABEGIN_AMODE='64' ! PTR_64 = 'YES' %THEN              /* @D5A*/         
+*  %DO;                                                       /* @D5A*/         
+*   3 VlokBlockingLock   Ptr(64), /*+60 Ptr to Ret Blocking Lock @D5A*/         
+*     5 VlokBlockingLockHi Char(4), /* +60                       @D5C*/         
+*     5 VlokBlockingLock31 Ptr,   /* +64                         @D5C*/         
+*  %END;                                                      /* @D5A*/         
+*  %ELSE                                                      /* @D5A*/         
+*  %DO;                                                       /* @D5A*/         
+*   3                *  Ptr,                    ] Rsvd for Ptr64 @D2A*/         
+*   3 VlokBlockingLock  Ptr,      /* Ptr to Ret Blocking Lock    @D2A*/         
+*  %END;                                                      /* @D5A*/         
+*                                 /* +68 */                                     
+*   3 *  UNION      Bdy(DWord),                                /*@D2A*/         
+*     4 VlokAioExt ,              /* Async Extension             @D2A*/         
+*       5 VlokAiocb64   AsaxmacP64,   /* Async Locking Aiocb P64 @P7A*/         
+*         7   *             Ptr,                                                
+*         7 VlokAiocb       Ptr,      /* Async Locking Aiocb P31 @D2A*/         
+*       5 VlokAiocbLen     Fixed(32), /* Async Aiocb Length      @D2A*/         
+*                                                              /*@D2A*/         
+*     4 VlokUnLoadLocksExt ,      /* Unload Locks Extension      @D2A*/         
+*       5 VlokUllInMaskPtr64 AsaxmacP64,/*  Input Mask Ptr64     @P8A*/         
+*         7   *               Ptr,                                              
+*         7 VlokUllOutListPtr Ptr,      /* Output List Ptr31     @D2A*/         
+*           9 VlokUllInMaskPtr Ptr,     /*  Input Mask Ptr31     @D4A*/         
+*       5 VlokUllSubpool     Fixed(8),  /* Storage Subpool       @D2A*/         
+*       5 VlokUllMaskLen     Fixed(8),             /*@P3D@D2A@D4C@P6C*/         
+*       5 VlokUllRetWaiters  Fixed(8),  /* Return Waiters too    @D2A*/         
+*                                                              /*@D2A*/         
+*     4 VlokPurgeExt ,            /* Purge Locks Mask Ext        @D2A*/         
+*       5 VlokPgMasks64 AsaxmacP64,   /* VlokObjOwnMasks Ptr64   @P8A*/         
+*         7   *             Ptr,                                                
+*         7 VlokPgMasks     Ptr,      /* VlokObjOwnMasks Ptr31   @D2A*/         
+*       5 VlokPgMasksLen   Fixed(32), /* Length of the two masks @D2A*/         
+*                                 /* +74 */                                     
+*   3 *             Char(12),                                  /*@D2A*/         
+*   3 VlokEndVer2 Char(0);   /* +80 --- End of Version 2 ------- @D2A*/         
+*                                                                               
+*                                                                               
+*DCL                                                                            
+* Vlok#ID Char(4)  Constant('VLOK'),        /* Eye catcher           */         
+* Vlok#Len Fixed(31) Constant(Length(Vlok));/* Length of Vlok        */         
+*DCL                                                                            
+* Vlok#InvalidToken Char(8)                 /* Token is invalid due  */         
+*   Constant('FFFFFFFFFFFFFFFF'X);          /* to lock error     @D3A*/         
+*                                                                               
+*/* Constants for VlokSubFunction                    (Internal Use)  */         
+*DCL                                                                            
+* Vlok#Close  Fixed(8) Constant(5), /* v_lockctl = Vlok#Unlock & this           
+*                                      is for a close            @02A*/         
+* Vlok#Getown Fixed(8) Constant(6), /* Query owner locks         @03A*/         
+* Vlok#MoveFs Fixed(8) Constant(7); /* filesystem move           @D3A*/         
+*                                                                               
+*/* Constants for Object Class (VlokObjClass)                        */         
+*DCL                                                                            
+* Vlok#HFS Fixed(32) Constant(0), /* OpenEdition MVS Hierarchical FS */         
+* Vlok#MVS Fixed(32) Constant(1), /* MVS dataset                     */         
+* Vlok#LFSESA Fixed(32) Constant(2), /* LAN File Server/ESA files    */         
+* Vlok#NfscObjCl Fixed(32) Constant(3), /* NFS Client object     @D6C*/         
+* VLOK#FLK Fixed(32) Constant(4); /* FLOCK Object Class          @D6A*/         
+*                                                                               
+* /* Constants for UnLoadLocks                                   @D2A*/         
+* Dcl                                                      /*@P3D@D2A*/         
+*   Vlok#RetHeldOnly Fixed(8) Constant(0), /* Ret Held Only      @D4A*/         
+*   Vlok#RetWaiters Fixed(8) Constant(1),  /* Ret Held & Waiters @D2A*/         
+*   Vlok#RetAllObj  Fixed(8) Constant(3);  /* Total UnLoad       @D2A*/         
+*                                                                               
+* /* The UnLoaded Locks output is mapped by the                                 
+*    Brlm_UnloadLocksList structure in the IGWLB2IN macro.                      
+*    This contains an array of (ObjectID,RangeLock) pairs.                      
+*                                                                               
+*    In the RangeLock structure if the RLAccess field equals                    
+*    Vlok#OpenModes then the RangeLock structure contains the                   
+*    file's open access and deny modes rather than a byte range                 
+*    lock.  The file's open modes are returned when the VlokVnToken             
+*    field contains a Vnode token and only for opens that have                  
+*    specified either DenyRead or DenyWrite.  These are mapped                  
+*    by the VlokRngLock structure below, which overlays the                     
+*    BRLM_UnLoadList_RangeLock element of the array.             @D2A*/         
+*                                                                               
+* Dcl Vlok#OpenModes  Fixed(8) Constant(5);                    /*@D2A*/         
+*                                                                               
+* /* RangeLock structure for RLAccess=Vlok#OpenModes             @D2A*/         
+*                                                              /*@D2A*/         
+* Dcl 1 VlokRngLock Based,    /* A BRLM_RangeLock For Open Modes @D2A*/         
+*       2 VlokRngOwner      Char(16),    /* V_Open VopnOpenOwner @D2A*/         
+*       2 VlokRngOffLen     Char(16),    /* Not used             @D2A*/         
+*       2 VlokRngFlags      Fixed(32),                         /*@D2A*/         
+*         3 VlokRngWaiter     Bit(1),                          /*@D2A*/         
+*         3            *      Bit(7),                          /*@D2A*/         
+*         3 VlokRngOpenAcc    Fixed(8),  /* VopnShrAccess value  @D2A*/         
+*         3 VlokRngOpenDeny   Fixed(8),  /* VopnShrDeny value    @D2A*/         
+*         3 VlokRngRlAccess   Fixed(8);  /* =Vlok#OpenModes      @D2A*/         
+*                                                                               
+* /* Mask structure for Purge Locks                              @D2A*/         
+*                                                                               
+* Dcl 1 VlokObjOwnMasks Based,                                 /*@D2A*/         
+*       2 VlokObjectMask   Char(16),    /* Object Id Mask        @D2A*/         
+*         3 VlokObjClassMask Char(4),   /*   Object Class        @D2A*/         
+*         3 VlokObjDevMask   Char(4),   /*   Object Devno (HFS)  @D2A*/         
+*         3 VlokObjFIDMask   Char(8),   /*   Object Fid   (HFS)  @D2A*/         
+*       2 VlokOwnerMask    Char(16),    /* Owner Id Mask         @D2A*/         
+*         3 VlokLockerMask   Char(8),   /*   Locker Mask         @D2A*/         
+*           5 VlokSPidMask    Char(4),  /*     Server PID Mask   @D2A*/         
+*           5 VlokCPidMask    Char(4),  /*     Client PID Mask   @D2A*/         
+*         3 VlokTIDMask      Char(8);   /*   Thread Id Mask      @D2A*/         
+*                                                                               
+*/* Constants for V_lockctl commands                                 */         
+*/*           Changes made to these commands should also be made @P2A*/         
+*/*           in the BPXZFCNA macro in the BPXFCBRL section.     @P2A*/         
+*DCL                                                                            
+* Vlok#RegLocker   Fixed(32) Constant(1), /* Register Locker         */         
+* Vlok#UnregLocker Fixed(32) Constant(2), /* Unregister Locker       */         
+* Vlok#Lock        Fixed(32) Constant(3), /* Lock object's byte range*/         
+* Vlok#LockWait    Fixed(32) Constant(4), /* Lock object's byte range           
+*                                            - wait if blocked       */         
+* Vlok#Unlock      Fixed(32) Constant(5), /* UnLock object's byte range         
+*                                                                    */         
+* Vlok#Query       Fixed(32) Constant(6), /* Query byte range for locks         
+*                                                                    */         
+* Vlok#Purge       Fixed(32) Constant(7), /* Purge all locks for a              
+*                                            locker                  */         
+* Vlok#LockAsy     Fixed(32) Constant(8), /* Lock Asynchronously @D2A*/         
+* Vlok#LockCancel  Fixed(32) Constant(9), /* Cancel Async Lock   @D2A*/         
+* Vlok#UnloadLocks Fixed(32) Constant(10);/* Unload BRLM Locks   @D2A*/         
+*                                                                               
+*                                                                               
+*/* VlokObjectVP & VlokObjTokVP are used internally for loading      */         
+*/* and unloading byte range locks.                                  */         
+*                                                                               
+*DCL 1 VlokObjectVP ViaPtr Bdy(Dword) Defined(VlokObject),    /* @D1A*/         
+*     3 VlokObject1 Fixed(32),    /* word 1 of VlokObject        @D1A*/         
+*     3 VlokObject2 Ptr;          /* word 2 of VlokObject        @D1A*/         
+*                                                                               
+*DCL 1 VlokObjTokVP ViaPtr Bdy(Dword) Defined(VlokObjTok),    /* @D1A*/         
+*     3 VlokObjTok1 Fixed(32),    /* word 1 of VlokObjTok        @D1A*/         
+*     3 VlokObjTok2 Ptr;          /* word 2 of VlokObjTok        @D1A*/         
+*                                                                               
+*@LOGIC;                                                                        
+*#PRAGMA TOOL=PADI                                                              
+*#LINE.%INCLUDE SYSLIB(BPXYBRLK);                                               
+*#DELETE.VLOKSERVERPIDBYTE2                                                     
+*#DELETE.VLOKLOCKERTOK1                                                         
+*#DELETE.VLOKLOCKERTOK2                                                         
+*#DELETE.VLOK#ID                                                                
+*#DELETE.VLOK#LEN                                                               
+*#DELETE.VLOK#INVALIDTOKEN                                                      
+*#DELETE.VLOK#CLOSE                                                             
+*#DELETE.VLOK#GETOWN                                                            
+*#DELETE.VLOK#MOVEFS                                                            
+*#DELETE.VLOK#NFSCOBJCL                                                         
+*#DELETE.VLOK#FLK                                                               
+*#DELETE.VLOK#OPENMODES                                                         
+*#DELETE.VLOKRNGLOCK                                                            
+*#DELETE.VLOKOBJECTVP                                                           
+*#DELETE.VLOKOBJTOKVP                                                           
+*#PADIDELETE.VLOKAIOEXT                                                         
+*#PADIDELETE.VLOKUNLOADLOCKSEXT                                                 
+*#PADIDELETE.VLOKPURGEEXT                                                       
+*#PADIDELETE.VLOKBEGIN                                                          
+*#PADIDELETE.VOLKNOSPLITMERGE                                                   
+*#PADIDELETE.VLOKRSVD1                                                          
+*#PADIDELETE.VLOKRSVD                                                           
+*#PADIDELETE.VLOKUNION                                                          
+*#PADIDELETE.VLOK#LENGTH                                                        
+*#EPRAGMA                                                                       
+*@ENDLOGIC;                                                                     

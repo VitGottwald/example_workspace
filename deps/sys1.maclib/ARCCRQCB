@@ -1,0 +1,477 @@
+*/********************************************************************/         
+*/*                                                                  */         
+*/* $MAC(ARCCRQCB) COMP(DATA) PROD(DFSMShsm):                        */         
+*/* *** ARCCRQCB   ***                                               */         
+*/*                                                                  */         
+*/* Description - Common Recall Queue Lists Control Block            */         
+*/*                                                                  */         
+*/********************************************************************/         
+*/*PROPRIETARY V3 STATEMENT                                          */         
+*/*LICENSED MATERIALS - PROPERTY OF IBM                              */         
+*/*"RESTRICTED MATERIALS OF IBM"                                     */         
+*/*5650-ZOS                                                          */         
+*/*Copyright IBM Corp. 2019                                          */         
+*/*END PROPRIETARY V3 STATEMENT                                      */         
+*/********************************************************************/         
+*/* Function: Describes the Lists of Common Recall Queue             */         
+*/*                                                                  */         
+*/* Method of access:                                                */         
+*/*                 - PL/X-390:   %INCLUDE SYSLIB(ARCCRQCB)          */         
+*/*                 - ASSEMBLER:  ARCCRQCB                           */         
+*/*                                                                  */         
+*/* Change Activity =                                                */         
+*/* $Q0=HSMQ25,250,080820,THI9-15: Extract CRQ data             @Q25A*/         
+*/********************************************************************/         
+* %GOTO C_HDR;                  /*                                              
+         MACRO                                                                  
+&NAME    ARCCRQCB                                                               
+         AGO   .C_ASM           */                                              
+* %C_HDR: ;                                                                     
+* DCL                                                                           
+*  CRQ@ PTR(31);                        /* Extract area ptr          */         
+*                                                                               
+* DCL                                                                           
+*  1 CRQ BASED(CRQ@),                   /* Extract Area header       */         
+*    3 CRQ_HDR# FIXED(31),              /* CRQ header size           */         
+*    3 CRQ_C@    PTR(31),               /* Control List ptr          */         
+*    3 CRQ_T@    PTR(31),               /* Tape List ptr             */         
+*    3 CRQ_PUR@  PTR(31),               /* PUR List ptr              */         
+*    3 CRQ_SUR@  PTR(31),               /* SUR List ptr              */         
+*    3 CRQ_SR@   PTR(31),               /* Selected Request List ptr */         
+*    3 CRQ_C_TOT   FIXED(31),           /* Number of CL entries      */         
+*    3 CRQ_T_TOT   FIXED(31),           /* Number of TL entries      */         
+*    3 CRQ_PUR_TOT FIXED(31),           /* Number of PURL entries    */         
+*    3 CRQ_SUR_TOT FIXED(31),           /* Number of SURL entries    */         
+*    3 CRQ_SR_TOT  FIXED(31),           /* Number of SRL entries     */         
+*    3 CRQ_C#   FIXED(31),              /* Control List size         */         
+*    3 CRQ_T#   FIXED(31),              /* Tape List size            */         
+*    3 CRQ_PUR# FIXED(31),              /* PUR List size             */         
+*    3 CRQ_SUR# FIXED(31),              /* SUR List size             */         
+*    3 CRQ_SR#  FIXED(31),              /* Selected Reqst List size  */         
+*    3 CRQ_LEN    FIXED(31),            /* Total CRQ structure size  */         
+*    3 CRQ_SENT   FIXED(31),            /* Bytes sent via MWEBUFD    */         
+*                                                                               
+*   /* Control List entry */                                                    
+*  1 CRQ_CL_ENT (*) BASED(CRQ_C@),       /* Control List entry       */         
+*    3 CRQ_CL_FWD PTR(31),               /* Forward pointer          */         
+*    3 CRQ_CL_BWD PTR(31),               /* Backward pointer         */         
+*    3 CRQ_CL_LEN FIXED(31),             /* Control List entry size  */         
+*    3 CRQ_CL_AUTHORITY CHAR(16),        /* List authority value     */         
+*      5 CRQ_CL_HSMPLEX CHAR(8),         /* HSMplex Name             */         
+*      5 * CHAR(8),                      /* Reserved                 */         
+*    3 CRQ_CL_ENTRYID CHAR(12),          /* Control List entry id    */         
+*      5 CRQ_CL_IDTYPE CHAR(3),          /* Type of entry                       
+*                                           'CES' for the CES entry             
+*                                           Hostid!!'4000'x for host            
+*                                           entry                    */         
+*        7 CRQ_CL_HID CHAR(2),           /* Use for host entries     */         
+*        7 * CHAR(1),                    /* Reserved                 */         
+*      5 * CHAR(9),                      /* Reserved                 */         
+*    3 CRQ_CL_ENTRYKEY CHAR(16),         /* Control List entry key   */         
+*      5 CRQ_CL_KTYPE CHAR(3),           /* Type of entry                       
+*                                           'CES' for the CES entry             
+*                                           Hostid!!'4000'x for host            
+*                                           entry                    */         
+*        7 CRQ_CL_HKEY CHAR(2),          /* Use for host entries     */         
+*        7 * CHAR(1),                    /* Reserved                 */         
+*      5 * CHAR(13),                     /* Reserved                 */         
+*    3 CRQ_CL_ADJAREA CHAR(64) BDY(WORD), /* Contr List adjunct area */         
+*      5 CRQ_CL_CES FIXED(8),            /* CRQ Eligibility Status   */         
+*        7 CRQ_CL_CES_FLAGS BIT(8),      /* CES flags                */         
+*          9 * BIT(1),                   /* Reserved                 */         
+*          9 CRQ_CL_NOT_ELIG BIT(1),     /* 1= Not Elig - RECALL or             
+*                                           CQ(RECALL) or                       
+*                                         CQ(RECALL(SELECTION)) held */         
+*          9 * BIT(1),                   /* Reserved                 */         
+*          9 CRQ_CL_TP_HELD BIT(1),      /* 1= RECALL TAPE held      */         
+*          9 * BIT(1),                   /* Reserved                 */         
+*          9 CRQ_CL_TPTSO_HELD BIT(1),   /* 1= RECALL TAPE(TSO) held */         
+*          9 * BIT(2),                   /* Reserved                 */         
+*      5 CRQ_CL_POP FIXED(8),            /* Processing Options       */         
+*        7 CRQ_CL_POP_FLAGS BIT(8),      /* POP flags                */         
+*          9 CRQ_CL_FBID_ORD BIT(1),     /* 1= Recall from tape in              
+*                                           ascending FBID order     */         
+*          9 * BIT(7),                   /* Reserved                 */         
+*      5 * CHAR(62),                     /* Reserved                 */         
+*      /* Version:                                                              
+*         - For Host Entries:                                                   
+*           Host's connection status: X'00000000'!!ConnectionVersion            
+*         - For CRQ Eligibility Status Entry: Not Used */                       
+*    3 CRQ_CL_VERSION CHAR(8),           /* Version for host entries */         
+*      5 CRQ_CL_CONNVERSION CHAR(4),     /* CF Connection version    */         
+*      5 * CHAR(4),                      /* X'00000000'              */         
+*                                                                               
+*   /* Tape List entry */                                                       
+*  1 CRQ_TL_ENT (*) BASED(CRQ_T@),         /* Tape List entry        */         
+*    3 CRQ_TL_FWD PTR(31),                 /* Forward pointer        */         
+*    3 CRQ_TL_BWD PTR(31),                 /* Backward pointer       */         
+*    3 CRQ_TL_LEN FIXED(31),               /* Tape List entry size   */         
+*    3 CRQ_TL_ENTRYID CHAR(12) BDY(WORD),  /* Tape List entry id     */         
+*      5 CRQ_TL_IDVOLSER CHAR(6),          /* Tape volser name       */         
+*      5 * CHAR(6),                        /* Reserved               */         
+*    3 CRQ_TL_ENTRYKEY CHAR(16) BDY(WORD), /* Tape List entry key    */         
+*      5 CRQ_TL_VOLSER CHAR(6),            /* Tape volser name       */         
+*      5 * CHAR(10),                       /* Reserved               */         
+*    3 CRQ_TL_ADJAREA CHAR(64) BDY(WORD),  /* Tape List adjunct area */         
+*      5 CRQ_TL_PRIORITY FIXED(16),        /* Highest priority of any           
+*                                             single tape request               
+*                                             needing tape           */         
+*      5 CRQ_TL_HI_EID CHAR(12),           /* Entry ID of highest               
+*                                             priority single tape              
+*                                             req needing this tape  */         
+*      5 CRQ_TL_HOSTID CHAR(2),            /* Host id of the host               
+*                                             that has tape currecntly          
+*                                             selected for recall    */         
+*      5 CRQ_TL_FLAGS BIT(16),             /* Flags                  */         
+*        7 CRQ_TL_INUSE BIT(1),            /* 1= In-Use.  Note: if              
+*                                             this flag is ON, then the         
+*                                             SNGL_TAPE_PROC flag               
+*                                             will also be ON if single         
+*                                            tape is being processed */         
+*        7 CRQ_TL_SNGL_TAPE_REQ BIT(1),    /* 1= Single tape request */         
+*        7 CRQ_TL_SNGL_TAPE_PROC BIT(1),   /* 1= Processing single              
+*                                             tape requests          */         
+*        7 CRQ_TL_FIRST_VOL BIT(1),        /* 1= First volume of                
+*                                             volume request         */         
+*        7 CRQ_TL_LAST_VOL BIT(1),         /* 1= Last volume of                 
+*                                             multi-volume request   */         
+*        7 * BIT(11),                      /* Reserved               */         
+*      5 CRQ_TL_FIRST_VOL_CNT FIXED(15),   /* Number of requests                
+*                                             needing the tape as the           
+*                                             first volume           */         
+*      5 CRQ_TL_LAST_VOL_CNT FIXED(15),    /* Numb of requests needing          
+*                                             tape as the last volume*/         
+*      5 CRQ_TL_CTS CHAR(8),               /* Time stamp TL created  */         
+*        7 CRQ_TL_CTIME CHAR(4),           /* Time the TL created    */         
+*        7 CRQ_TL_CDATE CHAR(4),           /* Date the TL created.              
+*                                             The date is obtained from         
+*                                             the TIME DEC  macro in            
+*                                             format X'Ocyyddds'     */         
+*      5 * CHAR(34),                       /* Reserved               */         
+*                                                                               
+*   /* Primary Unselected Requests List */                                      
+*  1 CRQ_PURL_ENT (*) BASED(CRQ_PUR@),      /* PUR List entry        */         
+*    3 CRQ_PURL_FWD PTR(31),                /* Forward pointer       */         
+*    3 CRQ_PURL_BWD PTR(31),                /* Backward pointer      */         
+*    3 CRQ_PURL_LEN FIXED(31),              /* PUR List entry size   */         
+*    3 CRQ_PURL_ENTRYID CHAR(12) BDY(WORD), /* PUR List entry id     */         
+*      5 CRQ_PURL_ENTRYID_HOSTID CHAR(2),   /* Host ID               */         
+*      5 * CHAR(2),                         /* Reserved              */         
+*      5 CRQ_PURL_ENTRYID_REQNUM FIXED(31), /* MWE Request number    */         
+*      5 * CHAR(4),                         /* Reserved              */         
+*    3 CRQ_PURL_ENTRYKEY CHAR(16) BDY(WORD), /* List key             */         
+*      5 CRQ_PURL_PRIORITY FIXED(16),       /* Priority              */         
+*      5 CRQ_PURL_USER_PRIORITY FIXED(16),  /* User priority value   */         
+*      5 CRQ_PURL_USERID CHAR(8),           /* USERID if nowait prty=50         
+*                                              '0'B if W/noWait request         
+*                                                with priority <> 50 */         
+*      5 * CHAR(4),                         /* Reserved              */         
+*    3 CRQ_PURL_ADJAREA CHAR(64) BDY(WORD), /* PUR List adjunct area */         
+*      5 CRQ_PURL_ADJ_DSNAME CHAR(44),      /* Dataset name          */         
+*      5 CRQ_PURL_ADJ_USERID CHAR(8),       /* User id               */         
+*      5 CRQ_PURL_ADJ_RETRY FIXED(31),  /* Earliest retry recall time*/         
+*      5 CRQ_PURL_ADJ_FLAGS BIT(32),    /* Flags                     */         
+*        7 CRQ_PURL_ADJ_TAPE  BIT(1),   /* Requires Tape             */         
+*        7 CRQ_PURL_ADJ_TPTSO BIT(1),   /* TSO request requires tape */         
+*        7 CRQ_PURL_ADJ_EXT   BIT(1),   /* Extent reduction from EAV */         
+*        7 CRQ_PURL_ADJ_CLTR  BIT(1),   /* Class transition candidate*/         
+*        7 CRQ_PURL_ADJ_CLOUD BIT(1),   /* Dataset mig copy in cloud */         
+*        7 *                  BIT(27),  /* Reserved                  */         
+*      5 * CHAR(4),                     /* Reserved                  */         
+*    3 CRQ_PURL_DATA_ELEMENT CHAR(512), /* Data element              */         
+*      5 CRQ_PURL_MWE CHAR(512),        /* PUR List MWE              */         
+*    3 CRQ_PURL_VERSION CHAR(8),        /* Version - used to quickly            
+*                                          find the last request from           
+*                                          a particular user         */         
+*      5 CRQ_PURL_VER_USERID CHAR(8),   /* - USERID of nowait request           
+*                                            with priority = 50.                
+*                                          - '0'B for:                          
+*                                            a. Wait requests                   
+*                                            b. Non-wait requests with          
+*                                               priority 0-49,51-100 */         
+*                                                                               
+*   /* Secondary Unselected Requests List */                                    
+*  1 CRQ_SURL_ENT (*) BASED(CRQ_SUR@),       /* SUR List entry       */         
+*    3 CRQ_SURL_FWD PTR(31),                 /* Forward pointer      */         
+*    3 CRQ_SURL_BWD PTR(31),                 /* Backward pointer     */         
+*    3 CRQ_SURL_LEN FIXED(31),               /* SUR List entry size  */         
+*    3 CRQ_SURL_ENTRYID CHAR(12) BDY(WORD),  /* SUR List entry id    */         
+*      5 CRQ_SURL_ENTRYID_HOSTID CHAR(2),    /* Host ID              */         
+*      5 * CHAR(2),                          /* Reserved             */         
+*      5 CRQ_SURL_ENTRYID_REQNUM FIXED(31),  /* MWE Request number   */         
+*      5 * CHAR(4),                          /* Reserved             */         
+*    3 CRQ_SURL_ENTRYKEY CHAR(16) BDY(WORD), /* List key             */         
+*      5 CRQ_SURL_VOLSER CHAR(6),            /* Tape volser          */         
+*      5 CRQ_SURL_PRIORITY FIXED(16),        /* MWE priority         */         
+*      5 CRQ_SURL_FBIDCOMP FIXED(31),        /* Compliment of FBID   */         
+*      5 * CHAR(4),                          /* Reserved             */         
+*    3 CRQ_SURL_ADJAREA CHAR(64) BDY(WORD), /* SUR List adjunct area */         
+*      5 CRQ_SURL_ADJ_DSNAME CHAR(44),     /* Dataset name           */         
+*      5 CRQ_SURL_ADJ_USERID CHAR(8),      /* User id                */         
+*      5 CRQ_SURL_ADJ_RETRY FIXED(31),  /* Earliest retry recall time*/         
+*      5 CRQ_SURL_ADJ_FLAGS  BIT(32),   /* Flags                     */         
+*        7 CRQ_SURL_ADJ_TAPE  BIT(1),   /* Requires Tape             */         
+*        7 CRQ_SURL_ADJ_TPTSO BIT(1),   /* TSO request requires tape */         
+*        7 CRQ_SURL_ADJ_EXT   BIT(1),   /* Extent reduction from EAV */         
+*        7 CRQ_SURL_ADJ_CLTR  BIT(1),   /* Class transition candidate*/         
+*        7 CRQ_SURL_ADJ_CLOUD BIT(1),   /* Dataset mig copy in cloud */         
+*        7 *                  BIT(27),  /* Reserved                  */         
+*      5 * CHAR(4),                     /* Reserved                  */         
+*    3 CRQ_SURL_DATA_ELEMENT CHAR(512), /* Data element              */         
+*      5 CRQ_SURL_MWE CHAR(512),        /* SUR List MWE              */         
+*                                                                               
+*   /* Selected Requests List */                                                
+*  1 CRQ_SRL_ENT (*) BASED(CRQ_SR@),       /* SR List entry          */         
+*    3 CRQ_SRL_FWD PTR(31),                /* Forward pointer        */         
+*    3 CRQ_SRL_BWD PTR(31),                /* Backward pointer       */         
+*    3 CRQ_SRL_LEN FIXED(31),              /* SR List entry size     */         
+*    3 CRQ_SRL_ENTRYID CHAR(12) BDY(WORD), /* SR List entry id       */         
+*      5 CRQ_SRL_ENTRYID_HOSTID CHAR(2),   /* Host ID                */         
+*      5 * CHAR(2),                        /* Reserved               */         
+*      5 CRQ_SRL_ENTRYID_REQNUM FIXED(31), /* MWE Request number     */         
+*      5 * CHAR(4),                        /* Reserved               */         
+*    3 CRQ_SRL_ENTRYKEY CHAR(16) BDY(WORD), /* SR List entry key     */         
+*      5 CRQ_SRL_HOSTID CHAR(2),           /* Processing host's ID   */         
+*      5 * CHAR(2),                        /* Reserved               */         
+*      5 CRQ_SRL_REQNUM FIXED(31),         /* MWE request number     */         
+*      5 * CHAR(8),                        /* Reserved               */         
+*    3 CRQ_SRL_ADJAREA CHAR(64) BDY(WORD), /* SR List adjunct area   */         
+*      5 CRQ_SRL_ADJ_DSNAME CHAR(44),      /* Dataset name           */         
+*      5 CRQ_SRL_ADJ_USERID CHAR(8),       /* User id                */         
+*      5 CRQ_SRL_ADJ_RETRY FIXED(31),   /* Earliest retry recall time*/         
+*      5 CRQ_SRL_ADJ_FLAGS  BIT(32),    /* Flags                     */         
+*        7 CRQ_SRL_ADJ_TAPE  BIT(1),    /* Requires Tape             */         
+*        7 CRQ_SRL_ADJ_TPTSO BIT(1),    /* TSO request requires tape */         
+*        7 CRQ_SRL_ADJ_EXT   BIT(1),    /* Extent reduction from EAV */         
+*        7 CRQ_SRL_ADJ_CLTR  BIT(1),    /* Class transition candidate*/         
+*        7 CRQ_SRL_ADJ_CLOUD BIT(1),    /* Dataset mig copy in cloud */         
+*        7 *                 BIT(27),   /* Reserved                  */         
+*      5 * CHAR(4),                     /* Reserved                  */         
+*    3 CRQ_SRL_DATA_ELEMENT CHAR(512),  /* Data element              */         
+*      5 CRQ_SRL_MWE CHAR(512);         /* SR List MWE               */         
+*                                                                               
+* %GOTO C_ENDA;                                                                 
+*                                                                               
+.C_ASM    ANOP                                                                  
+*                                                                               
+*********************************************************************           
+*      CRQ Lists Header                                             *           
+*********************************************************************           
+CRQ       DSECT           Extract area                                          
+CRQ_HDR#    DS   F        CRQ header size                                       
+CRQ_C@      DS   AL4      Control List ptr                                      
+CRQ_T@      DS   AL4      Tape List ptr                                         
+CRQ_PUR@    DS   AL4      PUR List ptr                                          
+CRQ_SUR@    DS   AL4      SUR List ptr                                          
+CRQ_SR@     DS   AL4      Selected Request List ptr                             
+CRQ_C_TOT   DS   F        Number of CL entries                                  
+CRQ_T_TOT   DS   F        Number of TL entries                                  
+CRQ_PUR_TOT DS   F        Number of PURL entries                                
+CRQ_SUR_TOT DS   F        Number of SURL entries                                
+CRQ_SR_TOT  DS   F        Number of SRL entries                                 
+CRQ_C#      DS   F        Control List size                                     
+CRQ_T#      DS   F        Tape List size                                        
+CRQ_PUR#    DS   F        PUR List size                                         
+CRQ_SUR#    DS   F        SUR List size                                         
+CRQ_SR#     DS   F        Selected Reqst List size                              
+CRQ_LEN     DS   F        Total CRQ structure size                              
+CRQ_SENT    DS   F        Bytes sent via MWEBUFD                                
+*********************************************************************           
+*      Control List entry                                           *           
+*********************************************************************           
+CRQ_CL_ENT      DSECT        Control List entry                                 
+CRQ_CL_FWD        DS   AL4     Forward pointer                                  
+CRQ_CL_BWD        DS   AL4     Backward pointer                                 
+CRQ_CL_LEN        DS   F       Control List entry size                          
+CRQ_CL_AUTHORITY  DS  0CL16    List authority value                             
+CRQ_CL_HSMPLEX    DS   CL8     HSMplex Name                                     
+                  DS   CL8     Reserved                                         
+CRQ_CL_ENTRYID    DS  0CL12    Control List entry id                            
+CRQ_CL_IDTYPE     DS  0CL3     Type of entry                                    
+*                              'CES' for the CES entry                          
+*                              Hostid!!'4000'x for host entry                   
+CRQ_CL_HID        DS   CL2     Use for host entries                             
+                  DS   CL1     Reserved                                         
+                  DS   CL9     Reserved                                         
+CRQ_CL_ENTRYKEY   DS  0CL16    Control List entry key                           
+CRQ_CL_KTYPE      DS  0CL3     Type of entry                                    
+*                              'CES' for the CES entry                          
+*                              Hostid!!'4000'x for host entry                   
+CRQ_CL_HKEY       DS   CL2     Use for host entries                             
+                  DS   CL1     Reserved                                         
+                  DS   CL13    Reserved                                         
+                  DS   0F      Alignment                                        
+CRQ_CL_ADJAREA    DS  0CL64    Control List adjunct area                        
+CRQ_CL_CES        DS  0XL1     CRQ Eligibility Status                           
+CRQ_CL_CES_FLAGS  DS   XL1     CES flags                                        
+CRQ_CL_NOT_ELIG   EQU  X'40'   1= Not Elig - RECALL or                          
+*                                 CQ(RECALL) or                                 
+*                                 CQ(RECALL(SELECTION)) held                    
+CRQ_CL_TP_HELD    EQU  X'10'   1= RECALL TAPE held                              
+CRQ_CL_TPTSO_HELD EQU  X'04'   1= RECALL TAPE(TSO) held                         
+CRQ_CL_POP        DS  0XL1     Processing Options                               
+CRQ_CL_POP_FLAGS  DS   XL1     POP flags                                        
+CRQ_CL_FBID_ORD   EQU  X'80'   1= Recall from tape in asc FBID order            
+                  DS   CL62    Reserved                                         
+*          Version:                                                             
+*          - For Host Entries:                                                  
+*            Host's connection status: X'00000000'!!ConnectionVersion           
+*          - For CRQ Eligibility Status Entry: Not Used                         
+CRQ_CL_VERSION     DS  0CL8    Version for host entries                         
+CRQ_CL_CONNVERSION DS   CL4    CF Connection version                            
+                   DS   CL4    X'00000000'                                      
+*********************************************************************           
+*      Tape List entry                                              *           
+*********************************************************************           
+CRQ_TL_ENT      DSECT         Tape List entry                                   
+                  DS   0F       Alignment                                       
+CRQ_TL_FWD        DS   AL4      Forward pointer                                 
+CRQ_TL_BWD        DS   AL4      Backward pointer                                
+CRQ_TL_LEN        DS   F        Tape List entry size                            
+CRQ_TL_ENTRYID    DS  0CL12     Tape List entry id                              
+CRQ_TL_IDVOLSER   DS   CL6      Tape volser name                                
+                  DS   CL6      Reserved                                        
+                  DS   0F       Alignment                                       
+CRQ_TL_ENTRYKEY   DS  0CL16     Tape List entry key                             
+CRQ_TL_VOLSER     DS   CL6      Tape volser name                                
+                  DS   CL10     Reserved                                        
+                  DS   0F       Alignment                                       
+CRQ_TL_ADJAREA    DS  0CL64     Tape List adjunct area                          
+CRQ_TL_PRIORITY   DS   H        Highest priority of any single                  
+*                               tape request needing tape                       
+CRQ_TL_HI_EID     DS   CL12     Entry ID of highest priority single             
+*                               tape request needing this tape                  
+CRQ_TL_HOSTID     DS   CL2      Host id of the host that has tape               
+*                               currecntly selected for recall                  
+CRQ_TL_FLAGS          DS  XL2   Flags                                           
+CRQ_TL_INUSE          EQU X'80' 1= In-Use.  Note: if this flag is ON,           
+*                               then SNGL_TAPE_PROC flag will also be           
+*                               ON if single tape is being processed.           
+CRQ_TL_SNGL_TAPE_REQ  EQU X'40' 1= Single tape request                          
+CRQ_TL_SNGL_TAPE_PROC EQU X'20' 1= Processing single tape requests              
+CRQ_TL_FIRST_VOL      EQU X'10' 1= First volume of volume request               
+CRQ_TL_LAST_VOL       EQU X'08' 1= Last volume of multi-volume request          
+CRQ_TL_FIRST_VOL_CNT DS   H     Number of requests needing the tape as          
+*                               the first volume                                
+CRQ_TL_LAST_VOL_CNT  DS   H     Number of requests needing tape as              
+*                               the last volume                                 
+CRQ_TL_CTS           DS  0CL8   Time stamp TL created                           
+CRQ_TL_CTIME         DS   CL4   Time the TL created                             
+CRQ_TL_CDATE         DS   CL4   Date the TL created. The date is                
+*                               obtained from the TIME DEC  macro               
+*                               in format X'Ocyyddds'                           
+                     DS   CL34  Reserved                                        
+*********************************************************************           
+*      Primary Unselected Requests List                             *           
+*********************************************************************           
+CRQ_PURL_ENT          DSECT        PUR List entry                               
+                        DS   0F      Alignment                                  
+CRQ_PURL_FWD            DS   AL4     Forward pointer                            
+CRQ_PURL_BWD            DS   AL4     Backward pointer                           
+CRQ_PURL_LEN            DS   F       PUR List entry size                        
+CRQ_PURL_ENTRYID        DS  0CL12    PUR List entry id                          
+CRQ_PURL_ENTRYID_HOSTID DS   CL2     Host ID                                    
+                        DS   CL2     Reserved                                   
+CRQ_PURL_ENTRYID_REQNUM DS   F       MWE Request number                         
+                        DS   CL4     Reserved                                   
+                        DS   0F      Alignment                                  
+CRQ_PURL_ENTRYKEY       DS  0CL16    List key                                   
+CRQ_PURL_PRIORITY       DS   H       Priority                                   
+CRQ_PURL_USER_PRIORITY  DS   H       User priority value                        
+CRQ_PURL_USERID         DS   CL8     USERID - if nowait prty=50                 
+*                                    '0'B   - if W/noWait request               
+*                                             with priority <> 50               
+                        DS   CL4     Reserved                                   
+                        DS   0F      Alignment                                  
+CRQ_PURL_ADJAREA        DS  0CL64    PUR List adjunct area                      
+CRQ_PURL_ADJ_DSNAME     DS   CL44    Dataset name                               
+CRQ_PURL_ADJ_USERID     DS   CL8     User id                                    
+CRQ_PURL_ADJ_RETRY      DS   F       Earliest retry recall time                 
+CRQ_PURL_ADJ_FLAGS      DS   XL4     Flags                                      
+CRQ_PURL_ADJ_TAPE       EQU  X'80'   Requires Tape                              
+CRQ_PURL_ADJ_TPTSO      EQU  X'40'   TSO request requires tape                  
+CRQ_PURL_ADJ_EXT        EQU  X'20'   Extent reduction from EAV                  
+CRQ_PURL_ADJ_CLTR       EQU  X'10'   Class transition candidate                 
+CRQ_PURL_ADJ_CLOUD      EQU  X'08'   Dataset mig copy in cloud                  
+                        DS   CL4     Reserved                                   
+CRQ_PURL_DATA_ELEMENT   DS  0CL512   Data element                               
+CRQ_PURL_MWE            DS   CL512   PUR List MWE                               
+CRQ_PURL_VERSION        DS  0CL8     Version - used to quickly                  
+*                                    find the last request from                 
+*                                    a particular user                          
+CRQ_PURL_VER_USERID     DS   CL8     - USERID of nowait request                 
+*                                      with priority = 50.                      
+*                                    - '0'B for:                                
+*                                      a. Wait requests                         
+*                                      b. Non-wait requests with                
+*                                         priority 0-49,51-100                  
+*********************************************************************           
+*      Secondary Unselected Requests List                           *           
+*********************************************************************           
+CRQ_SURL_ENT          DSECT         SUR List entry                              
+                        DS   0F     Alignment                                   
+CRQ_SURL_FWD            DS   AL4    Forward pointer                             
+CRQ_SURL_BWD            DS   AL4    Backward pointer                            
+CRQ_SURL_LEN            DS   F      SUR List entry size                         
+CRQ_SURL_ENTRYID        DS  0CL12   SUR List entry id                           
+CRQ_SURL_ENTRYID_HOSTID DS   CL2    Host ID                                     
+                        DS   CL2    Reserved                                    
+CRQ_SURL_ENTRYID_REQNUM DS   F      MWE Request number                          
+                        DS   CL4    Reserved                                    
+                        DS   0F     Alignment                                   
+CRQ_SURL_ENTRYKEY       DS  0CL16   List key                                    
+CRQ_SURL_VOLSER         DS   CL6    Tape volser                                 
+CRQ_SURL_PRIORITY       DS   H      MWE priority                                
+CRQ_SURL_FBIDCOMP       DS   F      Compliment of FBID                          
+                        DS   CL4    Reserved                                    
+                        DS   0F     Alignment                                   
+CRQ_SURL_ADJAREA        DS  0CL64   SUR List adjunct area                       
+CRQ_SURL_ADJ_DSNAME     DS   CL44   Dataset name                                
+CRQ_SURL_ADJ_USERID     DS   CL8    User id                                     
+CRQ_SURL_ADJ_RETRY      DS   F      Earliest retry recall time                  
+CRQ_SURL_ADJ_FLAGS      DS   XL4    Flags                                       
+CRQ_SURL_ADJ_TAPE       EQU  X'80'  Requires Tape                               
+CRQ_SURL_ADJ_TPTSO      EQU  X'40'  TSO request requires tape                   
+CRQ_SURL_ADJ_EXT        EQU  X'20'  Extent reduction from EAV                   
+CRQ_SURL_ADJ_CLTR       EQU  X'10'  Class transition candidate                  
+CRQ_SURL_ADJ_CLOUD      EQU  X'08'  Dataset mig copy in cloud                   
+                        DS   CL4    Reserved                                    
+CRQ_SURL_DATA_ELEMENT   DS   0CL512 Data element                                
+CRQ_SURL_MWE            DS    CL512 SUR List MWE                                
+*********************************************************************           
+*      Selected Requests List                                       *           
+*********************************************************************           
+CRQ_SRL_ENT          DSECT         SR List entry                                
+                       DS   0F     Alignment                                    
+CRQ_SRL_FWD            DS   AL4    Forward pointer                              
+CRQ_SRL_BWD            DS   AL4    Backward pointer                             
+CRQ_SRL_LEN            DS   F      SR List entry size                           
+CRQ_SRL_ENTRYID        DS  0CL12   SR List entry id                             
+CRQ_SRL_ENTRYID_HOSTID DS   CL2    Host ID                                      
+                       DS   CL2    Reserved                                     
+CRQ_SRL_ENTRYID_REQNUM DS   F      MWE Request number                           
+                       DS   CL4    Reserved                                     
+                       DS   0F     Alignment                                    
+CRQ_SRL_ENTRYKEY       DS  0CL16   SR List entry key                            
+CRQ_SRL_HOSTID         DS   CL2    Processing host's ID                         
+                       DS   CL2    Reserved                                     
+CRQ_SRL_REQNUM         DS   F      MWE request number                           
+                       DS   CL8    Reserved                                     
+                       DS   0F     Alignment                                    
+CRQ_SRL_ADJAREA        DS  0CL64   SR List adjunct area                         
+CRQ_SRL_ADJ_DSNAME     DS   CL44   Dataset name                                 
+CRQ_SRL_ADJ_USERID     DS   CL8    User id                                      
+CRQ_SRL_ADJ_RETRY      DS   F      Earliest retry recall time                   
+CRQ_SRL_ADJ_FLAGS      DS   XL4    Flags                                        
+CRQ_SRL_ADJ_TAPE       EQU  X'80'  Requires Tape                                
+CRQ_SRL_ADJ_TPTSO      EQU  X'40'  TSO request requires tape                    
+CRQ_SRL_ADJ_EXT        EQU  X'20'  Extent reduction from EAV                    
+CRQ_SRL_ADJ_CLTR       EQU  X'10'  Class transition candidate                   
+CRQ_SRL_ADJ_CLOUD      EQU  X'08'  Dataset mig copy in cloud                    
+                       DS   CL4    Reserved                                     
+CRQ_SRL_DATA_ELEMENT   DS  0CL512  Data element                                 
+CRQ_SRL_MWE            DS   CL512  SR List MWE                                  
+*                                                                               
+         MEND                                                                   
+*                                                                               
+* %C_ENDA: ;                                                                    

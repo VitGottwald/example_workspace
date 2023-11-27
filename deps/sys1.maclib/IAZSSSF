@@ -1,0 +1,948 @@
+* %GOTO SSSFCMT;              /*                                        00100000
+         MACRO                                                          00200000
+         IAZSSSF                                                        00300000
+*          */                                                           00300200
+*  %SSSFCMT: ;                                                          00300400
+*/**** START OF SPECIFICATIONS *******************************          00300600
+.****PROPRIETARY-STATEMENT************************************          00301000
+.*01* PROPRIETARY STATEMENT:                                 *          00303000
+.*                                                           *          00308000
+.*    LICENSED MATERIALS-PROPERTY OF IBM                     *          00315000
+.*    5650-ZOS Copyright IBM Corp. 1990, 2019                *          00329000
+.*                                                           *          00336000
+.*    STATUS = HBB77C0                                       *          00343000
+.*                                                           *          00350000
+.****END-OF-PROPRIETARY-STATEMENT*****************************          00357000
+*                                                            *          00360000
+*01* DESCRIPTIVE NAME:  SSOB Extension for Scheduler         *          00364000
+*                       Services SSI Extension               *          00366000
+*02*  ACRONYM:  IAZSSSF                                      *          00371000
+*                                                            *          00378000
+*01* MACRO NAME:  IAZSSSF                                    * @Z23D101 00385000
+*                                                            *          00392000
+*01* DSECT NAME:  SSSF (optional)                            *          00400000
+*01* LABEL PREFIX:  SSSF                                     *          00410000
+*                                                            *          00420000
+*01* COMPONENT ID:  JES Common (SC141)                       *          00430000
+*                                                            *          00440000
+*01* EXTERNAL CLASSIFICATION:  PI                            *          00450000
+*01* END OF EXTERNAL CLASSIFICATION:                         *          00460000
+*                                                            *          00470000
+*01* EYE-CATCHER:  'SSSF'                                    *          00480000
+*02*  OFFSET:      SSSFID-SSSFBGN                            *          00490000
+*02*  LENGTH:      Length of SSSFID                          *          00500000
+*                                                            *          00510000
+*01* STORAGE ATTRIBUTES:                                     *          00520000
+*02*  SUBPOOL:  any                                          *          00600000
+*02*  KEY:  Key of SSI caller                                *          00610000
+*02*  RESIDENCY: Any                                         *          00620000
+*                                                            *          00630000
+*01* SIZE:                                                   *          00640000
+*                                                            *          00650000
+*     Header size (SSSFHSZE) + length of function dependent  *          00660000
+*     area (i.e. SSSFMRSZ)                                   *          00670000
+*                                                            *          00680000
+*01* CREATED BY:  Caller of SSI                              *          00700000
+*                                                            *          00800000
+*01* POINTED TO BY:  SSOBINDV in the IEFSSOBH mapping macro  *          00810000
+*                                                            *          00820000
+*01* SERIALIZATION: None required                            *          00900000
+*                                                            *          01000000
+*01* FUNCTION:                                               *          01900000
+*                                                            *          02000000
+*     This macro provides the mapping of the SSOB extension  *          02100000
+*     used to make requests of a target subsystem's          *          02200000
+*     Scheduler Facility Services Processor.  The requests   *          02300000
+*     are limited to services which can affect SUBSYSTEM     *          02310000
+*     MAINTAINED scheduler data, e.g.SWBTU data.             *          02400000
+*                                                            *          02403000
+*01* METHOD OF ACCESS:                                       *          02404000
+*                                                            *          02405000
+*02*  ASM:                                                   *          02406000
+*        SSSF DSECT   (optional)                             *          02406600
+*             IAZSSSF                                        *          02407300
+*                                                            *          02408000
+*        Notes on the assembler invocation:                  *          02409000
+*                                                            *          02410000
+*           An 'ORG label' may be placed after the           *          02411000
+*           generation of the common SSOB header macro       *          02412000
+*           (IEFSSOBH) to cause this extension to follow     *          02413000
+*           the header.  The SSOB header field SSOBINDV      *          02414000
+*           must be initialized by the caller to point to    *          02415000
+*           this functional extension.                       *          02416000
+*                                                            *          02417000
+*02*  PL/X:                                                  *          02418000
+*                                                            *          02419000
+*        %DCL SSSF_ATTR CHAR                                 *          02420000
+*        %SSSF_ATTR = 'value'      (see description below)   *          02421000
+*        %INCLUDE SYSLIB(IAZSSSF)                            *          02422000
+*                                                            *          02423000
+*        SSSF_ATTR is a global variable that determines      *          02424000
+*        SSSF's attributes.  The variable should be set to a *          02425000
+*        valid control block attribute, such as              *          02426000
+*        'BASED(SSOBINDV)' or '' (null).  The default is     *          02427000
+*        'BASED'.                                            *          02428000
+*                                                            *          02429000
+*01* DELETED BY:  Caller of SSI                              *          02430000
+*                                                            *          02431000
+*01* FREQUENCY: 1 per Scheduler Services SSI request.        *          02432000
+*                                                            *          02433000
+*01* RESTRICTIONS:  None                                     *          02434000
+*                                                            *          02436000
+****** END OF SPECIFICATIONS ********************************/          02439000
+*/********************************************************************/ 02442000
+*/*01* CHANGE ACTIVITY:                                              */ 02445000
+*/*                                                                  */ 02448000
+*/* $420LSFS=SWBMOD   HBB4420 900717 RPG:  SCHEDULER FACIL SERVICE   */ 07910000
+*/* $420P365=PTM      HBB4420 900813 NAW:  PTM PH31365               */ 07915000
+*/* $420P545=PTM      HBB4420 900924 RPG:  PTM PH31545               */ 07916000
+*/*                                                                  */ 07920000
+*/* $VC1PB36=PTM      HJE6603 951109 VLC:  BCP Ext.Classifications   */ 07930000
+*/* $VC1P036=PTM      HJE6603 951208 VLC:  BCP PR20036 Ext.Class     */ 07940000
+*/*                                                                  */ 07950000
+*/* $Z09LAPF=APFMITG  HBB7740 060919 NAW:  APF Mitigation            */ 07960000
+*/* $ME08361=APFMITG  HBB7740 061103 MJM5: Exit 45 security auth set */ 07970000
+*/*                                        ME08361                   */ 07980000
+*/* $ME08400=APFMITG  HBB7740 061107 NAW:  Length error reason code  */ 07990000
+*/*                                        ME08400                   */ 08000000
+*/* $ME08068=APFMITG  HBB7740 070123 NAW:  SHOWHDR updates           */ 08001000
+*/*                                        ME08068                   */ 08004000
+*/*                                                                  */ 08006000
+*/* $Z10LSJF=SJF      HBB7750 070808 J_K2:                           */ 08008000
+*/* $Z10LSJF=SJF      HBB7750 070912 J_K2:                           */ 08009000
+*/*                                                                  */ 08009100
+*/* $Z11LSSI=SDSFASST HBB7760 080805 BWT:  IAZSSSF SWB Modify JES3   */ 08009400
+*/* $Z11LSSI=SDSFASST HBB7760 080925 DLN:  IAZSSSF JES3 Changes      */ 08009700
+*/* $Z11LSSI=SDSFASST HBB7760 081113 BWT:  JES3 Changes,IAZJPITD upd */ 08009800
+*/* $ME15723=BASEQ    HBB7760 090311 BWT:  IAZSSSF PLX Eyec Const    */ 08029800
+*/*                                        ME15723                   */ 08049800
+*/*                                                                  */ 08050000
+*/* $S202710=CHEADERS HBB77C0 190212 TJW:  Updates for C headers     */ 08055000
+*/*                                        S202710                   */ 08060000
+*/*                                                                  */ 08069800
+*/*01* A000000-999999    Created for JES2 4.2.0              @420LSFS*/ 08100000
+*/********************************************************************/ 08300000
+*/************************************************************          08302000
+*01* NOTES:                                                  *          08309000
+*                                                            *          08372000
+*************************************************************/          08379000
+*   %GOTO END_OF_ASM_SSFS; /*                                           08400000
+         SPACE 1                                               @Z11LSSI 08500000
+*********************************************************************** 08600000
+*                                                                     * 08700000
+*        Scheduler Facility Services SSI FUNCTION VALUE FOR SSOBFUNC  * 08800000
+*                                                                     * 08900000
+*********************************************************************** 09000000
+SSOBSFS  EQU   70                 Scheduler Facility Services           09100000
+         SPACE 3                                               @Z11LSSI 09110000
+*********************************************************************** 09200000
+*                                                                     * 09300000
+*        Scheduler Facility Services SSI RETURN CODES (SSOBRETN)      * 09400000
+*         Any other values are values propagated from JES2            * 09500000
+*         installation exit 45.                                       * 09510000
+*                                                                     * 09520000
+*********************************************************************** 09600000
+         SPACE 1                                               @Z11LSSI 09700000
+SSSFOK   EQU   0                  Request processed successfully        09800000
+SSSFUERR EQU   8                  Request rejected,see reason code      10000000
+SSSFEXTE EQU   12                 No Extension found                    10100000
+SSSFNOST EQU   16                 No storage to process reqst  @420P545 10110000
+SSSFPOST EQU   20                 No response data received    @Z11LSSIC10120000
+                                    from the global            @Z11LSSI 10130000
+SSSFABND EQU   24                 Processing ABEND             @Z11LSSI 10140000
+         SPACE 1                                               @Z11LSSI 10200000
+*********************************************************************** 10300000
+*                                                                     * 10400000
+*        Scheduler Facility Services SSI REASON CODES (SSSFREAS)      * 10500000
+*         Any other values are values propagated from JES2            * 10510000
+*         installation exit 45.                                       * 10520000
+*                                                                     * 10600000
+*********************************************************************** 10700000
+         SPACE 1                                               @Z11LSSI 10800000
+SSSFNOJ2 EQU   16                 JES address space not up and @Z11LSSIC10900000
+                                    running                    @Z11LSSI 10910000
+SSSFINVF EQU   20                 Invalid function request              11000000
+SSSFINVE EQU   24                 Invalid SSSF extension                11100000
+SSSFNOAU EQU   32                 No authorization for request          11300000
+SSSFINRI EQU   36                 Error processing request              11400000
+SSSFEXC  EQU   40                 Exit cancelled request                11410000
+SSSFDISA EQU   44                 Scheduler Services disabled  @420LSFS 11420000
+SSSFGLBL EQU   48                 Insufficient global level    @Z11LSSI 11430000
+         SPACE 1                                               @Z11LSSI 11500000
+*********************************************************************** 11600000
+*                                                                     * 11700000
+*        Scheduler Facility Services SSI FUNCTION REQUEST CODES.      * 11800000
+*                                                                     * 11900000
+*********************************************************************** 12000000
+         SPACE 1                                               @Z11LSSI 12100000
+SSSFSWBM EQU   4                  SWB modify of output desc    @Z11LSSI 12200000
+SSSFSWBF EQU   8                  SWB merge of output          @Z11LSSIC12210000
+                                    descriptors                @Z10LSJF 12220000
+SSSFSWBC EQU   12                 Return memory used by SWB    @Z10LSJFC12230000
+                                    merge function             @Z10LSJF 12240000
+         SPACE 1                                               @Z11LSSI 12250000
+*********************************************************************** 12300000
+*                                                                     * 12400000
+*        Scheduler Facility Services SSI Extension Header             * 12500000
+*                                                                     * 12600000
+*********************************************************************** 12700000
+         SPACE 1                                               @420P365 12800000
+SSSFBGN  EQU   *                                                        12900000
+SSSFID   DC    CL4'SSSF'          Acronym set to 'SSSF'                 13000000
+SSSFLEN  DS    AL2                SSSF SSOB extension length   @Z11LSSIC13100000
+                                   Equals Extension header and @Z11LSSIC13200000
+                                    request dependent area     @Z11LSSI 13300000
+SSSFRSV1 DS    XL1                Reserved for JES2                     13310000
+SSSFVER  DS    XL1                Version number of IAZSSSF             13400000
+SSSFCVER EQU   3                  Current version number of    @Z11LSSIC13500000
+                                   IAZSSSF - Version z/OS 1.11 @Z11LSSIC13600000
+                                   SSSFVER MUST = SSSFCVER     @Z11LSSI 13700000
+         SPACE 1                                               @Z11LSSI 13800000
+SSSFREAS DS    H                  SSSF Reason code                      13900000
+SSSFREQF DS    CL1                Function request                      14000000
+SSSFFLG1 DS    BL1                Flag Byte-defined per request         14100000
+SSSFRDA  DS    0F                 Request Dependent Area Begins here   C14110000
+                                                               @420P365 14200000
+SSSFHSZE EQU   *-SSSFBGN          Header size                  @420P365 14300000
+         EJECT                                                 @Z11LSSI 14500000
+SSSFMOD  DS    0H                 Org point for sections                14505000
+         ORG   SSSFRDA            Modify Request Dependent Area         14510000
+         SPACE 1                                               @Z11LSSI 14520000
+*********************************************************************** 14600000
+*                                                                     * 14700000
+*       SFS Modify Request Dependent Extension Area                   * 14800000
+*                                                                     * 14900000
+*********************************************************************** 15000000
+         SPACE 1                                                        15100000
+*********************************************************************** 15200000
+*                                                                     * 15300000
+*        Reason Codes for Scheduler Request MODIFY (SSSFMREA)         * 15400000
+*                                                                     * 15500000
+*********************************************************************** 15600000
+         SPACE 1                                               @Z11LSSI 15700000
+SSSFMOK  EQU   0                  Modify processing successful          15800000
+SSSFMTUE EQU   4                  Modify/Erase TU error                 15900000
+SSSFMJBE EQU   8                  Modify jobname/jobid error            16000000
+SSSFMGRP EQU   12                 Modify groupname error                16100000
+SSSFMNOS EQU   16                 No storage to process request         16200000
+SSSFMSCI EQU   20                 Invalid security request     @Z23D102C16210000
+                                   (SSSFFLG1)                  @Z23D102 16220000
+SSSFMIVX EQU   24                 Invalid modify extension     @Z23D103 16230000
+SSSFMTKE EQU   28                 Modify data set or client      @Z22BJC16235000
+                                    token error                  @Z22BJ 16236000
+SSSFMNTK EQU   32                 No data set or client          @Z22BJC16240000
+                                    token provided               @Z22BJ 16242000
+SSSFMJNF EQU   36                 Job not found                @Z11LSSI 16245000
+SSSFMDNF EQU   40                 Data set not found           @Z11LSSI 16250000
+SSSFMDSB EQU   44                 Data set busy                @Z11LSSI 16255000
+SSSFMDSQ EQU   48                 Data set on BDT/TCP queue    @Z11LSSI 16260000
+SSSFMDSF EQU   52                 Data set referenced by       @Z11LSSIC16265000
+                                    JECL FORMAT statement      @Z11LSSI 16270000
+SSSFMSJF EQU   56                 SJFREQ (MERGE) error         @Z11LSSI 16275000
+SSSFMSPC EQU   60                 SWBTUREQ (SPLICE) error      @Z11LSSI 16276000
+SSSFMSPT EQU   64                 SWBTUREQ (SPLIT) error       @Z11LSSI 16277000
+SSSFMSTU EQU   68                 SWBTUREQ (RETRIEVE) error    @Z11LSSI 16280000
+SSSFMSPL EQU   72                 Spool I/O error              @Z11LSSI 16285000
+SSSFMTNU EQU   76                 Token not useable for        @Z11LSSIC16290000
+                                    requested function         @Z11LSSI 16295000
+         SPACE 1                                               @Z11LSSI 16300000
+*------------------------------------------------------------* @Z11LSSI 16400000
+*                                                            * @Z11LSSI 16500000
+*        SSSFFLG1 bit definitions - the first two bits       * @Z11LSSI 16600000
+*        indicate the type of security authorization checking* @Z11LSSI 16605000
+*        requested. Note that only one of the first two bits * @Z11LSSI 16610000
+*        should be turned on.                                * @Z11LSSI 16620000
+*                                                            * @Z11LSSI 16630000
+*        These SSSFFLG1 bit definitions are only used by     * @Z11LSSI 16640000
+*        JES2. They are ignored by JES3.                     * @Z11LSSI 16700000
+*                                                            * @Z11LSSI 16710000
+*------------------------------------------------------------* @Z11LSSI 16800000
+         SPACE 1                                               @Z11LSSI 16900000
+SSSFDEST EQU   B'10000000'        Destination check indicator  @Z11LSSIC17000000
+                                    (JES2 only)                @Z11LSSI 17005000
+SSSFSECL EQU   B'01000000'        Seclabel dominance check     @Z23D102C17010000
+                                   only (honored for           @Z11LSSIC17020000
+                                    authorized callers)        @Z23D102C17030000
+                                     (JES2 only)               @Z11LSSI 17035000
+         SPACE 1                                               @Z11LSSI 17040000
+*------------------------------------------------------------* @Z11LSSI 17045000
+*                                                            * @Z11LSSI 17050000
+*        SSSFFLG1 bit definitions - the third bit (SSSFMTYP) * @Z11LSSI 17055000
+*        indicates what type of modify data is being passed. * @Z11LSSI 17060000
+*                                                            *   @Z22BJ 17062000
+*        The bit OFF indicates individual job identification * @Z11LSSI 17065000
+*        data for a modify request is being passed           * @Z11LSSI 17070000
+*        (Job name, Job ID, Group name, etc).                * @Z11LSSI 17075000
+*                                                            *   @Z22BJ 17076000
+*        The bit ON indicates that a data set or client      *   @Z22BJ 17080000
+*        token is being passed, and can be used to extract   *   @Z22BJ 17082000
+*        the necessary data such as job name, job ID,        *   @Z22BJ 17085000
+*        etc.                                                *   @Z22BJ 17090000
+*                                                            *   @Z22BJ 17092000
+*        Note: In a JES3 environment, use the client token   *   @Z22BJ 17094000
+*        delivered by ENF58 with an ENF58_QUALIFIER value of *   @Z22BJ 17096000
+*        ENF58_Q_TOKEN_CHANGE.                               *   @Z22BJ 17098000
+*                                                            * @Z11LSSI 17100000
+*        Note that the data supplied for the modify request  * @Z11LSSI 17106000
+*        is dependent on the setting of the bit SSSFMTYP.    * @Z11LSSI 17112000
+*        Data definitions below indicate the setting of      * @Z11LSSI 17118000
+*        SSSFMTYP that uses them. After the data fields      * @Z11LSSI 17124000
+*        unique to each modify type, there are data fields   * @Z11LSSI 17130000
+*        that are common to both types, followed by the      * @Z11LSSI 17136000
+*        output descriptor list information.                 * @Z11LSSI 17142000
+*                                                            * @Z11LSSI 17148000
+*        JES3 requires SSSFFLG1 have bit SSSFMTYP ON.        * @Z11LSSI 17154000
+*                                                            * @Z11LSSI 17160000
+*------------------------------------------------------------* @Z11LSSI 17166000
+         SPACE 1                                               @Z11LSSI 17172000
+SSSFMTYP EQU   B'00100000'        Modify request type          @Z11LSSIC17178000
+                                    OFF - Use job/group info   @Z11LSSIC17184000
+                                    ON  - Use data set or        @Z22BJC17190000
+                                          client token           @Z22BJ 17195000
+         SPACE 1                                                        17200000
+SSSFMDTA DS    0F                 Modify Request Type Dep Data @Z11LSSI 17210000
+         SPACE 2                                               @Z11LSSI 17220000
+*------------------------------------------------------------* @Z11LSSI 17230000
+*                                                            * @Z11LSSI 17240000
+*        SSSFMTYP = OFF                                      * @Z11LSSI 17250000
+*                                                            * @Z11LSSI 17260000
+*        Job/Group information has been supplied to define   * @Z11LSSI 17270000
+*        the SFS Modify Request.                             * @Z11LSSI 17280000
+*                                                            * @Z11LSSI 17290000
+*------------------------------------------------------------* @Z11LSSI 17300000
+         SPACE 1                                               @Z11LSSI 17310000
+         ORG   SSSFMDTA           Job/Group Modify Req Data    @Z11LSSI 17320000
+         SPACE 1                                               @Z11LSSI 17330000
+SSSFJBNM DS    CL8                JOBNAME                               17500000
+SSSFJBID DS    CL8                JOBID                                 17600000
+SSSFGRPN DS    CL8                Output group name                     17700000
+SSSFGRP1 DS    H                  Output group - first ID               17800000
+SSSFGRP2 DS    H                  Output group - second ID              17900000
+SSSFMDJL EQU   *-SSSFMDTA         Length of job/group fields   @Z11LSSI 17904000
+         SPACE 2                                               @Z11LSSI 17910000
+*------------------------------------------------------------* @Z11LSSI 17916000
+*                                                            * @Z11LSSI 17922000
+*        SSSFMTYP = ON                                       * @Z11LSSI 17928000
+*                                                            * @Z11LSSI 17934000
+*        Data set or client token has been supplied to       *   @Z23BN 17940000
+*        define the SFS Modify Request.                      * @Z11LSSI 17946000
+*                                                            * @Z11LSSI 17952000
+*------------------------------------------------------------* @Z11LSSI 17958000
+         SPACE 1                                               @Z11LSSI 17964000
+         ORG   SSSFMDTA           Data Set Token Modify Req    @Z11LSSIC17970000
+                                    Data                       @Z11LSSI 17976000
+         SPACE 1                                               @Z11LSSI 17982000
+*------------------------------------------------------------* @Z11LSSI 18000000
+*                                                            * @Z11LSSI 18003000
+*        The data set level token is returned in field       * @Z11LSSI 18006000
+*        STVSCTKN when a verbose output request is made      * @Z11LSSI 18009000
+*        using SSI 80 (Extended Status). (JES3 only)         * @Z11LSSI 18012000
+*                                                            * @Z11LSSI 18015000
+*        The address of a data set level token is returned   * @Z11LSSI 18018000
+*        in field SSS2DSTR for each data set returned by     * @Z11LSSI 18021000
+*        SSI 79 (SAPI). (JES3 only)                          * @Z11LSSI 18024000
+*                                                            * @Z11LSSI 18027000
+*        A client token is returned by the DYNALLOC macro.   * @Z11LSSI 18030000
+*        The text unit DALRTCTK (number 0071) will return    * @Z11LSSI 18033000
+*        an 80 byte JES Client Token at offset 6 in the      * @Z11LSSI 18036000
+*        text unit.                                          * @Z11LSSI 18039000
+*                                                            *   @Z22BJ 18040000
+*        JES3 will accept a data set level token or a client *   @Z22BJ 18042000
+*        token for a modify request.  The client token       *   @Z22BJ 18043000
+*        delivered by ENF58 with an ENF58_QUALIFIER value of *   @Z22BJ 18044000
+*        ENF58_Q_TOKEN_CHANGE should be used.                *   @Z22BJ 18045000
+*                                                            *   @Z22BJ 18046000
+*        JES2 will accept a group level client token for     * @Z11LSSI 18048000
+*        a modify request.                                   * @Z11LSSI 18051000
+*                                                            * @Z11LSSI 18054000
+*        JES3 requires the use of SSSFMDST.                  * @Z11LSSI 18057000
+*                                                            * @Z11LSSI 18060000
+*------------------------------------------------------------* @Z11LSSI 18063000
+         SPACE 1                                               @Z11LSSI 18066000
+SSSFMDST DS    A                  Addr of token                  @Z22BJC18069000
+                                    -- data set level -- JES3  @Z11LSSIC18072000
+                                    -- Client         -- JES3    @Z22BJC18073000
+                                    -- group level    -- JES2  @Z11LSSI 18075000
+SSSFMDDL EQU   *-SSSFMDTA         Len of data set token fields @Z11LSSI 18078000
+         DS    XL(SSSFMDJL-SSSFMDDL)  Extend section to common @Z11LSSIC18081000
+                                        fields                 @Z11LSSI 18084000
+         SPACE 2                                               @Z11LSSI 18100000
+*------------------------------------------------------------* @Z11LSSI 18102000
+*                                                            * @Z11LSSI 18109000
+*        The remaining fields are common to both types of    * @Z11LSSI 18116000
+*        modify request.                                     * @Z11LSSI 18123000
+*                                                            * @Z11LSSI 18130000
+*------------------------------------------------------------* @Z11LSSI 18137000
+         SPACE 2                                               @Z11LSSI 18144000
+SSSFMDCM DS    0F                 Beginning of common modify   @Z11LSSIC18151000
+                                    request data fields        @Z11LSSI 18158000
+SSSFCART DS    CL8                CART for WTO responses       @Z11LSSIC18165000
+                                    (JES2)                     @Z11LSSI 18172000
+SSSFCNID DS    F                  Console ID for WTO responses @Z11LSSIC18179000
+                                    (JES2)                     @Z11LSSI 18186000
+SSSFMREA DS    H                  Error reason code for modify          18200000
+SSSFMDR1 DS    H                  Reserved for IBM use                  18300000
+SSSFMDR2 DS    CL8                Reserved for IBM use                  18400000
+         SPACE 1                                               @Z11LSSI 18410000
+*------------------------------------------------------------* @Z11LSSI 18420000
+*                                                            * @Z11LSSI 18500000
+*        Output descriptor lists are in SWBTU/TU format as   * @Z11LSSI 18600000
+*        required by the SCHEDULER JCL facility (SJF).       * @Z11LSSI 18700000
+*                                                            * @Z11LSSI 18710000
+*------------------------------------------------------------* @Z11LSSI 18720000
+         SPACE 1                                               @Z11LSSI 18800000
+SSSFMDAD DS    A                  Address of output descriptor @Z11LSSIC18900000
+                                    Modify list SWBTU format   @Z11LSSI 19000000
+SSSFERAD DS    A                  Address of output descriptor @Z11LSSIC19100000
+                                    Erase list in TU format    @Z11LSSI 19200000
+SSSFMDLN DS    H                  Length of Modify list (SWBTU)         19300000
+SSSFERLN DS    H                  Length of Erase list (TU)             19400000
+SSSFMRSZ EQU   *-SSSFRDA          Size of modify function area          19600000
+         EJECT                                                 @Z11LSSI 19600100
+SSSFMERG ORG   SSSFRDA            Merge Request Dependent Area @Z10LSJF 19600200
+         SPACE 1                                               @Z10LSJF 19601100
+************************************************************** @Z10LSJF 19602000
+*                                                            * @Z10LSJF 19602900
+*       SFS Merge Request Dependent Extension Area           * @Z10LSJF 19603800
+*                                                            * @Z10LSJF 19604700
+************************************************************** @Z10LSJF 19605600
+         SPACE 1                                               @Z10LSJF 19606500
+************************************************************** @Z10LSJF 19607400
+*                                                            * @Z10LSJF 19608300
+*        Reason Codes for Scheduler Request MERGE (SSSFFREA) * @Z10LSJF 19609200
+*                                                            * @Z10LSJF 19610100
+************************************************************** @Z10LSJF 19611000
+         SPACE 1                                               @Z11LSSI 19611900
+SSSFFOK  EQU   0                   Merge processing successful/        C19612000
+                                   if SSOBRETN <> 0 Check SSSFWRTN,    C19612200
+                                   SSSFWRSN for error info.             19612400
+SSSFFDST EQU   4                   Data Set or Client token      @Z22BJC19612800
+                                     not given                   @Z22BJ 19613200
+SSSFFDSG EQU   8                   Data Set gone               @Z10LSJF 19613700
+SSSFFDSV EQU   12                  Failure obtaining           @Z10LSJFC19614600
+                                     checkpoint version        @Z10LSJFC19615500
+                                     (JES2 only)               @Z10LSJF 19615600
+SSSFFJBG EQU   16                  Job gone                    @Z10LSJF 19616400
+SSSFFSWI EQU   20                  Invalid SWBTU buffer        @Z10LSJF 19617300
+SSSFFDSE EQU   24                  Invalid data set or client    @Z22BJC19618200
+                                     token                       @Z22BJ 19618400
+SSSFFGTE EQU   28                  Invalid group token         @Z10LSJF 19619100
+SSSFFNOS EQU   32                  No storage to process reqs  @Z11LSSI 19619300
+SSSFFSPL EQU   36                  Spool I/O error             @Z11LSSI 19619500
+SSSFFTNU EQU   40                  Token not usable for        @Z11LSSIC19619700
+                                     requested function        @Z11LSSI 19619900
+SSSFFDSQ EQU   48                  Data set on BDT/TCP queue     @Z23BHC19620100
+                                     (JES3)                      @Z23BH 19620300
+SSSFFDSF EQU   52                  Data set referenced by        @Z23BHC19620500
+                                     JECL FORMAT statement       @Z23BHC19620700
+                                     (JES3)                      @Z23BH 19620900
+         SPACE 1                                               @Z11LSSI 19621100
+************************************************************** @Z10LSJF 19621800
+*                                                            * @Z10LSJF 19622700
+*        SSSFFLG1 bit definitions                            * @Z10LSJF 19623600
+*                                                            * @Z10LSJF 19624500
+************************************************************** @Z10LSJF 19625400
+         SPACE 1                                               @Z11LSSI 19626300
+SSSFFSWB EQU   B'10000000'           Provide non-SWA SWBs      @Z10LSJF 19627200
+SSSFCPAT EQU   B'01000000'           Return compatibility SWBs          19627600
+         SPACE 1                                               @Z10LSJF 19628100
+*------------------------------------------------------------* @Z10LSJF 19629000
+*        Input data                                          * @Z10LSJF 19629900
+*------------------------------------------------------------* @Z10LSJF 19630800
+         SPACE 1                                               @Z10LSJF 19631700
+*------------------------------------------------------------* @Z10LSJF 19632600
+*                                                            * @Z11LSSI 19632800
+*        The address of the group token can be zero.  The    * @Z10LSJF 19633500
+*        address of the data set level or client token must  *   @Z22BJ 19634400
+*        be provided.                                        *   @Z22BJ 19635300
+*                                                            * @Z10LSJF 19636200
+*        The group token is returned by SSI 80 in field      * @Z10LSJF 19637100
+*        STSTCTKN                                            * @Z10LSJF 19638000
+*                                                            * @Z11LSSI 19638100
+*        A client token is returned by the DYNALLOC macro.   * @Z11LSSI 19638200
+*        The text unit DALRTCTK (number 0071) will return    * @Z11LSSI 19638300
+*        an 80 byte JES Client Token at offset 6 in the      * @Z11LSSI 19638400
+*        text unit.                                          * @Z11LSSI 19638500
+*                                                            * @Z11LSSI 19638600
+*        Note: In a JES3 environment, use the client token   *   @Z22BJ 19638620
+*        delivered by ENF58 with an ENF58_QUALIFIER value of *   @Z22BJ 19638640
+*        ENF58_Q_TOKEN_CHANGE.                               *   @Z22BJ 19638660
+*                                                            *   @Z22BJ 19638680
+*        A Group Level client token is only valid for JES2.  * @Z11LSSI 19638700
+*                                                            * @Z11LSSI 19638800
+*------------------------------------------------------------* @Z10LSJF 19638900
+         SPACE 1                                               @Z10LSJF 19639800
+SSSFFGTK DS    A                   Addr of group level token     @Z22BJC19640700
+                                     -- JES2 only                @Z22BJ 19641600
+         SPACE 1                                               @Z10LSJF 19642500
+*------------------------------------------------------------* @Z10LSJF 19643400
+*                                                            * @Z11LSSI 19643600
+*        The data set level token is returned in field       * @Z10LSJF 19644300
+*        STVSCTKN when a verbose output request is made      * @Z10LSJF 19645200
+*        using SSI 80 (Extended Status).                     * @Z10LSJF 19646100
+*                                                            * @Z10LSJF 19647000
+*        The address of a data set level token is returned   * @Z10LSJF 19647900
+*        in field SSS2DSTR for each data set returned by     * @Z10LSJF 19648800
+*        SSI 79 (SAPI).                                      * @Z10LSJF 19649700
+*                                                            * @Z11LSSI 19649800
+*        A client token is returned by the DYNALLOC macro.   * @Z11LSSI 19649900
+*        The text unit DALRTCTK (number 0071) will return    * @Z11LSSI 19650000
+*        an 80 byte JES Client Token at offset 6 in the      * @Z11LSSI 19650100
+*        text unit.                                          * @Z11LSSI 19650200
+*                                                            * @Z11LSSI 19650300
+*        JES3 requires a Data Set Level token or a client    *   @Z22BJ 19650400
+*        token.                                              *   @Z22BJ 19650500
+*        Note: In a JES3 environment, use the client token   *   @Z22BJ 19650520
+*        delivered by ENF58 with an ENF58_QUALIFIER value of *   @Z22BJ 19650540
+*        ENF58_Q_TOKEN_CHANGE.                               *   @Z22BJ 19650560
+*                                                            *   @Z22BJ 19650580
+*------------------------------------------------------------* @Z10LSJF 19650600
+         SPACE 1                                               @Z10LSJF 19651500
+SSSFFDTK DS    A                   Addr of token                 @Z22BJC19652400
+                                     -- data set level -- or     @Z22BJC19653300
+                                     -- client         --        @Z22BJ 19653600
+         SPACE 1                                               @Z10LSJF 19654200
+*------------------------------------------------------------* @Z10LSJF 19655100
+*        Output data                                         * @Z10LSJF 19656000
+*------------------------------------------------------------* @Z10LSJF 19656900
+         SPACE 1                                               @Z10LSJF 19657800
+SSSFFSWT DS    XL4'00'             Token used for SJFREQ       @Z10LSJFC19658700
+                                     services.                 @Z10LSJF 19659600
+SSSFFSWU DS    A(*-*)              Address of the SWBTU block. @Z10LSJF 19660500
+SSSFFREA DS    H                   Error reason code for Merge @Z10LSJF 19664100
+         DS    H                   Reserved for future use     @Z10LSJF 19665000
+         SPACE 1                                               @Z11LSSI 19665900
+SSSFWRTN DS    F                   SWB Processing Error -      @Z10LSJFC19666800
+                                     Return Code.  Reason code @Z10LSJFC19667700
+                                     field SSSFWRSN also set   @Z10LSJF 19668600
+SSSFWOK  EQU   0                   Processing successful       @Z10LSJF 19669500
+SSSFWERR EQU   4                   Processing failed           @Z10LSJF 19670400
+         SPACE 1                                               @Z11LSSI 19671300
+*------------------------------------------------------------* @Z10LSJF 19672200
+*                                                            * @Z10LSJF 19673100
+*        SSSFWRSN has the following values:                  * @Z10LSJF 19674000
+*                                                            * @Z10LSJF 19674900
+*          SSSSCCRR where SSSSCCRR is defined as:            * @Z10LSJF 19675800
+*                                                            * @Z10LSJF 19676700
+*            SSSS  Reason code from SJF service RR           * @Z10LSJF 19677600
+*                  or a qualifier for a JES service error    * @Z10LSJF 19678500
+*            CC    Return code from SJF service RR -         * @Z10LSJF 19679400
+*                  00 if RR is 4 or 8                        * @Z10LSJF 19680300
+*            RR    indicates the SJF service or JES service  * @Z10LSJF 19681200
+*                   4 = JES SPOOL I/O Error                  * @Z10LSJF 19682100
+*                   8 = JES Memory management error          * @Z10LSJF 19683000
+*                  12 = SWB_MERGE                            * @Z10LSJF 19683900
+*                  16 = PUTSWB                               * @Z10LSJF 19684800
+*                  20 = JDTEXTRACT                           * @Z10LSJF 19685700
+*                  24 = SWBTUREQ RETRIEVE                    * @Z10LSJF 19686600
+*                  28 = SWBTUREQ SPLICE                      * @Z11LSSI 19686900
+*                  32 = SWBTUREQ SPLIT                       * @Z11LSSI 19687200
+*                                                            * @Z10LSJF 19687500
+*------------------------------------------------------------* @Z10LSJF 19688400
+         SPACE 1                                               @Z11LSSI 19689300
+SSSFWRSN DS    F                   SWB Processing Error -      @Z10LSJFC19690200
+                                     Reason code set to non-   @Z10LSJFC19691100
+                                     zero only if SSSFWRTN is  @Z10LSJFC19692000
+                                     non-zero                  @Z10LSJF 19692900
+SSSFRFLG DS    B                   Returned flags              @Z10LSJF 19693800
+SSSFFIPA EQU   B'10000000'           IP address available      @Z10LSJF 19694700
+         DS    XL3                 Reserved for future use     @Z10LSJF 19695600
+SSSFFMSZ EQU   *-SSSFRDA           Size of merge function area @Z10LSJF 19696500
+         ORG   ,                                               @Z10LSJF 19697000
+         MEND                                                        */ 19700000
+* % END_OF_ASM_SSFS: ;                      /*                       */ 19800000
+*/********************************************************************/ 19900000
+*/*                                                                  */ 20000000
+*/*      Scheduler Facility Services SSI FUNCTION CODE FOR SSOBFUNC  */ 20100000
+*/*                                                                  */ 20200000
+*/********************************************************************/ 20300000
+* DCL  SSOBSFS  FIXED(15) CONSTANT(70); /* Sched Fac Services ID     */ 20400000
+*/********************************************************************/ 20500000
+*/*                                                                  */ 20600000
+*/*      Scheduler Facility Services SSI RETURN CODES (SSOBRETN)     */ 20700000
+*/*       Any other values are values propagated from                */ 20710000
+*/*       installation exit 45.                                      */ 20720000
+*/*                                                                  */ 20800000
+*/********************************************************************/ 20900000
+* DCL  SSSFOK   FIXED(31) CONSTANT(0);/* Processing successful       */ 21000000
+* DCL  SSSFUERR FIXED(31) CONSTANT(8); /* Processing UNsuccessful    */ 21200000
+* DCL  SSSFEXTE FIXED(31) CONSTANT(12);/* No extension found         */ 21300000
+* DCL  SSSFNOST FIXED(15) CONSTANT(16); /*No storage to process rqst    21310000
+*                                                            @420P545*/ 21320000
+* DCL  SSSFPOST FIXED(15) CONSTANT(20); /* POST error (JES3) @Z11LSSI*/ 21330000
+* DCL  SSSFABND FIXED(15) CONSTANT(24); /* Proceeing ABEND (JES3)       21340000
+*                                                            @Z11LSSI*/ 21350000
+*/********************************************************************/ 21400000
+*/*                                                                  */ 21500000
+*/*      Scheduler Facility Services SSI REASON CODES (SSSFREAS)     */ 21600000
+*/*       Any other values are values propagated from                */ 21610000
+*/*       installation exit 45.                                      */ 21620000
+*/*                                                                  */ 21700000
+*/********************************************************************/ 21800000
+* DCL  SSSFNOJ2 FIXED(15) CONSTANT(16); /*JES2 not up and running    */ 21900000
+* DCL  SSSFINVF FIXED(15) CONSTANT(20); /*Invalid function request   */ 22000000
+* DCL  SSSFINVE FIXED(15) CONSTANT(24); /*Invalid SSSF extension     */ 22100000
+* DCL  SSSFNOAU FIXED(15) CONSTANT(32); /*No authorization for rqst  */ 22300000
+* DCL  SSSFINRI FIXED(15) CONSTANT(36); /*Error processing request   */ 22400000
+* DCL  SSSFEXC  FIXED(15) CONSTANT(40); /*Exit cancelled request     */ 22410000
+* DCL  SSSFDISA FIXED(15) CONSTANT(44); /*Scheduler Services disabled   22420000
+*                                                            @420LSFS*/ 22430000
+* DCL  SSSFGLBL FIXED(15) CONSTANT(48); /*Insufficient global level     22440000
+*                                                            @Z11LSSI*/ 22450000
+*/********************************************************************/ 22500000
+*/*                                                                  */ 22600000
+*/*      Scheduler Facility Services SSI FUNCTION REQUEST CODES      */ 22700000
+*/*                                                                  */ 22800000
+*/********************************************************************/ 22900000
+* @SPACE;                                                               23000000
+* DCL SSSFSWBM  FIXED(8) CONSTANT(4); /* SWB Modify function code    */ 23100000
+* DCL SSSFSWBF  FIXED(8) CONSTANT(8); /* SWB Merge function  @Z10LSJF*/ 23110000
+* DCL SSSFSWBC FIXED(8) CONSTANT(12); /* SWB Merge rtn mem   @Z10LSJF*/ 23120000
+* @SPACE;                                                               23200000
+*/********************************************************************/ 23300000
+*/*                                                                  */ 23400000
+*/*      Scheduler Facility Services SSOB Extension Header           */ 23500000
+*/*                                                                  */ 23600000
+*/********************************************************************/ 23700000
+* @SPACE;                                                               23800000
+* %IF SSSF_ATTR = '' %THEN            /*If attribute not set then    */ 23900000
+*     %SSSF_ATTR = 'BASED';           /*  establish default          */ 24000000
+* @SPACE;                                                               24100000
+*  DECLARE                                                              24200000
+*   1 SSSFBGN       SSSF_ATTR,                                          24300000
+*     3 SSSFID     CHAR(4),           /*  Acronym set to 'SSSF'      */ 24400000
+*     3 SSSFLEN    FIXED(15),         /* Length of SSOB extension       24500000
+*                                        equals extension header        24600000
+*                                        plus request dependent area */ 24700000
+*     3 SSSFRSV1   FIXED(8),          /* Reserved for JES2           */ 24710000
+*     3 SSSFVER    FIXED(8),          /* Service version number      */ 24800000
+*/*                                                                  */ 24900000
+*     3 SSSFREAS   FIXED(16),         /* SSSF Reason code            */ 25000000
+*     3 SSSFREQF   FIXED(8),          /* Function request            */ 25100000
+* %IF IBM_CBGENC ^= 'YES' %THEN                                         25110000
+* %DO;                                                                  25120000
+*     3 SSSFFLG1   BIT(8),            /* Flag Byte-defined by reqst  */ 25200000
+* %END;                                                                 25200100
+* %ELSE %DO;                                                            25200200
+*/*------------------------------------------------------------------*/ 25200300
+*/*   This definition is to avoid the DEFINE later when C header     */ 25200400
+*/*   files are being generated.  Ensure that changes here are       */ 25200500
+*/*   also made in the DEFINE sectins                                */ 25200600
+*/*------------------------------------------------------------------*/ 25200700
+*     3 SSSFFLG1   BIT(8) Union,      /* Flag Byte-defined by reqst  */ 25200800
+*       5 SSSFMODF,                   /* Flag byte for SWB Modify    */ 25200900
+*          7 SSSFDEST     BIT(1),     /*   DEST check                */ 25201000
+*          7 SSSFSECL     BIT(1),     /*   Seclabel dominance check     25201100
+*                                            only (honored for          25201200
+*                                             authorized callers)       25201300
+*                                                            @Z11LSSI*/ 25201400
+*          7 SSSFMTYP     BIT(1),     /*   Type of data in              25201500
+*                                          parm list for                25201600
+*                                          modify request -             25201700
+*                                            OFF - job/group            25201800
+*                                            ON  - ds or client         25201900
+*                                                  token       @Z22BJ*/ 25202000
+*          7 *            BIT(5),     /*   Reserved          @Z11LSSI*/ 25202100
+*       5 SSSFMERF,                   /* Flag byte for SWB Merge     */ 25202200
+*          7 SSSFFSWB     BIT(1),     /*   Get non-SWA SWBs  @Z10LSJF*/ 25202300
+*          7 SSSFCPAT     BIT(1),     /*   Return compatibility SWBs    25202400
+*                                                            @Z11LSSI*/ 25202500
+*          7 *            BIT(6),     /*   Reserved          @Z11LSSI*/ 25202600
+* %END;                                                       /* @xxA*/ 25202700
+*     3 SSSFRDA Union,                                                  25204000
+*        @SPACE(1);                                        /*@Z10LSJF*/ 25208000
+*/********************************************************** @Z10LSJF*/ 25212000
+*/*                                                          @Z10LSJF*/ 25216000
+*/*     SWB Modify dependent area                            @Z10LSJF*/ 25220000
+*/*                                                          @Z10LSJF*/ 25224000
+*/********************************************************** @Z10LSJF*/ 25228000
+*        @SPACE(1);                                        /*@Z10LSJF*/ 25232000
+*       5 SSSFMOD,             /* Begin modify area          @Z10LSJF*/ 25236000
+*         7 SSSFMDTA Union,    /* Begin modify request data  @Z11LSSI*/ 25237000
+*           9 SSSFMDJG,        /* Begin modify data job/grp  @Z11LSSI*/ 25238000
+*             11 SSSFJBNM  CHAR(8),   /* JOBNAME             @Z11LSSI*/ 25240000
+*             11 SSSFJBID  CHAR(8),   /* JOBID               @Z11LSSI*/ 25244000
+*             11 SSSFGRPN  CHAR(8),   /* Output group name              25248000
+*                                                            @Z11LSSI*/ 25250000
+*             11 SSSFGRP1  FIXED(15), /* Output group - first ID        25252000
+*                                                            @Z11LSSI*/ 25254000
+*             11 SSSFGRP2  FIXED(15), /* Output group - second ID       25256000
+*                                                            @Z11LSSI*/ 25256400
+*        @SPACE(1);                                        /*@Z11LSSI*/ 25256800
+*           9 SSSFMDDT,        /* Begin modify data ds tokn  @Z11LSSI*/ 25257200
+*        @SPACE(1);                                                     25257250
+*/***********************************************************/          25257300
+*/*         JES3 accepts data set or client token           */          25257350
+*/*         JES2 accepts group token only                   */          25257400
+*/***********************************************************/          25257450
+*        @SPACE(1);                                                     25257500
+*             11 SSSFMDST  PTR(31),   /* Address of token               25257600
+*                                        -- data set level -- JES3      25258000
+*                                        -- Client         -- JES3      25258100
+*                                        -- group level    -- JES2      25258200
+*                                                              @Z22BJ*/ 25258300
+*        @SPACE(1);                                        /*@Z11LSSI*/ 25258400
+*         7 SSSFMDCM,          /* Begin modify data common fields       25258800
+*                                                            @Z11LSSI*/ 25259200
+*           9 SSSFCART  CHAR(8),      /* CART for WTO responses         25260000
+*                                                            @Z11LSSI*/ 25262000
+*           9 SSSFCNID  FIXED(31),    /* Console ID for WTO resp        25264000
+*                                                            @Z11LSSI*/ 25266000
+*           9 SSSFMREA  FIXED(15),    /* Error reason code-modify       25268000
+*                                                            @Z11LSSI*/ 25270000
+*           9 SSSFMDR1  FIXED(15),    /* Reserved for IBM use           25272000
+*                                                            @Z11LSSI*/ 25274000
+*           9 SSSFMDR2  CHAR(8),      /* Reserved for IBM use           25276000
+*                                                            @Z11LSSI*/ 25278000
+*/*                                                                  */ 25280000
+*/*       Output descriptor lists are in                             */ 25284000
+*/*       SWBTU/TU format as required by the                         */ 25288000
+*/*       SCHEDULER JCL Facility (SJF).                              */ 25292000
+*/*                                                                  */ 25296000
+*         7 SSSFOUTD,          /* Begin modify data output descr        25297000
+*                                                            @Z11LSSI*/ 25298000
+*           9 SSSFMDAD  POINTER(31),  /* Address of Modify SWBTU        25300000
+*                                                            @Z11LSSI*/ 25302000
+*           9 SSSFERAD  POINTER(31),  /* Address of Erase List          25304000
+*                                                            @Z11LSSI*/ 25306000
+*           9 SSSFMDLN  FIXED(15),    /* Length of Modify SWBTU         25308000
+*                                                            @Z11LSSI*/ 25310000
+*           9 SSSFERLN  FIXED(15),    /* Length of Erase list           25312000
+*                                                            @Z11LSSI*/ 25316000
+*        @SPACE(1);                                        /*@Z10LSJF*/ 25320000
+*/********************************************************** @Z10LSJF*/ 25324000
+*/*                                                          @Z10LSJF*/ 25328000
+*/*      SWB Merge dependent area                            @Z10LSJF*/ 25332000
+*/*                                                          @Z10LSJF*/ 25336000
+*/********************************************************** @Z10LSJF*/ 25340000
+*        @SPACE(1);                                        /*@Z10LSJF*/ 25344000
+*       5 SSSFMERG,            /* Begin merge area           @Z11LSSI*/ 25348000
+*         7 SSSFFGTK  PTR(31),        /* Addr of Group level token      25352000
+*                                        -- JES2 only          @Z22BJ*/ 25356000
+*         7 SSSFFDTK  PTR(31),        /* Addr of data set or client     25360000
+*                                         token              @Z10LSJF*/ 25364000
+*         7 SSSFFSWT  CHAR(4),        /* Token used for SJFREQ          25368000
+*                                         services           @Z10LSJF*/ 25372000
+*         7 SSSFFSWU  POINTER(31),    /* Addr of SWBTU block @Z10LSJF*/ 25376000
+*         7 SSSFFREA  FIXED(16),      /* Error reason code for merge    25400000
+*                                         SJFREQ services    @Z10LSJF*/ 25405000
+*         7 *         FIXED(16),      /* Reserved            @Z10LSJF*/ 25410000
+*         7 SSSFWRTN  FIXED(32),      /* SWB processing error           25415000
+*                                                            @Z10LSJF*/ 25420000
+*        @SPACE(1);                                        /*@Z10LSJF*/ 25425000
+*/********************************************************** @Z10LSJF*/ 25430000
+*/*                                                          @Z10LSJF*/ 25435000
+*/*      SSSFWRSN has the following values:                  @Z10LSJF*/ 25440000
+*/*                                                          @Z10LSJF*/ 25445000
+*/*        SSSSCCRR where SSSSCCRR is defined as:            @Z10LSJF*/ 25450000
+*/*                                                          @Z10LSJF*/ 25455000
+*/*          SSSS  Reason code from SJF service RR           @Z10LSJF*/ 25460000
+*/*                or a qualifier for a JES service error    @Z10LSJF*/ 25465000
+*/*          CC    Return code from SJF service RR -         @Z10LSJF*/ 25470000
+*/*                00 if RR is 4 or 8                        @Z10LSJF*/ 25475000
+*/*          RR    indicates the SJF service or JES service  @Z10LSJF*/ 25480000
+*/*                 4 = JES SPOOL I/O Error                  @Z10LSJF*/ 25500000
+*/*                 8 = JES Memory management error          @Z10LSJF*/ 25501000
+*/*                12 = SWB_MERGE                            @Z10LSJF*/ 25508000
+*/*                16 = PUTSWB                               @Z10LSJF*/ 25515000
+*/*                20 = JDTEXTRACT                           @Z10LSJF*/ 25522000
+*/*                24 = SWBTUREQ RETRIEVE                    @Z10LSJF*/ 25529000
+*/*                28 = SWBTUREQ SPLICE                      @Z11LSSI*/ 25530000
+*/*                32 = SWBTUREQ SPLIT                       @Z11LSSI*/ 25532000
+*/*                                                          @Z10LSJF*/ 25536000
+*/********************************************************** @Z10LSJF*/ 25543000
+*        @SPACE(1);                                        /*@Z10LSJF*/ 25550000
+*         7 SSSFWRSN  FIXED(32),      /* SWB processing error           25557000
+*                                                            @Z10LSJF*/ 25564000
+*         7 SSSFRFLG  FIXED(8),       /* Returned flag       @Z10LSJF*/ 25571000
+*           9 SSSFFIPA  BIT(1),       /* IP addr available   @Z10LSJF*/ 25578000
+*         7 *         CHAR(3);        /* Reserved            @Z10LSJF*/ 25585000
+* @SPACE;                                                               25600000
+* DCL SSSFMRSZ FIXED(15) CONSTANT(LENGTH(SSSFMOD)); /* Size             25610000
+*                                        of modify function             25620000
+*                                        area job/grp dta    @Z11LSSI*/ 25625000
+* DCL SSSFFMSZ FIXED(15) CONSTANT(LENGTH(SSSFMERG)); /* Sz              25630000
+*                                        of merge function              25635000
+*                                        area                @Z11LSSI*/ 25640000
+*/********************************************************************/ 25700000
+*/*                                                                  */ 25800000
+*/*     SFS Modify Request Dependent Extension Area                  */ 25900000
+*/*                                                                  */ 26000000
+*/********************************************************************/ 26100000
+* @SPACE;                                                               26200000
+*/********************************************************************/ 26300000
+*/*                                                                  */ 26400000
+*/*      Reason Codes for Scheduler Request MODIFY (SSSFMREA)        */ 26500000
+*/*                                                                  */ 26600000
+*/********************************************************************/ 26700000
+* @SPACE;                                                               26800000
+* DCL  SSSFMOK  FIXED(15) CONSTANT(0); /*Modify processing successfl */ 26900000
+* DCL  SSSFMTUE FIXED(15) CONSTANT(4); /*Modify/Erase TU error       */ 27000000
+* DCL  SSSFMJBE FIXED(15) CONSTANT(8); /*Jobname/jobid error         */ 27100000
+* DCL  SSSFMGRP FIXED(15) CONSTANT(12); /*Groupname error            */ 27200000
+* DCL  SSSFMNOS FIXED(15) CONSTANT(16); /*No storage to process rqst */ 27300000
+* DCL  SSSFMSCI FIXED(15) CONSTANT(20); /*Invalid security   @Z23D102   27310000
+*                                        request (SSSFFLG1)  @Z23D102*/ 27320000
+* DCL  SSSFMIVX FIXED(15) CONSTANT(24); /*Invalid modify     @Z23D103   27330000
+*                                        extension           @Z23D103*/ 27340000
+* DCL  SSSFMTKE FIXED(15) CONSTANT(28); /*Modify data set or client     27342000
+*                                        token error           @Z22BJ*/ 27345000
+* DCL  SSSFMNTK FIXED(15) CONSTANT(32); /*No data set or client         27348000
+*                                         token provided       @Z22BJ*/ 27351000
+* DCL  SSSFMJNF FIXED(15) CONSTANT(36); /*Job not found      @Z11LSSI*/ 27354000
+* DCL  SSSFMDNF FIXED(15) CONSTANT(40); /*Data set not found @Z11LSSI*/ 27357000
+* DCL  SSSFMDSB FIXED(15) CONSTANT(44); /*Data set busy      @Z11LSSI*/ 27360000
+* DCL  SSSFMDSQ FIXED(15) CONSTANT(48); /*Data set on        @Z11LSSI   27363000
+*                                         BDT/TCP queue      @Z11LSSI   27366000
+*                                         (JES3)             @Z11LSSI*/ 27369000
+* DCL  SSSFMDSF FIXED(15) CONSTANT(52); /*Data set           @Z11LSSI   27372000
+*                                         referenced by      @Z11LSSI   27375000
+*                                         JECL FORMAT stmt   @Z11LSSI*/ 27378000
+* DCL  SSSFMSJF FIXED(15) CONSTANT(56); /*SJFREQ (MERGE) err @Z11LSSI*/ 27381000
+* DCL  SSSFMSPC FIXED(15) CONSTANT(60); /*SWBTUREQ (SPLICE)  @Z11LSSI   27382000
+*                                         error              @Z11LSSI*/ 27383000
+* DCL  SSSFMSPT FIXED(15) CONSTANT(64); /*SWBTUREQ (SPLIT)   @Z11LSSI   27384000
+*                                         error              @Z11LSSI*/ 27384700
+* DCL  SSSFMSTU FIXED(15) CONSTANT(68); /*SWBTUREQ           @Z11LSSI   27385400
+*                                        (RETRIEVE) error    @Z11LSSI*/ 27386100
+* DCL  SSSFMSPL FIXED(15) CONSTANT(72); /*Spool I/O error    @Z11LSSI*/ 27387000
+* DCL  SSSFMTNU FIXED(15) CONSTANT(76); /*Token not useable  @Z11LSSI   27390000
+*                                         for requested      @Z11LSSI   27393000
+*                                         function           @Z11LSSI*/ 27396000
+* @SPACE;                                                               27400000
+*/********************************************************** @Z11LSSI*/ 27410000
+*/*                                                          @Z11LSSI*/ 27420000
+*/*      SSSFFLG1 bit definitions - the first two bits       @Z11LSSI*/ 27430000
+*/*      indicate the type of security authorization check   @Z11LSSI*/ 27440000
+*/*      requested. Note that only one of the first two bits @Z11LSSI*/ 27450000
+*/*      should be turned on.                                @Z11LSSI*/ 27460000
+*/*                                                          @Z11LSSI*/ 27470000
+*/*      These SSSFFLG1 bit definitions are only used by     @Z11LSSI*/ 27480000
+*/*      JES2. They are ignored by JES3.                     @Z11LSSI*/ 27490000
+*/*                                                          @Z11LSSI*/ 27500000
+*/*                                                          @Z11LSSI*/ 27510000
+*/*      SSSFFLG1 bit definitions - the third bit (SSSFMTYP) @Z11LSSI*/ 27520000
+*/*      indicates what type of modify data is being passed. @Z11LSSI*/ 27530000
+*/*      The bit OFF indicates individual job identification @Z11LSSI*/ 27540000
+*/*      data for a modify request is being passed           @Z11LSSI*/ 27550000
+*/*      (Job name, Job ID, Group name, etc).                @Z11LSSI*/ 27560000
+*/*      The bit ON indicates that a data set token is being @Z11LSSI*/ 27570000
+*/*      passed, and can be used to extract the necessary    @Z11LSSI*/ 27580000
+*/*      data such as job name, job ID , etc.                @Z11LSSI*/ 27590000
+*/*                                                          @Z11LSSI*/ 27600000
+*/*      Note that the data supplied for the modify request  @Z11LSSI*/ 27610000
+*/*      is dependent on the setting of the bit SSSFMTYP.    @Z11LSSI*/ 27620000
+*/*      Data definitions below indicate the setting of      @Z11LSSI*/ 27630000
+*/*      SSSFMTYP that uses them. After the data fields      @Z11LSSI*/ 27640000
+*/*      unique to each modify type, there are data fields   @Z11LSSI*/ 27650000
+*/*      that are common to both types, followed by the      @Z11LSSI*/ 27660000
+*/*      output descriptor list information.                 @Z11LSSI*/ 27700000
+*/*                                                          @Z11LSSI*/ 27800000
+*/*      JES3 requires SSSFFLG1 have bit SSSFMTYP ON.        @Z11LSSI*/ 27810000
+*/*                                                          @Z11LSSI*/ 27820000
+*/********************************************************** @Z11LSSI*/ 27900000
+* %IF IBM_CBGENC ^= 'YES' %THEN                                         27910000
+* %DO;                                                                  27920000
+*/*------------------------------------------------------------------*/ 27930000
+*/*   These bits are defined as part of a UNION above because the    */ 27940000
+*/*   tool that generated C headers does not process DEFINED data    */ 27950000
+*/*   structures.  All bit changes made here must be defined above.  */ 27960000
+*/*------------------------------------------------------------------*/ 27970000
+* DECLARE                                                               28000000
+*  1 SSSFMODF   DEFINED(SSSFFLG1),    /* Flag byte for SWB Modify    */ 28100000
+*     3 SSSFDEST     BIT(1),          /*   DEST check                */ 28200000
+*     3 SSSFSECL     BIT(1),          /*   Seclabel dominance check     28210000
+*                                            only (honored for          28220000
+*                                             authorized callers)       28230000
+*                                                            @Z11LSSI*/ 28240000
+*     3 SSSFMTYP     BIT(1),          /*   Type of data in              28250000
+*                                          parm list for                28260000
+*                                          modify request -             28270000
+*                                            OFF - job/group            28280000
+*                                            ON  - ds or client         28290000
+*                                                  token       @Z22BJ*/ 28295000
+*     3 *            BIT(5);          /*   Reserved          @Z11LSSI*/ 28300000
+* %END;                                                                 28310000
+* @SPACE;                                                               28400000
+*/********************************************************************/ 28410000
+*/*                                                                  */ 28420000
+*/*      Reason Codes for Scheduler Request MERGE (SSSFFREA) @Z10LSJF*/ 28430000
+*/*                                                                  */ 28440000
+*/********************************************************************/ 28450000
+* @SPACE;                                                               28460000
+* DCL  SSSFFOK  FIXED(15) CONSTANT(0); /* Merge function successful or  28462000
+*                                         if SSOBRETN <> 0 Check        28464000
+*                                         SSSFWRTN, SSSWFRSN for        28466000
+*                                         error info                 */ 28468000
+* DCL  SSSFFDST FIXED(15) CONSTANT(4); /* Data set or client            28470000
+*                                         token not given      @Z22BJ*/ 28500000
+* DCL  SSSFFDSG FIXED(15) CONSTANT(8); /* Data set gone      @Z10LSJF*/ 28600000
+* DCL  SSSFFDSV FIXED(15) CONSTANT(12); /* Failure getting              28700000
+*                                          checkpoint version (JES2     28800000
+*                                          only)             @Z10LSJF*/ 28900000
+* DCL  SSSFFJBG FIXED(15) CONSTANT(16); /* Job gone          @Z10LSJF*/ 29000000
+* DCL  SSSFFSWI FIXED(15) CONSTANT(20); /* Invalid SWBTU buffer         29100000
+*                                                            @Z10LSJF*/ 29200000
+* DCL  SSSFFDSE FIXED(15) CONSTANT(24); /* Invalid data set or          29300000
+*                                          client token        @Z22BJ*/ 29400000
+* DCL  SSSFFGTE FIXED(15) CONSTANT(28); /* Invalid group token          29500000
+*                                                            @Z10LSJF*/ 29600000
+* DCL  SSSFFNOS FIXED(15) CONSTANT(32); /* No storage to process reqs   29610000
+*                                                            @Z11LSSI*/ 29620000
+* DCL  SSSFFSPL FIXED(15) CONSTANT(36); /* Spool I/O error   @Z11LSSI*/ 29630000
+* DCL  SSSFFTNU FIXED(15) CONSTANT(40); /*Token not useable  @Z11LSSI   29640000
+*                                         for requested      @Z11LSSI   29650000
+*                                         function           @Z11LSSI*/ 29660000
+* DCL  SSSFFDSQ FIXED(15) CONSTANT(48); /* Data set on         @Z23BH   29665000
+*                                          BDT/TCP queue       @Z23BH   29670000
+*                                          (JES3)              @Z23BH*/ 29675000
+* DCL  SSSFFDSF FIXED(15) CONSTANT(52); /* Data set            @Z23BH   29680000
+*                                          referenced by       @Z23BH   29685000
+*                                          JECL FORMAT stmt    @Z23BH   29690000
+*                                          (JES3)              @Z23BH*/ 29695000
+* %IF IBM_CBGENC ^= 'YES' %THEN                                         29696000
+* %DO;                                                                  29697000
+* @SPACE;                                                               29700000
+*/********************************************************************/ 29800000
+*/*                                                                  */ 29900000
+*/*      SSSFFLG1 bit definitions                            @Z10LSJF*/ 30000000
+*/*                                                                  */ 30100000
+*/********************************************************************/ 30200000
+*/*------------------------------------------------------------------*/ 30210000
+*/*   These bits are defined as part of a UNION above because the    */ 30220000
+*/*   tool that generated C headers does not process DEFINED data    */ 30230000
+*/*   structures.  All bit changes made here must be defined above.  */ 30240000
+*/*------------------------------------------------------------------*/ 30250000
+* @SPACE;                                                               30300000
+* DECLARE                                                               30400000
+*  1 SSSFMERF   DEFINED(SSSFFLG1),    /* Flag byte for SWB Merge     */ 30500000
+*     3 SSSFFSWB     BIT(1),          /*   Get non-SWA SWBs  @Z10LSJF*/ 30600000
+*     3 SSSFCPAT     BIT(1),          /*   Return compatibility SWBs    30610000
+*                                                            @Z11LSSI*/ 30620000
+*     3 *            BIT(6);          /*   Reserved          @Z11LSSI*/ 30700000
+* %END;                                                                 30710000
+* @SPACE;                                                               30800000
+* DCL  SSSFCVER FIXED(8)  CONSTANT(3); /*Current version no.of SSSF     30900000
+*                                                            @Z11LSSI*/ 30910000
+* DCL  SSSFIDEY CHAR(4)   CONSTANT('SSSF'); /* SSSF Ext. identifier     31000000
+*                                                           @Z23D107*/  31005000
+* DCL  SSSFWOK  FIXED(8)  CONSTANT(0);      /* Processing successful    31010000
+*                                                            @Z10LSJF*/ 31020000
+* DCL  SSSFWERR FIXED(8)  CONSTANT(4);      /* Processing failed        31030000
+*                                                            @Z10LSJF*/ 31040000
+* % IAZSSSFEND: ;                                                       31100000
+*/*                   END OF MACRO                                   */ 31110000
+* @Logic;                                                               31120000
+* #PRAGMA TOOL=PADI.                                                    31130000
+* #PADIDELETE.SSSFMDJG                                                  31140000
+* #PADIDELETE.SSSFMDDT                                                  31150000
+* #PADIDELETE.SSSFOUTD                                                  31160000
+* #PADIDELETE.SSSFMERG                                                  31170000
+* #PADIDELETE.SSSFMODF                                                  31180000
+* #PADIDELETE.SSSFMERF                                                  31190000
+* #PADIDELETE.SSSFIDEY                                                  31200000
+* #PADIDELETE.SSSFHSZE                                                  31210000
+* #PADIDELETE.SSSFMDJL                                                  31220000
+* #PADIDELETE.SSSFMDDL                                                  31230000
+* #EPRAGMA                                                              31240000
+* @ENDLOGIC;                                                            99999999

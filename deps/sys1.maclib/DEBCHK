@@ -1,0 +1,855 @@
+*/*PROPRIETARY V3 STATEMENT                                          */ 00010001
+*/*LICENSED MATERIALS - PROPERTY OF IBM                              */ 00020001
+*/*"RESTRICTED MATERIALS OF IBM"                                     */ 00030001
+*/*5650-ZOS                                                      @L9C*/ 00040001
+*/*COPYRIGHT IBM Corp. 1992,2017                                 @L9C*/ 00050001
+*/*END PROPRIETARY V3 STATEMENT                                      */ 00051001
+*/*                                                                  */ 00052001
+         MACRO                                                          00053001
+&NAME    DEBCHK &CBAD,                                                 *00054001
+               &TYPE=,                                                 *00055001
+               &AM=,                                                   *00056001
+               &BRANCH=NO,                                             *00057001
+               &DEBADDR=,                                          @L9A*00058001
+               &DEBTCB=,                                           @03A*00059001
+               &KEYADDR=,                                      @ZA44985*00060001
+               &KEYREG=,                                           @04A*00070001
+               &MF=,                                               @L9C*00080001
+               &PURGE=,                                            @L6A*00090001
+               &SAVREG=,                                               *00100001
+               &RBADDR=,                                           @L8A*00110001
+               &TCBADDR=                                                00120001
+.*                                                                      00130001
+.********************************************************************** 00140001
+.*                                                                      00150001
+.* MODULE NAME = DEBCHK                                                 00160001
+.*                                                                      00170001
+.* DESCRIPTIVE NAME = Call DEB validity check routine via SVC or branch 00180001
+.*                                                                      00190001
+.* STATUS = z/OS 2.3 DFSMS                                         @L8C 00200001
+.*                                                                      00210001
+.* FUNCTION = THIS MACRO SETS UP THE INTERFACE FOR checking a DEB.      00220001
+.*     This is for the SVC 117 entry:                              @L9C 00230001
+.*            It loads the Access Method value (If any) in BITS 0 - 7   00240001
+.*            of register 0 and the type function code in BiT 8 - 31    00250001
+.*            of register 0.  It loads register 1 with the DEB address  00260001
+.*            if TYPE=PURGE or with the DCB address in low word of      00270001
+.*            register 1 and optionally DEB address in high word of     00270101
+.*            register 1. It then loads register 15 with the value of   00270201
+.*            2 and issue SVC 117.                                 @LAC 00270301
+.*                                                                      00270401
+.*            REGISTER 0: BITS 0-7:  ACCESS METHOD VALUE: Byte-0   @L8c 00270501
+.*                                     TCAMAP = X'84'                   00270601
+.*                                     SUBSYS = X'81'                   00270701
+.*                                     ISAM   = X'80'                   00270801
+.*                                     BDAM   = X'40'                   00270901
+.*                                     SAM    = X'20'                   00271001
+.*                                     BPAM   = X'20'                   00272001
+.*                                     TAM    = X'10'                   00273001
+.*                                     GAM    = X'08' (obsolete)   @L9C 00274001
+.*                                     TCAM   = X'04'                   00275001
+.*                                     EXCP   = X'02'                   00276001
+.*                                     VSAM   = X'01'                   00277001
+.*                                     NONE   = X'00'                   00278001
+.*                                                                      00279001
+.*                        BITS 8 - 15: Byte-1 = always zeros       @L8a 00280001
+.*                                                                      00290001
+.*                        BITS 16- 23: Byte-2                      @L8a 00300001
+.*                         GET SHARE LOCK     = X'01'              @L8a 00310001
+.*                         RELEASE LOCK       = X'02'              @L8a 00320001
+.*                         GET EXCLUSIVE LOCK = X'03'              @L8a 00330001
+.*                                                                      00340001
+.*                        BITS 24- 31: Byte-3                      @L8a 00350001
+.*                                     TYPE FUNCTION CODE(Byte-3)  @L9c 00360001
+.*                                     VERIFY = 0                       00370001
+.*                                     ADD    = 1                       00371001
+.*                                     DELETE = 2                       00372001
+.*                                     PURGE  = 3                       00373001
+.*                               PURGE=FORCE  = 4                       00374001
+.*                                                                      00375001
+.*                                                                      00376001
+.* REGISTER 0 and 1 are described below for SVC and Branch Entry: 1@LAa 00377001
+.* ---------------------------------------------------------------1@LAa 00378001
+.*  FUNCTION     Register-0    R1(63-32) SVC/BRC   R1(31-0)  SVC/BRC    00379001
+.* -------------------------------------------------------------------- 00380001
+.*               ('AM..CODE')  DEBADDR=  ( DEB )   POS.PARM  ( DCB )  * 00390001
+.* -------------------------------------------------------------------* 00400001
+.*  VERIFY:      x'....0000'   ........            DCB addr  .../Req  * 00410001
+.*  LOCK:        x'....0100'   DEB addr  Opt/Opt   DCB addr  Req/Opt  * 00420001
+.*  UNLOCK:      x'....0200'   DEB addr  Opt/Opt   DCB addr  Req/Opt  * 00430001
+.*  LOCKEXCL:    x'....0300'   DEB addr  Opt/Opt   DCB addr  Req/Opt  * 00440001
+.*  ADD:         x'....0001'   ........            DCB addr  Req/     * 00450001
+.*  ADDLOCK:     x'....0301'   ........            DCB addr  Req/     * 00460001
+.*  DELETE:      x'....0002'   ........            DCB addr  Req/     * 00470001
+.*  UNLOCKDELETE:x'....0202'   ........            DCB addr  Req/     * 00480001
+.*  PURGE:       x'....0003'   ........            DCB addr  Req/     * 00490001
+.*  PURGE=FORCE: x'....0004'   ........            DEB addr           * 00500001
+.* ---------------------------------------------------------------1@LAa 00510001
+.*                                                                      00520001
+.*  1. This is for the branch entry at return:                    1@LAC 00530001
+.*            REGISTER 0: 0 or reason code if R15 is nonzero.     1@LAA 00540001
+.*            REGISTER 1: BITS 32 - 63: DCB address                     00550001
+.*                        BITS  0 - 31: DEB addrress              1@LAA 00560001
+.*      Access Register 0: TCB address.                           1@LAA 00570001
+.*      Access Register 1: RB address                             1@LAA 00580001
+.*                                                                      00590001
+.*     This is for the branch entry without TYPE=LOCK, UNLOCK or   @L9A 00600001
+.*     LOCKEXCL (it is for VERIFY)                                 @L9A 00610001
+.*            REGISTER 0: Unpredictable.                           @L9A 00620001
+.*            REGISTER 1: BITS 0 - 7:  X'00'                            00630001
+.*                        BITS 8 - 31: DCB POINTER.  Macro then    @L9A 00640001
+.*                        loads the DEB address.                   @L9A 00650001
+.*            REGISTER 10: TCB address.                            @L9A 00660001
+.*                                                                 @LAA 00670001
+.*     This is for the branch entry with TYPE=LOCK, UNLOCK or      @L9A 00680001
+.*     LOCKEXCL (it is not for VERIFY):                            @L9A 00681001
+.*            REGISTER 0: TYPE code.                               @L9A 00682001
+.*                        x'00000100' or 256  LOCK                 @L9A 00683001
+.*                        x'00000200' or 512  UNLOCK               @L9A 00684001
+.*                        x'00000300' or 768  LOCKEXCL             @L9A 00685001
+.*            REGISTER 1:                                          @L9A 00686001
+.*             - Hi-Word: BITS  0 -  7: X'00'                           00687001
+.*                        BITS  8 - 31: DEB address                @L9A 00688001
+.*             - Lo-Word: BITS 32 - 39: X'00'                           00689001
+.*                        BITS 40 - 63: DCB address                @L9A 00689101
+.*            Access register 0: TCB address                       @L9A 00689201
+.*            Access register 1: RB address                        @L9A 00689301
+.*                                                                      00689401
+.*  2. This is for the SVC with TYPE=ADD, DELETE, and PURGE:      1@LAA 00689501
+.*            REGISTER 0: Unpredictable.                          1@LAA 00689601
+.*            REGISTER 1: BITS 0 - 7:  X'00'                            00689701
+.*                        BITS 8 - 31: DCB POINTER.               1@LAA 00689801
+.*                                                                1@LAA 00689901
+.*     This is for the SVC with TYPE=ADDLOCK and UNLOCKDELETE:    1@LAA 00690001
+.*            REGISTER 0: TYPE code.                              1@LAA 00691001
+.*                        x'00000301' or 769  ADDLOCK             1@LAA 00691101
+.*                        x'00000202' or 514  UNLOCKDELETE        1@LAA 00691201
+.*            REGISTER 1:                                         1@LAA 00691301
+.*             - Hi-Word: BITS  0 -  7: X'00'                           00691401
+.*                        BITS  8 - 31: Zero or DEB address       1@LAA 00691501
+.*             - Lo-Word: BITS 32 - 39: X'00'                           00691601
+.*                        BITS 40 - 63: DCB address(required)     1@LAA 00691701
+.*            Access register 1: RB address                       1@LAA 00691801
+.*                                                                      00691901
+.*      AN ADDITIONAL KEYWORD IS PROVIDED TO SUPPORT SUBTASKING.   @03A 00692001
+.*      DEBTCB KEYWORD IS USED TO INDICATE AN OPTIONAL DEBCHK      @03A 00692101
+.*      FUNCTION TO PROVIDE THE DAUGHTER TASK TCB IN PLACE OF THE  @03A 00692201
+.*      MOTHER TASK TCB SUPPLIED BY THE SVC INTERRUPT HANDLER.     @03A 00692301
+.*      This is not part of the intended programming interface.    @L9A 00692401
+.*                                                                      00692501
+.*      AN ADDITIONAL KEYWORD IS PROVIDED TO SUPPORT FORCE PURGE   @L6A 00692601
+.*      PURGE KEYWORD IS USED TO REQUEST THAT THE DEB TABLE ENTRY  @L6A 00692701
+.*      CONTAINING THE PASSED DEB ADDRESS BE DELETED WITHOUT       @L6A 00692801
+.*      ACCESSING THE DEB STORAGE.  THIS TYPICALLY IS USED         @L6A 00692901
+.*      BY IOS PURGE AFTER DETERMINING THAT THE DEB STORAGE IS NOT @L6A 00693001
+.*      ACCESSIBLE. THIS IS AN ALTERNATE BRANCH ENTRY TO IFGDEBVR  @L6A 00694001
+.*      +8.                                                        @L6A 00695001
+.*                                                                      00696001
+.*      For the branch entry with TYPE=VERIFY (or omitted):        @L9C 00697001
+.*            IT MODESETS TO THE USER KEY AND LOADS THE DEB ADDRESS     00698001
+.*            INTO REGISTER 1, THE TCB ADDRESS INTO REGISTER AR1, THEN  00699001
+.*            MODESETS TO SUPERVISOR KEY AND LOADS THE BRANCH ENTRY     00700001
+.*            ADDRESS OF DEBCHK INTO REGISTER 15, AND BRANCH AND LINKS  00710001
+.*            TO DEBCHK ON REGISTER 14. ON RETURN FROM DEBCHK, IT       00720001
+.*            RESTORES THE PROTECT KEY IN EFFECT AT ENTRY TO THE MACRO. 00730001
+.*                                                                      00740001
+.*      For the branch entry with TYPE=LOCK, UNLOCK or LOCKEXCL:   @L9C 00750001
+.*                                                                      00760001
+.*      DEBCHK ALSO HAS A LIST FORM WHICH GENERATES ONLY THE            00770001
+.*      ACCESS METHOD TYPE (ONE BYTE).                                  00780001
+.*                                                                      00790001
+.*      DEPENDENCIES = NONE                                             00800001
+.*                                                                      00810001
+.*      RESTRICTIONS = It is strongly recommended that the caller       00820001
+.*           of the branch entry hold the local lock.                   00830001
+.*                                                                      00840001
+.*      REGISTER CONVENTIONS = Sets register 10 for the branch entry.   00850001
+.*                                                                      00860001
+.* PATCH LABEL = NOT APPLICABLE                                         00870001
+.*                                                                      00880001
+.* MODULE TYPE = MACRO                                                  00890001
+.*                                                                      00900001
+.*      PROCESSOR = ASSEMBLER LANGUAGE                                  00910001
+.*                                                                      00920001
+.*      MODULE SIZE = NOT APPLICABLE                                    00930001
+.*                                                                      00940001
+.*      ATTRIBUTES = NOT APPLICABLE                                     00950001
+.*                                                                      00960001
+.* ENTRY POINT = NOT APPLICABLE                                         00970001
+.*                                                                      00980001
+.*      PURPOSE = SEE FUNCTION                                          00990001
+.*                                                                      01000001
+.*      LINKAGE = LABEL DEBCHK CBAD,TYPE=,AM=,MF=                       01010001
+.*                                                                      01020001
+.*      INPUT =                                                         01030001
+.*                                                                      01040001
+.*            OPTIONAL LABEL SPECIFIED AS AN ACCEPTABLE ASSEMBLER       01050001
+.*         LABEL.                                                       01060001
+.*                                                                      01070001
+.*            The control block address is the only positional     @L9C 01080001
+.*         parameter.  It is either a word that points to the      @L9C 01090001
+.*         control block or a register in parentheses that points  @L9C 01100001
+.*         to the control block. It is always the DCB address.    1@LAA 01110001
+.*            With BRANCH=NO, this positional parameter is         @L9A 01120001
+.*         required.  With TYPE not PURGE, it is the DCB.  With    @L9A 01130001
+.*         TYPE=PURGE it is the DEB.                               @L9A 01140001
+.*            With BRANCH=YES this positional parameter is         @L9A 01150001
+.*         optional if DEB keyword is coded.                       @L9A 01160001
+.*            With BRANCH=YES and TYPE=VERIFY or omitted,         1@LAA 01170001
+.*         DEB keyword is optional if the positional parameter @L9A     01180001
+.*         is used to pass the DCB address.                        @L9A 01190001
+.*            WIth BRANCH=YES and TYPE is LOCK, LOCKEXCL, and     1@LAA 01200001
+.*         UNLOCK, both positional parameter and DEB keyword      1@LAA 01210001
+.*         are required.                                                01220001
+.*                                                                      01230001
+.*            TYPE= is a keyword parameter which can be ADD,       @L9C 01240001
+.*         ADDLOCK, DELETE, UNLOCKDELETE, PURGE, VERIFY, LOCK,     @L9C 01250001
+.*         UNLOCK or LOCKEXCL.  If it is omitted, the default is   @L9C 01260001
+.*         VERIFY.                                                 @L9C 01270001
+.*                                                                      01280001
+.*            TYPE= IS A KEYWORD PARAMETER WHICH CAN BE EITHER          01290001
+.*         ADD, ADDLOCK, DELETE, UNLOCKDELETE, PURGE OR VERIFY.    @L9C 01300001
+.*         IF IT IS OMITTED, VERIFY IS THE DEFAULT.                     01310001
+.*                                                                      01320001
+.*            AM= IS A KEYWORD PARAMETER WHICH CAN HAVE ANY OF          01330001
+.*         THE ACCESS METHOD VALUES SPECIFIED UNDER 'FUNCTION'.         01340001
+.*                                                                      01350001
+.*            MF= IS A KEYWORD PARAMETER WHICH CAN BE EITHER            01360001
+.*         MF=E (EXECUTE FORM) OR MF=L (LIST FORM).  THE                01370001
+.*         LIST FORM OF DEBCHK GENERATES ONLY THE ACCESS                01380001
+.*         METHOD TYPE.  THE DEFAULT IF MF=E.                           01390001
+.*                                                                      01400001
+.*            BRANCH= IS A KEYWORD PARAMETER WHICH CAN BE EITHER        01410001
+.*         YES OR NO. IF OMITTED, THE DEFAULT IS NO. IF YES,            01420001
+.*                                                                      01430001
+.*            TCBADDR= IS A KEYWORD PARAMETER WHICH CAN BE A LABEL      01440001
+.*         OR A REGISTER. IT IS IGNORED IF BRANCH=NO OR BRANCH= IS      01450001
+.*         OMITTED.  IT IS REQUIRED IF BRANCH=YES. IT IS A REGISTER     01460001
+.*         OR A LABEL OF A FULL WORD WHICH POINTS TO THE TCB TO BE      01470001
+.*         USED BY DEBCHK. FOR LOCK, LOCKEXCL, UNLOCK, IT IS THE        01480001
+.*         CURRENT TCB IF TCBADDR IS OMITTED.                     1@LAA 01490001
+.*                                                                      01500001
+.*            KEYADDR= IS A KEYWORD PARAMETER WHICH CAN BE A LABEL      01510001
+.*         OR A BASE DISPLACEMENT VALUE.  KEYREG= SPECIFIES A           01520001
+.*         REGISTER THAT CONTAINS A KEY VALUE IN BITS 24-27.            01530001
+.*         KEYADDR!KEYREG IS IGNORED IF BRANCH=NO OR OMITTED.  IT       01540001
+.*         IS OPTIONAL IF BRANCH=YES.  IF BOTH KEYADDR AND KEYREG  @L8C 01550001
+.*         ARE SPECIFIED FOR BRANCH=YES, KEYREG IS ACCEPTED AND         01560001
+.*         KEYADDR IS IGNORED.  THE KEY PROVIDED WILL BE USED IN        01570001
+.*         A MODESET MACRO PRIOR TO LOADING THE DEB ADDRESS             01580001
+.*         INTO REGISTER 1. IF KEYADDR OR KEYREG IS NOT CODED, IT  @L8C 01590001
+.*         DEFAULTS TO THE CURRENT KEY.                            @L8A 01600001
+.*                                                                      01610001
+.*            SAVREG= IS A KEYWORD PARAMETER WHICH MAY BE USED TO       01620001
+.*         SPECIFY A REGISTER TO BE USED TO SAVE REGISTER 2.            01630001
+.*         REGISTER 2 WILL BE RESTORED AT THE END OF THE MACRO.         01640001
+.*                                                                1@L8a 01650001
+.*         RB=is a keyword parameter which can be a label or      1@L8a 01660001
+.*            register. If specifying a register, the register    1@L8a 01670001
+.*            should contain the address of the RB.  Specify the  1@L8a 01680001
+.*            mainline's RB if unlocking from recovery if not     1@L8a 01690001
+.*            running under the mainline's RB (as would be the    1@L8a 01700001
+.*            case for an ESTAE-type recovery routine).           1@L8a 01710001
+.*                                                                      01720001
+.*                                                                1@L8a 01730001
+.*         DEBADDR=is a keyword parameter which can be a label or 1@LAa 01740001
+.*            register. If specifying a register, the register    1@LAa 01750001
+.*            should contain the address of the DEB. It is a      1@LAa 01760001
+.*            required keyword when the positional control block  1@LAa 01761001
+.*            address is not coded. It is optional otherwise.     1@LAa 01762001
+.*                                                                      01763001
+.*         FOR BRANCH=YES:                                              01764001
+.*            REGISTERS 1, 2, 10, 11, 14, 15, AND &SAVREG MUST NOT      01765001
+.*         BE USED FOR CBAD, TCBADDR, OR KEYADDR!KEYREG.                01766001
+.*            REGISTERS 10, 11, AND 14 WILL BE UNPREDICTABLY            01767001
+.*         ALTERED.                                                @04C 01768001
+.*            REGISTER 2 WILL BE UNPREDICTABLY ALTERED IF SAVREG        01769001
+.*         IS NOT USED.                                                 01770001
+.*            REGISTER 1 WILL CONTAIN THE ADDRESS OF THE DEB.           01780001
+.*            REGISTER 15 WILL CONTAIN 0 IF THE DEB IS VALID,           01790001
+.*         4 IF THE DEB IS NOT VALID, OR 16 IF THE DEB DOES NOT         01800001
+.*         POINT TO THE DCB.                                            01810001
+.*            A PROGRAM CHECK MAY OCCUR IF THE WRONG USER KEY           01820001
+.*         IS PROVIDED.                                                 01830001
+.*                                                                      01840001
+.*      OUTPUT = INTERFACE TO SVC 117                                   01850001
+.*                                                                      01860001
+.* EXIT-NORMAL = MEXIT OR MEND STATEMENT                                01870001
+.*                                                                      01880001
+.* EXIT-ERROR = ERROR MESSAGES:                                         01890001
+.*                                                                      01900001
+.*      IGG205  THE MF KEYWORD VALUE MUST BE L OR OMITTED               01910001
+.*      IGG205  THE BRANCH KEYWORD VALUE MUST BE NO, YES or OMITTED     01920001
+.*      IGG205  THE AM KEYWORD VALUE MUST BE SAM, BPAM, EXCP, VSAM,     01930001
+.*              SUBSYS, BDAM, TAM, TCAM, TCAMAP, GAM or ISAM            01940001
+.*      IGG205  THE TYPE KEYWORD VALUE MUST BE ADD, ADDLOCK, DELETE,    01950001
+.*              UNLOCKDELETE, PURGE                                @L9C 01960001
+.*      MNOTE 8,THE DEBCHK MACRO DOES NOT SUPPORT SYSSTATE         @L1A 01970001
+.*              AMODE64=YES                                        @L1A 01980001
+.*      MNOTE 8,THE DEBCHK MACRO DOES NOT SUPPORT SYSSTATE         @L1A 01990001
+.*              ASCENV=AR OR ANY                                   @L1A 02000001
+.*                                                                      02010001
+.* EXTERNAL REFERENCES = NONE                                           02020001
+.*                                                                      02030001
+.*      ROUTINES = NONE                                                 02040001
+.*                                                                      02050001
+.*      DATA AREAS = NONE                                               02060001
+.*                                                                      02070001
+.*      CONTROL BLOCKS = NONE                                           02080001
+.*                                                                      02090001
+.* TABLES = NONE                                                        02100001
+.*                                                                      02110001
+.* MACROS = IGGERMAC                                               @L1A 02120001
+.*          IHBINNRA                                                    02130001
+.*          MODESET                                                @L9A 02140001
+.*                                                                      02150001
+.* CHANGE ACTIVITY =                                                    02160001
+.*                                                                      02170001
+.*       MACRO DELETIONS/CHANGES FOR HDP1102                            02180001
+.*$01=OZ64153,HDP1102,,FERV: AIF (T'KEYADDR NE '0') STMT INCORRECT @01A 02190001
+.*$02=OZ94112,HDP1102,,ISGRJV: ABEND0C4, BRANCH ENTRY, 31 BIT MODE @02A 02200001
+.*$03=OY32791,HDP3330,910522,SJPLJAA: ADD ADDITIONAL KEYWORD OPTION@03A 02210001
+.*$04=OW33030,HDZ11D0,980415,SJPLLLL: ADD KEYWORD 'KEYREG'         @04A 02220001
+.*$05=OW33082,HDZ11D0,980428,SJPLGEC: AE OW33030                   @05A 02230001
+.*$L1=64BIT,HDZ1D10,20101115,SVLWER:64 bit message                 @L1A 02240001
+.*$L6=NDEBCKP,HDZ2210,110530,SJPLJAL: PURGE=FORCE FUNCTION         @L6A 02250001
+.*$L7=K210164,HDZ2210,110530,SJPLJAL: PURGE=FORCE FUNCTION         @L7A 02260001
+.*$L8=OA53955,HDZ2230,MAY2017,SVLTHN: DEB Lock support             @L8A 02270001
+.*$L9=OA53955,HDZ2230,20170608,SVLWER: DEB Lock support, use rel.  @L9A 02280001
+.*                                    branching & more efficient        02290001
+.*                                    instructions                      02300001
+.*$LA=OA53955,HDZ2230,JUN2017,SVLTHN: For Branch, AR0 TCB address  @LAA 02310001
+.*$LA=OA53955,HDZ2230,JUN2017,SVLTHN: HiWord Reg1=DEB. LoWord=DCB.1@LAA 02320001
+.*    W202365                         TCBADDR optional for locks. 1@LAA 02330001
+.*$LB=W209787,HDZ2230,JUN2017,SVLTHN: Fix to recompile IFG0TC0A    @LBA 02331001
+.*$LB=W226750,HDZ2230,JAN2018,SVLTHN: Add IGGERMAC and IHBERMAC 2/1@LBA 02332001
+.*$06=OA56110,HDZ2230,SEP2018,SVLTHN: PE to COREQ ISAM FIX OA56018 @06A 02332101
+.********************************************************************** 02333001
+.*                                                                      02334001
+.*                       *****************                              02335001
+.*                       *   VARIABLES   *                              02336001
+.*                       *  DECLARATION  *                              02337001
+.*                       *****************                              02338001
+.*                                                                      02339001
+         GBLC  &SYSAM64    GLOBAL VARIABLE SET BY SYSSTATE MACRO   @L1A 02340001
+         GBLC  &SYSASCE    GLOBAL VARIABLE SET BY SYSSTATE MACRO   @L1A 02350001
+         GBLA  &SYSALVL    SYSSTATE sets to current arch. level    @L9A 02360001
+         LCLB  &AM0,&AM1,&AM2,&AM3,&AM4,&AM5,&AM6,&AM7                  02370001
+         LCLB  &TYPEA,&TYPED,&TYPEV,&TYPEP,&ERR                         02380001
+         LCLB  &TYPELO,&TYPEXL,&TYPEUD,&TYPEUL                     @L8A 02390001
+         LCLB  &TYPEALX                                           1@L8A 02400001
+         LCLB  &DEBAD                                             1@LAC 02410001
+         LCLB  &DCBAD                                             1@LAC 02420001
+         LCLB  &TCBAD                                             1@LAC 02430001
+         LCLB  &BRCH                                           @ZA44985 02440001
+         LCLC  &LABEL,&AMFC                                        @L9C 02450001
+         LCLC  &CBSUB,&TCBSUB,&SVEREG                          @ZA44985 02460001
+         LCLA  &A,&AMCode                                          @L9C 02470001
+.*                                                                      02480001
+.*                       **********                                     02490001
+.*                       * VERIFY *                                     02500001
+.*                       *  INPUT *                                     02510001
+.*                       **********                                     02520001
+.*                                                                      02530001
+         SYSSTATE TEST    TEST HOW MACROS ARE TO EXPAND            @L1A 02540001
+         AIF   ('&SYSAM64' EQ 'YES').E0    GO IF AMODE64=YES       @L1A 02550001
+         AIF   (('&SYSASCE' NE '') AND ('&SYSASCE' NE 'P')).E1     @L1A 02560001
+         AIF   (T'&MF EQ 'O').DBCK020   BRANCH IF &MF OMITTED      @L9A 02570001
+         AIF   ('&MF' EQ 'O').DBCK020   BRANCH IF &MF OMITTED           02580001
+         AIF   ('&MF' EQ 'L').DBCK040   BRANCH IF &MF=L           2@LBC 02590001
+         IGGERMAC 205,'MF','L OR OMITTED'  MF must be L or omitted @L9C 02600001
+&ERR     SETB  1                                                        02610001
+.*                                                                      02620001
+.* ----  TEST &CBAD AND &DEBADDR TOGETHER                         1@LAC 02630001
+.DBCK020 AIF   (T'&CBAD EQ 'O').DBCK025 BRANCH IF &CBAD NOT CODED 1@LAC 02640001
+&DCBAD   SETB  1                        DCB ADDRESS DEB CODED 1@LAC     02650001
+.*                                      CONTINUE IF SPECIFIED     1@LAC 02660001
+.DBCK025 ANOP                                                     1@LAC 02670001
+         AIF   (T'&DEBADDR EQ 'O').DBCK030 IF &DEBADDR NOT CODED  1@LAA 02680001
+&DEBAD   SETB  1                           INDICATE DEB CODED 1@LAC     02690001
+.*                                                                      02700001
+.* ----  ESTABLISH AND TEST &BRANCH VALUE                               02710001
+.DBCK030 ANOP                                                  @ZA44985 02720001
+         AIF   (&DCBAD OR &DEBAD).DBCK040  EITHER SPECIFIED, OK   2@LBA 02721001
+         IHBERMAC 194                      Insufficient parameter 2@LBA 02722001
+         MNOTE *,'POSITIONAL AND/OR DEBADDR PARAMETER(S) ARE REQUIRED B*02722101
+               UT NOT SPECIFIED.'                                       02722201
+&ERR     SETB  1                           Set error indicator    2@LBA 02722301
+         AIF   (&ERR).CHKFINAL             Skip all the rest      2@LBA 02722401
+.DBCK040 ANOP                                                     2@LBA 02722501
+         AIF   (T'&BRANCH EQ 'O').SVC7500  IF &BRANCH NOT OMITTED.1@LAC 02722601
+         AIF   ('&BRANCH' EQ 'NO').SVC7500 OR BRANCH=NO. IT'S SVC.1@LAC 02722701
+         AIF   ('&BRANCH' EQ 'YES').BRANCH00 IF &BRANCH=YES    @ZA44985 02722801
+&ERR     SETB  1           SET ERROR INDICATOR                 @ZA44985 02722901
+         IGGERMAC 205,'BRANCH','NO, YES or omitted'                @L9C 02723001
+         AGO   .BRANCH05                                  1@LAC@ZA44985 02724001
+.BRANCH00 ANOP           BRANCH=YES was coded.                 @ZA44985 02725001
+&BRCH    SETB  1                                               @ZA44985 02726001
+.*       FOR BRANCH, DEBADDR= MUST BE REQUIRED FOR NEW TYPES IF   1@LAA 02727001
+.*       POSITIONAL PARM IS NOT CODED.                            1@LAA 02728001
+.*       FOR SVC, DEBADDR= WILL BE OPTIONAL FOR NOW.              1@LAA 02729001
+.*                                                                1@LAA 02730001
+.* ----  ESTABLISH AND SET &TCBADDR VALUE                         1@LAC 02740001
+.BRANCH05 ANOP                                            1@LAC@ZA44985 02750001
+         AIF   (T'&TCBADDR EQ 'O').DBCK125 &TCBADDR NOT SPECIFIED  @L8C 02760001
+&TCBAD   SETB  1                        INDICATE TCBADDR CODED    1@LAC 02770001
+.*                                                                      02780001
+.*       Don't make it an error if KEYADDR or KEYREG not coded.    @L8D 02790001
+.*       Default to not changing the key.                          @L8C 02800001
+         AGO   .DBCK125                                            @L8C 02810001
+.*                                                                      02820001
+.* ----  BRANCH=YES not coded.  Establish and test &AM value.      @L9C 02830001
+.*                                                                      02840001
+.SVC7500 ANOP                                                     1@LAC 02850001
+         AIF   (T'&AM NE 'O').DBCK060   BRANCH IF &AM SPECIFIED         02860001
+         AIF   ('&MF' NE 'L').DBCK120   BRANCH IF NOT LIST FORM         02870001
+         IHBERMAC 1006,AM      OPERAND REQUIRED, NOT SPECIFIED          02880001
+&ERR     SETB  1                                                        02890001
+         AGO   .CHKFINAL                                         1@LAC  02900001
+.DBCK060 ANOP                                                           02910001
+&AMFC    SETC  '&AM'(1,1)               FIRST CHARACTER OF &AM          02920001
+         AIF   ('&AMFC' NE '(').DBCK080 BRANCH IF &AM TO BE CALCULATED  02930001
+         AIF   ('&MF' EQ 'L').DBCK100   BRANCH IF LIST FORM             02940001
+         AGO   .DBCK120                 &AM IS VALID                    02950001
+.DBCK080 ANOP                                                           02960001
+&AM0     SETB  ('&AM' EQ 'ISAM' OR '&AM' EQ 'SUBSYS' OR                X02970001
+               '&AM' EQ 'TCAMAP')                               Y30ASJC 02980001
+&AM1     SETB  ('&AM' EQ 'BDAM')                                        02990001
+&AM2     SETB  ('&AM' EQ 'SAM' OR '&AM' EQ 'BPAM')                      03000001
+&AM3     SETB  ('&AM' EQ 'TAM')                                         03010001
+&AM4     SETB  ('&AM' EQ 'GAM')                                         03020001
+&AM5     SETB  ('&AM' EQ 'TCAM' OR '&AM' EQ 'TCAMAP')            YM2921 03030001
+&AM6     SETB  ('&AM' EQ 'EXCP')                                Y30ASJC 03040001
+&AM7     SETB  ('&AM' EQ 'VSAM' OR '&AM' EQ 'SUBSYS')                   03050001
+         AIF   (&AM0 OR &AM1 OR &AM2 OR &AM3 OR &AM4 OR &AM5 OR &AM6   X03060001
+               OR &AM7).DBCK120 BRANCH IF &AM VALID                     03070001
+.DBCK100 ANOP        Complain and show valid values in MNOTE.           03080001
+&ERR     SETB  1                        SET ERROR INDICATOR             03090001
+         IGGERMAC 205,'AM','SAM, BPAM, EXCP, VSAM, SUBSYS, BDAM, TAM, T*03100001
+               CAM, TCAMAP, GAM or ISAM'                           @L9C 03110001
+.* ----  ESTABLISH AND TEST &TYPE VALUE                                 03120001
+.DBCK120 AIF   ('&MF' EQ 'L').CHKFINAL  BRANCH IF LIST FORM       1@LAC 03130001
+&TYPEA   SETB  ('&TYPE' EQ 'ADD')                                       03140001
+&TYPED   SETB  ('&TYPE' EQ 'DELETE')                                    03150001
+&TYPEP   SETB  ('&TYPE' EQ 'PURGE')                                     03160001
+&TYPEALX SETB  ('&TYPE' EQ 'ADDLOCK')                              @L8A 03170001
+&TYPEUD  SETB  ('&TYPE' EQ 'UNLOCKDELETE')                         @L8A 03180001
+.*       LOCK, LOCKEXCL, UNLOCK, VERIFY APPLICABLE TO BOTH SVC     @L8A 03190001
+.DBCK125 ANOP                        AND BRANCH ENTRY.             @L8A 03200001
+&TYPELO  SETB  ('&TYPE' EQ 'LOCK')                                 @L8A 03210001
+&TYPEUL  SETB  ('&TYPE' EQ 'UNLOCK')                               @L8A 03220001
+&TYPEXL  SETB  ('&TYPE' EQ 'LOCKEXCL')                             @L8A 03230001
+&TYPEV   SETB  ('&TYPE' EQ 'VERIFY' OR T'&TYPE EQ 'O')                  03240001
+.*                                      BRANCH IF NO ERROR         @L8C 03250001
+         AIF   (&TYPEA OR &TYPED OR &TYPEV OR &TYPEP).VFYOLDTYPE  1@LAC 03260001
+         AIF   (&TYPELO OR &TYPEUL OR &TYPEXL).VFYNEWLOCK         1@LAA 03270001
+         AIF   (&TYPEUD OR &TYPEALX).VFYOLDTYPE                   1@LAA 03280001
+         AIF   (&BRCH).BRANCHERR                                  1@LAA 03290001
+         IGGERMAC 205,'TYPE','ADD, ADDLOCK, DELETE, UNLOCKDELETE, PURGEX03300001
+               , LOCK, LOCKEXCL, UNLOCK'                                03310001
+&ERR     SETB  1                       Set error indicator        1@LAA 03320001
+         AGO   .VFYNEWLOCK             Go check other errors      1@LAA 03330001
+.BRANCHERR  ANOP                       ERROR MESSAGE FOR BRANCH   1@LAA 03340001
+         IGGERMAC 205,'TYPE','LOCK, LOCKEXCL, UNLOCK'                   03350001
+.*                                   Complain & show valid values  @L9C 03360001
+&ERR     SETB  1                        Set error indicator        @L9C 03370001
+.* ----  SVC AND BRANCH: VALIDATE &CBAD-DCB AND &DEBADDR-DEB      1@LAC 03380001
+.*       BRANCH: PRINT ERROR IF EITHER DEBADDR= OR POSITIONAL IS  1@LAC 03390001
+.*               OMITTED. FOR VERIFY, DEBADDR IS OPTIONAL.        1@LAC 03400001
+.*               VERIFY OPTIONAL B/C SOME VERIFY CALLERS WILL NOT 1@LAC 03410001
+.*               BE AFFECTED AND NO NEED TO UPDATE.               1@LAC 03420001
+.*       SVC   : DEB IS OPTIONAL FOR TYPES: LOCK, LOCKEXCL,       1@LAC 03430001
+.*               AND UNLOCK. POSITIONAL &CBAD IS REQUIRED FOR ALL 1@LAC 03440001
+.*               OLD AND NEW TYPES(ADDLOCK, UNLOCKDELETE)         1@LAC 03450001
+.VFYNEWLOCK ANOP                        VERIFY NEW TYPES          1@LAA 03460001
+         AIF   (NOT &BRCH).CHKFINAL     GO VALIDATE SVC FOR DEB   1@LAA 03470001
+.*       TYPE IS LOCK, LOCKEXCL, or UNLOCK:                       1@LAA 03480001
+.*       BRANCH: FOR VERIFY, DEBADDR= CAN BE OPTIONAL.            1@LAA 03490001
+         AIF   (&DEBAD).CHKFINAL        DEBADDR=, CONTINUE NOW    1@LAA 03500001
+         AIF   (&DCBAD).CHKFINAL        DCB passed, continue now  1@LAA 03510001
+.*       BRANCH: BOTH DCB and DEB are omitted, print error        1@LAA 03520001
+&ERR     SETB  1                        NO DEBADDR=, SET ERROR    1@LAA 03530001
+         IHBERMAC 1003,POSTIONAL,DEBADDR   Either are incorrect   2@LBC 03540001
+         AGO   .CHKFINAL                                          1@LAA 03550001
+.* ----  SVC AND BRANCH: VALIDATE &CBAD FOR EXISTING TYPES:       1@LAA 03560001
+.*                       ADD,VERIFY,DELETE,PURGE. FAIL IF OMITTED.1@LAA 03570001
+.*       SVC   : DEBADDR= IS OPTIONAL, BUT POSITIONAL IS REQUIRED 1@LAA 03571001
+.VFYOLDTYPE ANOP                        VERIFY EXISTING TYPE.     1@LAA 03572001
+         AIF   (NOT &BRCH).VFYPOSPARM   GO CHECK DCB PARM FOR SVC 1@LAA 03573001
+.* ----  TYPE=VERIFY WITHOUT TCBADDR= SPECIFIED, PRINT ERROR MSG. 1@LAA 03574001
+         AIF   (&TCBAD OR NOT &TYPEV).VFYPOSPARM                  1@LAA 03575001
+         IHBERMAC 1006,TCBADDR OPERAND REQUIRED, NOT SPECIFIED @ZA44985 03576001
+.VFYPOSPARM ANOP                        VERIFY EXISTING TYPE.     1@LAA 03577001
+.* ----  TYPE=VERIFY WITH DEBADDR= CODED, FAILED COMPILATION.     1@LAA 03578001
+         AIF   (NOT &DEBAD).VFYDCBTYPE                            1@LBA 03579001
+         IGGERMAC 206,'DEBADDR=','ADD, ADDLOCK, UNLOCKDELETE,          *03580001
+               DELETE, VERIFY, and PURGE.'                              03581001
+.*                                   Complain & show valid values a@LAA 03582001
+&ERR     SETB  1                        Set error indicator       a@LAA 03583001
+.VFYDCBTYPE ANOP                        VERIFY EXISTING TYPE.     1@LAA 03584001
+.* ----  OLD TYPES MUST HAVE POSITIONAL SPECIFIED AS BEFORE       1@LAA 03584101
+         AIF   (&DCBAD).CHKFINAL        POSITIONAL SPECIFIED, OK. 1@LAA 03584201
+&ERR     SETB  1                        NOT SPECIFIED, SET ERROR  1@LAA 03584301
+         IHBERMAC  2                                                    03584401
+.CHKFINAL   ANOP                        VERIFY EXISTING TYPE.     1@LAA 03584501
+         AIF   (NOT &ERR).DBCK220       CONTINUE IF NO SYNTAX ERRORS    03584601
+.*                                      GENERATE NAME IF NO CODE GENNED 03584701
+.*                                                                      03584801
+.*                       ERROR EXIT                                     03584901
+         AIF   ('&NAME' EQ '').DBCK200  DON'T GENERATE NAME IF NULL@L9C 03585001
+         AIF   ('&MF' NE 'L').DBCK180   BRANCH IF NOT LIST FORM         03585101
+&NAME    DS    0C                                                       03585201
+         MEXIT                                                          03585301
+.DBCK180 ANOP                                                           03585401
+&NAME    DS    0H                                                       03585501
+.DBCK200 MEXIT                                                          03585601
+.*                       ************                                   03585701
+.*                       * GENERATE *                                   03585801
+.*                       *   CODE   *                                   03585901
+.*                       ************                                   03586001
+.DBCK220 ANOP                                                           03586101
+&LABEL   SETC  '&NAME'                  SET LABEL FOR FIRST GENERATED   03586201
+.*                                      LINE OF CODE                    03586301
+         AIF   (&BRCH).BRANCH50         GO TO BRANCH ENTRY CODE   1@LAC 03586401
+         AIF   ('&MF' EQ 'L').DBCK340   GO TO  IF LIST FORM       1@LAC 03586501
+.*----------------------------------------------------------------1@LAC 03586601
+.* SVC PATH: BEGIN TO GENERATE CODE FOR SVC PATH                  1@LAC 03586701
+.*----------------------------------------------------------------1@LAC 03586801
+.*   TYPES:              REGISTER-0                               1@LAC 03586901
+.* 1 VERIFY:             x'....0000'                              1@LAC 03587001
+.* 2 LOCK:               x'....0100' or 256                       1@LAC 03588001
+.* 3 UNLOCK:             x'....0200' or 512                       1@LAC 03589001
+.* 4 LOCKEXCL:           x'....0300' or 768                       1@LAC 03590001
+.* 5 ADD:                x'....0001'                              1@LAC 03600001
+.* 6 ADDLOCK:            x'....0101' or 257                       1@LAC 03610001
+.* 7 DELETE:             x'....0002'                              1@LAC 03620001
+.* 8 UNLOCKDELETE:       x'....0202' or 514                       1@LAC 03630001
+.* 9 PURGE:              x'....0003'                              1@LAC 03640001
+.*10 PURGE=FORCE:        x'....0004'                              1@LAC 03650001
+.SVC117  ANOP                           BEGIN OF SVC GNERATED CODE1@LAC 03660001
+         AIF   (&TYPEV).DBCK240         BRANCH IF VERIFY                03670001
+&A       SETA  &TYPEA*1+&TYPED*2+&TYPEP*3  SET TYPE VALUE 1,2,or 3      03680001
+&A       SETA  &A+&TYPELO*256              SET LOCK FUNCTION       @L8A 03690001
+&A       SETA  &A+&TYPEUL*512              SET UNLOCK FUNCTION     @L8A 03700001
+&A       SETA  &A+&TYPEUD*514              SET UNLOCK DELETE       @L8A 03710001
+&A       SETA  &A+&TYPEXL*768              SET LOCK LOCKEXCL       @L8A 03720001
+&A       SETA  &A+&TYPEALX*769             SET ADD LOCK EXCLUSIVE 1@L8A 03730001
+         AIF   (T'&SAVREG EQ 'O').DBCK230  SAVREG NOT SUPPLIED    1@LAA 03740001
+         AIF   (&A LE 4).DBCK230           OLD TYPES, SKIP THIS   1@LAA 03750001
+.*  For NEW TYPES, IF SAVREG CODED WITHOUT KEYADDR OR KEYREG,     1@LAA 03760001
+.*  PRINT A WARNING MESSAGE ONLY, BUT DONT FLAG ERROR.            1@LAA 03770001
+         AIF   (T'&KEYREG NE 'O' OR T'&KEYADDR NE 'O').DBCK230    1@LAA 03780001
+         MNOTE *,'SAVREG has no effect because BRANCH=YES is not coded.*03790001
+               '                                                  1@LAA 03800001
+         SPACE 1                                               @ZA44985 03810001
+.DBCK230 ANOP                           CHECK FOR PURGE=FORCE     1@LAA 03820001
+         AIF   ('&A' EQ '3' AND '&PURGE' EQ 'FORCE').PURFORCE     1@LAC 03830001
+.DBCK240 AIF   (T'&AM NE 'O').DBCK260   BRANCH IF &AM SPECIFIED         03840001
+.*  AM was omitted.                                                     03850001
+         AIF   (NOT &TYPEV).DBCK245     BRANCH IF NOT TYPE=VERIFY  @L9A 03860001
+.* ----  AM= OMITTED: TYPE=VERIFY SKIPS AROUND SETTING AM VALUE.  1@LAC 03870001
+&LABEL   SR    0,0                      LOAD TYPE AND AM VALUE          03880001
+&LABEL   SETC  ''                       LABEL NOT TO GEN AGAIN     @L9A 03881001
+         AGO   .SVCSETREG1              GO TO SET REGISTER-1      1@LAC 03881101
+.DBCK245 ANOP                           TYPE is not VERIFY         @L9A 03881201
+&LABEL   LA    0,&A.(,0)                LOAD TYPE VALUE INTO REG 0 @L8C 03881301
+&LABEL   SETC  ''                       LABEL NOT TO BE GENERATED AGAIN 03881401
+         AGO   .SVCSETREG1              GO TO SET REGISTER-1      1@LAC 03881501
+.* ----  BEING TO SET AM TYPE                                     1@LAA 03881601
+.*    Load the access method type value into high order byte of R0.     03881701
+.*           TCAMAP    84        GAM       08                           03881801
+.*           SUBSYS    81        TCAM      04                           03881901
+.*           ISAM      80        EXCP      02                           03882001
+.*           BDAM      40        VSAM      01                           03883001
+.*           SAM/BPAM  20        OMITTED   00                           03884001
+.*           TAM       10                                               03885001
+.*                                                                      03886001
+.DBCK260 AIF   ('&AMFC' NE '(').DBCK340  BRANCH IF TO CALCULATE AM      03887001
+         AIF   ('&AM'(2,1) EQ '(').DBCK320 BRANCH IF AM A REGISTER &L9C 03888001
+.*                                                                      03889001
+.*                       &AM VALUE TO BE INSERTED FROM AN ADDRESS       03890001
+         AIF   (NOT &TYPEV).DBCK300     BRANCH IF NOT VERIFY            03900001
+&LABEL   SR    0,0                      LOAD TYPE VALUE                 03910001
+         AGO   .DBCK305                                            @L9A 03920001
+.DBCK300 ANOP                                                           03930001
+&LABEL   LA    0,&A.(,0)                LOAD TYPE VALUE INTO REG 0 @L8C 03940001
+.DBCK305 ANOP                                                      @L9A 03950001
+&AMFC    SETC  '&AM(1)'                 ADDRESS OF AM VALUE             03960001
+         ICM   0,8,&AMFC                INSERT AM VALUE IN HI BYTE      03970001
+         AGO   .SVCSETREG1              TYPE=VERIFY: GO GEN REG1  1@LAC 03980001
+.*                                                                      03990001
+.*                       &AM VALUE IN A REGISTER                        04000001
+.DBCK320 ANOP                                                           04010001
+&AMFC    SETC  '&AM'(3,K'&AM-4)         REG CONTAINING AM VALUE    @L9C 04020001
+         AIF   (&SYSALVL GE 4).DBCK330  Go if z10 or later         @L9A 04030001
+.*   Avoid loading a register into itself.                         @L9A 04040001
+         AIF   ('15' EQ '&AMFC').DBCK325  Branch if same register  @L9A 04050001
+&LABEL   LR    15,&AMFC                 LOAD AM VALUE              @L9C 04051001
+&LABEL   SETC  ''                       LABEL NOT TO BE GENERATED AGAIN 04052001
+         AGO   .DBCK326                 GO TO SHIFT TO HIGH BYTE   @L9C 04053001
+.DBCK325 AIF   ('&Label' EQ '').DBCK326 Go if no label coded       @L9A 04054001
+&Label   DC    0H'0'                                               @L9A 04055001
+.DBCK326 SLL   15,24(0)                 SHIFT TO HIGH ORDER BYTE   @L9C 04056001
+         AGO   .DBCK360                 Go to shift to high byte   @L9A 04057001
+.DBCK330 ANOP         Get AM from register with newer instruction  @L9A 04058001
+&Label   LA    0,&A             Load TYPE code                     @L9A 04059001
+         RISBG 0,&AMFC,32,39,24 Insert the AM (access method) code @L9A 04060001
+         AGO   .SVCSETREG1      Go to load register 1              @L9A 04070001
+.*                                                                      04080001
+.*                       &AM VALUE TO BE CALCULATED                     04090001
+.DBCK340 ANOP                                                           04100001
+&AMCode  SETA  128*&AM0+64*&AM1+32*&AM2+16*&AM3+8*&AM4+4*&AM5+2*&AM6+1*X04110001
+               &AM7                                                @L9C 04120001
+         AIF   ('&MF' NE 'L').DBCK360   BRANCH IF NOT LIST FORM         04130001
+&NAME    DC    AL1(&AMCode)             Access method code         @L9C 04140001
+         MEXIT                                                          04150001
+.*  &AMCode is 0 if AM is in register.  The user coded AM=((reg)). @L9A 04160001
+.*  The assembler rejects an LLILF value greater than X'7FFFFFFF'. @L9A 04170001
+.DBCK360 ANOP                                                      @L9C 04180001
+         AIF   (&AMCode GT 127).DBCK403                            @L9A 04190001
+&LABEL   LLILF 0,&AMCode*16777216+&A Load AM and TYPE values       @L9C 04200001
+         AGO   .DBCK400                                                 04210001
+.DBCK403 ANOP                                                           04220001
+&LABEL   LLILF 0,(&AMCode-128)*16777216+&A-X'7FFFFFFF'-1 Load AM & TYPE 04230001
+.DBCK400 AIF   ('&AM'(1,2) NE '((').SVCSETREG1 Go if not in reg.   @L9C 04240001
+         OR    0,15                OR AM TYPE INTO REGISTER 0           04250001
+.*                                                                      04260001
+.* SVC PATH TO SET UP REGISTER 1:                                 1@LAA 04270001
+.* ----  LOAD 64-BIT REG 1 WITH DEB AND DCBADDR in &CBAD.         1@LAA 04280001
+.SVCSETREG1 ANOP                                                  1@LAA 04290001
+         AIF   (NOT &DEBAD).SVCNODEB1   DEBADDR= NOT SPECIFIED    1@LAA 04300001
+         AIF   (&TYPELO OR &TYPEUL OR &TYPEXL).SVCLOCK1           1@LAA 04310001
+.*       SKIP GENERATING DEBADDR= CODE FOR ADD, ADDLOCK, DELETE,  1@LAA 04320001
+.*       UNLOCKDELETE, VERIFY, AND PURGE                          1@LAA 04330001
+         AGO   .SVCDCBR1                SKIP TO DCB LOADING       1@LAA 04340001
+.SVCLOCK1   ANOP                        STORE DEB ADDRESS IN HIGH 1@LAA 04350001
+         AIF   ('&DEBADDR'(1,1) NE '(').SVCLMHR1 NOT REG specified1@LAA 04360001
+         AIF   (&SYSALVL GE 4).SVCRISBG Go if z10 or later        1@LAA 04370001
+.* These instructions saved Lo-Word GR1 in Hi-Word GR1. Set DEB   2@LAA 04380001
+.* in Lo-Word. Swap again to set DEB in Hi-Word and restore Lo-Word@LAA 04390001
+         LR    15,1                     Save GR-1 in GR-15        2@LAA 04400001
+         SLLG  1,&DEBADDR(1),32         PUT DEB IN Hi-Word of GR1 2@LAA 04410001
+         LR    1,15                     Restore GR-1 from GR-15   2@LAA 04420001
+         AGO   .SVCDCBR1                GO LOAD LOW-WORD R1 /W DCB1@LAA 04430001
+.SVCRISBG   ANOP                                                  1@LAA 04440001
+         RISBG 1,&DEBADDR(1),0,31,32    STORE DEB IN Hi-Word Reg1 1@LAA 04450001
+         AGO   .SVCDCBR1                GO LOAD LOW-WORD R1 now   1@LAA 04460001
+.SVCLMHR1   ANOP                        STORE DEB ADDRESS IN HIGH 1@LAA 04470001
+         LMH   1,1,&DEBADDR(1)          Put DEB in Hi-Word of GR1 1@LAA 04471001
+         AGO   .SVCDCBR1                GO LOAD LOW-WORD R1 /W DCB1@LAA 04471101
+.SVCNODEB1  ANOP                        STORE DEB ADDRESS IN HIGH 1@LAA 04471201
+         AIF   (NOT(&TYPELO OR &TYPEUL OR &TYPEXL)).SVCDCBR1      1@LAA 04471301
+.*       CLEAR HI-WORG REG-1 FOR TYPE=LOCK,LOCKEXCL,UNLOCK        1@LAA 04471401
+         NIHF  1,0                      Indicate no DEBADDR passed1@LAA 04471501
+.* ----  LOAD CB ADDRESS WITH DCB ADDRESS AND SVC ROUTING ID      1@LAA 04471601
+.*       SVC PATH: DCB IS REQUIRED BUT DEB IS OPTIONAL.           1@LAA 04471701
+.SVCDCBR1   ANOP                        STORE DCB ADDRESS IN LOW  1@LAA 04471801
+         AIF   (NOT(&TYPELO OR &TYPEUL OR &TYPEXL)).SVCNOCBAD     5@LAA 04471901
+         AIF   (&DCBAD).SVCNOCBAD                                 5@LAA 04472001
+         XR    1,1              Indicate CBAD omitted             5@LAA 04472101
+.SVCNOCBAD ANOP                                                   5@LAA 04472201
+         IHBINNRA &CBAD                 LOAD DCB ADDR INTO REG-1  1@LAC 04472301
+.DBCK430 AIF   ('&DEBTCB' NE 'YES').DBCK440 IS DEBTCB PASSED       @L8C 04472401
+         LA    1,1(,1)                  PLACE ONE IN LOW ORDER BIT @L9C 04472501
+.DBCK440 ANOP                          CONTINUE                    @03A 04472601
+         AIF   (T'&RBADDR EQ 'O').DBCK450 IF RB= not coded, branch @L8A 04472701
+         AIF   ('&RBADDR'(1,1) NE '(').DBCK445  NOT REG specified  @L8A 04472801
+         SAR   1,&RBADDR(1)     Set RB address into AR1            @L8A 04472901
+         AGO   .DBCK460         Continue with existing path        @L8A 04473001
+.DBCK445 ANOP                   RB= is not a register specified    @L8A 04473101
+         LAM   1,1,&RBADDR(1)   Set RB address into Access Reg-1   @L8A 04473201
+         AGO   .DBCK460         Continue with existing path        @L8A 04473301
+.DBCK450 AIF   (NOT(&TYPELO OR &TYPEUL OR &TYPEXL)).DBCK460       1@LAA 04473401
+.*       TYPE=LOCK,LOCKEXCL,UNLOCK: Set current RB(AR1=0)         1@LAA 04473501
+         LAE   1,0(1,0)         Indicate current RB used          1@LAA 04473601
+.DBCK460 LA    15,2(,0)         DEBCHK SVC ID                      @L8C 04473701
+         SVC   117                                                      04473801
+         MEXIT                                                 @ZA44985 04473901
+.*                       ************                          @ZA44985 04474001
+.*                       * GENERATE *                          @ZA44985 04475001
+.*                       *  BRANCH  *                          @ZA44985 04476001
+.*                       *   ENTRY  *                          @ZA44985 04477001
+.*                       *   CODE   *                          @ZA44985 04478001
+.*                       ************                          @ZA44985 04479001
+.BRANCH50 ANOP                                                    1@LAC 04480001
+         AIF   (T'&NAME EQ 'O').DBCK520  LABEL NOT SUPPLIED    @ZA44985 04490001
+&NAME    DS    0H                                              @ZA44985 04500001
+.DBCK520 ANOP                                                  @ZA44985 04510001
+         AIF   (NOT(&TYPELO OR &TYPEUL OR &TYPEXL)).DBCK525       4@LAA 04520001
+         AIF   (T'&KEYREG EQ 'O' AND T'&KEYADDR EQ 'O').DBCK525   4@LAA 04530001
+         IGGERMAC 206,'KEYREG OR KEYADDR','TYPE=LOCK, LOCKEXCL OR      *04540001
+               UNLOCK'                                            3@LAA 04550001
+.DBCK525 AIF   (T'&SAVREG EQ 'O').DBCK540  SAVREG NOT SUPPLIED    4@LAA 04560001
+         AIF   (T'&KEYREG NE 'O' OR T'&KEYADDR NE 'O').DBCK530   1@LAA  04570001
+         ANOP                                                  @ZA44985 04580001
+         MNOTE *,'SAVREG IS CODED WITHOUT KEYREG OR KEYADDR. SAVREG IS *04590001
+               IGNORED IN THIS INVOCATION OF DEBCHK MACRO'        1@LAA 04600001
+         SPACE 1                                               @ZA44985 04610001
+         AGO   .DBCK540         GO CHECKING KEYREG AND KEYADDR     @L8A 04611001
+.DBCK530 LR    &SAVREG,2                                          3@LAA 04612001
+.DBCK540 ANOP                                                  @ZA44985 04613001
+         AIF   (T'&KEYREG EQ 'O').DBCK545  KEYREG NOT SUPPLIED    4@L8A 04614001
+         MODESET KEYREG=&KEYREG,                                       *04615001
+               WORKREG=15,                                             *04616001
+               SAVEKEY=(2)      SET TO USERS KEY                   @04A 04617001
+         AGO   .DBCK552         GO CHECKING TYPE=LOCK or UNLOCK   1@L8C 04617101
+.DBCK545 AIF   (T'&KEYADDR EQ 'O').DBCK552  KEYREG NOT SUPPLIED   4@L8A 04617201
+         MODESET KEYADDR=&KEYADDR,                                     *04617301
+               WORKREG=15,                                             *04617401
+               SAVEKEY=(2)      SET TO USERS KEY                  4@L8C 04617501
+.DBCK552 ANOP                                                  @ZA44985 04617601
+         AIF   ((NOT &TYPELO) AND (NOT &TYPEUL) AND                    x04617701
+                (NOT &TYPEXL)).BRANCHREG1                         1@LAA 04617801
+.* ----  PUT AM TYPE IN REG-0 HERE IF WE DO IT IN THE FUTURE      1@LAA 04617901
+.DBCK553 ANOP                   TYPE=LOCK or UNLOCK specified     1@l8A 04618001
+&A       SETA  &TYPELO*256      SET LOCK FUNCTION                 1@L8A 04619001
+&A       SETA  &A+&TYPEUL*512   SET UNLOCK FUNCTION               1@L8A 04620001
+&A       SETA  &A+&TYPEXL*768   SET LOCK LOCKEXCL                  @l8A 04630001
+         LA    0,&A.(,0)        LOAD TYPE VALUE INTO REGISTER0    1@L8A 04640001
+.* ----  PUT DEB ADDRESS IN HIGH-WORD REG1, DCB LOW-WORD REG1     1@LAA 04650001
+.*       WE CHECKS BECAUSE TYPE=VERIFY IS OPTIONAL WITH DEBADDR=. 1@LAA 04660001
+.BRANCHREG1 ANOP                LOAD TYPE VALUE INTO REGISTER0    1@L8A 04670001
+         AIF   (NOT &DEBAD).BRANCHDCB1  DEBADDR= NOT SPECIFIED    1@LAA 04680001
+         AIF   (&TYPEV).BRANCHDCB1      VERIFY, SKIP AROUND       2@LAA 04690001
+         AIF   ('&DEBADDR'(1,1) NE '(').BRANCHDEB1 NOT REG FORMAT 1@LAA 04700001
+         AIF   (&SYSALVL GE 4).BRANCHRISBG Go if z10 or later     1@LAA 04710001
+         LR    15,1                     Save GR-1 in GR-15        2@LAA 04720001
+         SLLG  1,&DEBADDR(1),32         PUT DEB IN Hi-Word of GR1 2@LAA 04730001
+         LR    1,15                     Restore GR-1 from GR-15   2@LAA 04740001
+         AGO   .BRANCHDCB1              GO LOAD LOW-WORD R1 /W DCB1@LAA 04750001
+.BRANCHRISBG ANOP                                                       04760001
+         RISBG 1,&DEBADDR(1),0,31,32    STORE DEB IN Hi-Word Reg1 1@LAA 04770001
+         AGO   .BRANCHDCB1              GO LOAD LOW-WORD R1 NOW   1@LAA 04780001
+.BRANCHDEB1 ANOP                        STORE DEB ADDRESS IN HIGH 1@LAA 04790001
+         LMH   1,1,&DEBADDR(1)          Put DEB in Hi-Word of GR1 1@LAA 04800001
+.BRANCHDCB1 ANOP                                                  1@LAA 04810001
+         AIF   (&DCBAD).BRANCHDCB2  &CBAD SPECIFIED, THEN SET UP  1@LAA 04820001
+         XR    1,1              Indicate CBAD omitted             1@LAA 04830001
+         AGO   .BRANCHTCB       GO TO SET UP TCB NEXT             1@LAA 04840001
+.BRANCHDCB2 ANOP                        STORE DEB ADDRESS IN HIGH 1@LAA 04850001
+         AIF   (&TYPEV).BRANCHDCB3      TYPE=VERIFY, SKIP NIHF    2@LAA 04860001
+         AIF   (&DEBAD).BRANCHDCB3      DEBADDR= specified        2@LAA 04870001
+         NIHF  1,0                      Indicate no DEBADDR passed1@LAA 04880001
+.BRANCHDCB3 ANOP                        STORE DEB ADDRESS IN HIGH 1@LAA 04890001
+         AIF   ('&CBAD'(1,1) EQ '(').BRANCHR1 REGISTER FORM       1@LAC 04900001
+         L     1,&CBAD          LOAD CONTROL BLOCK DCB ADDRESS    1@LAC 04910001
+         AGO   .BRANCHVFY0      CONTINUE CHECKING TYPE=VERIFY     2@LAA 04920001
+.BRANCHR1   ANOP                                                  1@LAA 04930001
+&CBSUB   SETC  '&CBAD'(2,K'&CBAD-2)                            @ZA44985 04940001
+         AIF   ('&CBSUB' EQ '1').BRANCHTCB SKIP B/C (1) is DCB    1@LAA 04950001
+         LR    1,&CBSUB         GET CONTROL BLOCK DCB ADDRESS     1@LAC 04960001
+.BRANCHVFY0 ANOP                                                  2@LAC 04970001
+         AIF   (NOT &TYPEV).BRANCHTCB  NOT VERIFY, GO CHECK TCB   2@LAA 04980001
+         ICM   1,B'1110',45(1)  LOAD DEB ADDRESS                   @02C 04990001
+         SRL   1,8              ZERO HIGH ORDER BYTE               @02C 05000001
+.* ----  BEGIN GENERATING TCBADDR= KEYWORD:                       1@LAA 05010001
+.BRANCHTCB  ANOP                SET UP TCB IN AR-0                1@LAA 05011001
+         AIF   (NOT &TCBAD).DBCK615 IF TCBADDR=NOT CODED, GO DOWN 1@LAA 05011101
+         AIF   ('&TCBADDR'(1,1) NE '(').DBCK600  IF NOT REG       5@L8C 05011201
+&TCBSUB  SETC  '&TCBADDR'(2,K'&TCBADDR-2)                      @ZA44985 05011301
+         AIF   (&TYPEV).BRANCHVRF1 FOR VERIFY TYPE, USE R10       1@LAA 05011401
+         SAR   0,&TCBSUB        Set TCB address into AR0       @L8A@LAA 05011501
+         AGO   .DBCK620                                        @ZA44985 05011601
+.BRANCHVRF1 ANOP                VERIFY TYPE                    @ZA44985 05011701
+         LR    10,&TCBSUB       LOAD TCB ADDRESS INTO R10      @ZA44985 05011801
+         AGO   .DBCK620                                        @ZA44985 05011901
+.DBCK600 ANOP                                                  @ZA44985 05012001
+         AIF   (&TYPEV).BRANCHVRF2 FOR VERIFY TYPE, USE R10       1@LAA 05012101
+         LAM   0,0,&TCBADDR(1)  Load TCB address into AR0      @L8A@LAA 05012201
+         AGO   .DBCK620                                        @ZA44985 05012301
+.BRANCHVRF2 ANOP                VERIFY TYPE                    @ZA44985 05012401
+         L     10,&TCBADDR      LOAD TCB ADDRESS INTO R10      @ZA44985 05012501
+         AGO   .DBCK620                                        @ZA44985 05012601
+.DBCK615 AIF   (NOT(&TYPELO OR &TYPEUL OR &TYPEXL)).DBCK623       1@LAA 05012701
+.*       TYPE=LOCK,LOCKEXCL,UNLOCK: Set current TCB=PSATOLD(x21C) 1@LAA 05012801
+         LAM   0,0,X'21C'(0)    Indicate current TCB (PSATOLD)    1@LAA 05012901
+.* ----  BEGIN GENERATING RB= KEYWORD:                            1@LAA 05013001
+.DBCK620 ANOP                                                  @ZA44985 05014001
+         AIF   (T'&RBADDR EQ 'O').DBCK622 IF RB= not coded,branch 1@LAA 05015001
+         AIF   ('&RBADDR'(1,1) NE '(').DBCK621  NOT REG specified 3@L8A 05016001
+         SAR   1,&RBADDR(1)     Set RB address into AR1           2@L8A 05017001
+         AGO   .DBCK623         Continue with existing path       2@L8A 05018001
+.DBCK621 ANOP                   RB= is not a register specified   3@L8A 05019001
+         LAM   1,1,&RBADDR(1)   Set RB address into Access Reg-1   @L8A 05020001
+         AGO   .DBCK623         Continue with existing path       1@LAA 05030001
+.DBCK622 AIF   (NOT(&TYPELO OR &TYPEUL OR &TYPEXL)).DBCK623       1@LAA 05040001
+.*       TYPE=LOCK,LOCKEXCL,UNLOCK: Set current RB(AR1=0)         1@LAA 05050001
+         LAE   1,0(1,0)         Indicate current RB               1@LAA 05060001
+.* ----  BEGIN GENERATING 31-bit or 24-bit ADDRESSING MODE:       1@LAA 05070001
+.DBCK623 ANOP                                                     2@L8A 05080001
+         L     15,16(,0)        GET ADDRESS OF CVT             @ZA60608 05090001
+         L     15,328(,15)      GET ADDR OF CVT EXTENSION      @ZA60608 05100001
+         L     15,8(,15)        ADDR OF DEBCHK ENTRY IFGDEBVR  @ZA60608 05110001
+         AIF   ((NOT &TYPELO) AND (NOT &TYPEUL) AND                    x05120001
+                (NOT &TYPEXL)).DBCK630                            1@L8A 05130001
+         L     15,12(,15)       ADDR OF DEBCHK 31-AMODE ENTRY     1@L8A 05140001
+         BASSM 14,15                                              5@L8A 05150001
+         AGO   .DBCK670         RESTORE KEYREG/KEYADDR/SAVREG     7@L8A 05160001
+.DBCK630 BASR  14,15            DO DEBCHK                         1@L9C 05170001
+         J     IHB&SYSNDX.A     GOOD RETURN                    @ZA44985 05180001
+         J     IHB&SYSNDX.B     DEB IS BAD                     @ZA44985 05190001
+IHB&SYSNDX.A DS 0H                                             @ZA44985 05200001
+         AIF   (&DEBAD).BRANCHNOVFY DONT GEN THESE CHECKS         1@LAA 05201001
+         AIF   ('&CBAD'(1,1) EQ '(').DBCK640  REGISTER FORM    @ZA44985 05202001
+         L     10,&CBAD         DCB ADDRESS IN REG 10          @ZA44985 05203001
+         CLM   10,7,25(1)                                      @ZA60608 05204001
+*                               DOES DEB CHAIN TO DCB?         @ZA44985 05205001
+         AGO   .DBCK660                                        @ZA44985 05206001
+.DBCK640 ANOP                                                  @ZA44985 05207001
+         CLM   &CBSUB,7,25(1)   DOES DEB CHAIN TO DCB?         @ZA60608 05208001
+.DBCK660 ANOP                                                  @ZA44985 05209001
+         JE    IHB&SYSNDX.B     YES, DEB IS GOOD                   @L9C 05210001
+         LA    15,16            NO, SET ERROR CODE IN REG 15   @ZA44985 05220001
+.BRANCHNOVFY   ANOP                                               1@LAA 05230001
+IHB&SYSNDX.B DS 0H                                                 @L9C 05240001
+.*  If KEYREG and KEYADDR were omitted, we did not change key.     @L9A 05250001
+.DBCK670 ANOP                                                     7@L8A 05260001
+         AIF   (T'&KEYREG EQ 'O' AND T'&KEYADDR EQ 'O').DBCK700         05270001
+.*   RETURN TO THE KEY IN EFFECT WHEN THE MACRO WAS INVOKED.   @ZA44985 05280001
+         MODESET KEYADDR=(2)                                   @ZA44985 05290001
+.DBCK675 AIF   (T'&SAVREG EQ 'O').DBCK680  SAVREG NOT SUPPLIED     @L9C 05300001
+         LR    2,&SAVREG                                       @ZA44985 05310001
+&SVEREG  SETC  '&SAVREG'                                       @ZA44985 05320001
+         AGO   .DBCK700                                        @ZA44985 05330001
+.DBCK680 AIF   (&TYPELO OR &TYPEUL OR &TYPEXL).DBCK700             @L9A 05340001
+         MNOTE *,'REGISTER-2 WAS CHANGED BY THIS INVOCATION OF THE DEBC*05350001
+               HK MACRO'                                       @ZA44985 05360001
+         SPACE 1                                               @ZA44985 05370001
+.DBCK700 ANOP              Exit this macro                         @L9C 05380001
+         AIF   (NOT &TYPEV).DBCK800                               1@LAA 05390001
+.*   TYPE=VERIFY STILL GOES INTO OLD CODE THAT CHANGED SOME REGS  1@LAA 05400001
+         SPACE 1                                                        05410001
+         MNOTE *,'REGS 1, &SVEREG, 10, 11, 14, AND 15 WERE CHANGED BY T*05420001
+               HIS INVOCATION OF THE DEBCHK MACRO'             @ZA44985 05430001
+.DBCK800 MEXIT             Exit this macro                        1@LAC 05440001
+         SPACE 1                                               @ZA44985 05450001
+.PURFORCE  ANOP     Handle TYPE=PURGE,PURGE=FORCE.                1@LAM 05460001
+&A       SETA  &TYPEP*4         SET AM TYPE                        @L6A 05470001
+&LABEL   LA    0,&A.(,0)        LOAD TYPE VALUE                    @L6A 05480001
+         AIF   ('&CBAD'(1,1) NE '(').DBCK770  IF NOT REGISTER FROM @L9A 05490001
+         AIF   ('&CBAD' EQ '(1)').DBCK770     If register is 1     @L9C 05500001
+         LR    1,&CBAD          DEB ADDRESS IN REG-1               @L6A 05510001
+.DBCK770 ANOP                                                      @L9C 05520001
+         LARL  14,DEBCHK_FPURGE_&SYSNDX POINT TO RETURN ADDRESS    @L6A 05530001
+.* CALLER MUST BE IN 31-BIT MODE.                                  @L7A 05540001
+         BSM   14,0             SAVE ADDRESSING MODE               @L6A 05550001
+         BAKR  14,0             STACK REGS/PSW ETC.                @L6A 05560001
+         SR    13,13            Assume local lock is held          @L6A 05570001
+         TM    PSACLHS4-PSA(0),1    LOCAL/CML HELD?                @LBC 05580001
+         JZ    *+14             BRANCH IF NOT HELD                 @L6A 05590001
+         CLC   PSALOCAL-PSA(4,0),PSAFZERO-PSA(0) LOCAL LOCK HELD?  @L6A 05600001
+         JE    *+8              BRANCH IF LOCAL LOCK HELD          @L6A 05610001
+         LA    13,4(0,0)        LOCAL LOCK NOT HELD. FORCE PURGE   @L6A 05620001
+.*                              REQUIRES HOLDING LOCAL LOCK        @L6A 05630001
+         L     15,16(,0)        GET ADDRESS OF CVT                 @L6A 05640001
+         L     15,328(,15)      GET ADDR OF CVT EXTENSION          @L6A 05650001
+         L     15,8(,15)        ADDR OF DEBCHK ENTRY               @L6A 05660001
+         LA    15,8(,15)        ADDR OF DEBCHK ENTRY +8            @L6A 05661001
+         BASSM 14,15                                               @L6A 05662001
+DEBCHK_FPURGE_&SYSNDX  DS  0H                                      @L6A 05663001
+         MEXIT                                                     @L6A 05664001
+.E0      IGGERMAC 203,DEBCHK    THE DEBCHK MACRO DOES NOT SUPPORT  @L1A 05664101
+         MEXIT                    SYSSTATE AMODE64=YES             @L1A 05664201
+.E1      IGGERMAC 204,DEBCHK    THE DEBCHK MACRO DOES NOT SUPPORT  @L1A 05664301
+         MEXIT                    SYSSTATE ASCENV=AR OR ANY        @L1A 05664401
+         MEND                                                  @ZA44985 05664501

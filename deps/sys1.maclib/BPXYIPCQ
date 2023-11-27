@@ -1,0 +1,576 @@
+*        %GOTO IPCQPRO ;        /* Bilingual header                     00010000
+         MACRO                                                          00020000
+         BPXYIPCQ  &DSECT=YES,&LIST=YES                                 00030000
+         GBLB  &IPCQ411                                                 00040000
+         GBLC  &SYSAM64       Variable set by SYSSTATE AMODE64=YES @D3A 00050000
+         AIF   (&IPCQ411 EQ 1).E411                                     00060000
+&IPCQ411 SETB  1                                                        00070000
+         AIF   ('&LIST' EQ 'YES').A411                                  00080000
+         PUSH  PRINT  BPXYIPCQ: w_getipc return data structure          00090000
+         PRINT OFF                                                      00100000
+         AGO   .A411                                                    00110000
+*                               */                                      00120000
+*%IPCQPRO : ;                                                           00130000
+*/****START OF SPECIFICATIONS****************************************** 00140000
+*    $MAC (BPXYIPCQ) COMP(SCPX1) PROD(BPX):                             00150000
+*01* MACRO NAME: BPXYIPCQ                                               00160000
+*01* DSECT NAME: N/A                                                    00170000
+*01* DESCRIPTIVE NAME: OpenMVS Interprocess Communications w_getipc     00180000
+*                      data return mapping.                             00190000
+*02*   ACRONYM: IPCQ                                                    00200000
+**/                                                                     00210000
+*/*01* PROPRIETARY STATEMENT=                                        */ 00220000
+*/***PROPRIETARY_STATEMENT********************************************/ 00230000
+*/*                                                                  */ 00240000
+*/*                                                                  */ 00250000
+*/* LICENSED MATERIALS - PROPERTY OF IBM                             */ 00260000
+*/* 5694-A01 (C) COPYRIGHT IBM CORP. 1995, 2008                      */ 00280001
+*/*                                                                  */ 00290000
+*/* STATUS= HBB7750                                                  */ 00300001
+*/*                                                                  */ 00310000
+*/***END_OF_PROPRIETARY_STATEMENT*************************************/ 00320000
+*/*                                                                     00330000
+*                                                                       00340000
+*01* EXTERNAL CLASSIFICATION:  GUPI                                     00350000
+*01* END OF EXTERNAL CLASSIFICATION:                                    00360000
+*                                                                       00370000
+*01* FUNCTION:   Mapping of user buffer into which BPX1GET (w_getipc)   00380000
+*                will place status information for InterProcess         00390000
+*                Communication (1) message queues, (2) semaphores,      00400000
+*                (3) shared memory segments, (4) mapped memory          00410000
+*                or (5) overview of the IPC mechanisms                  00420000
+*                all these mechanisms.                                  00430000
+*01* METHOD OF ACCESS:                                                  00440000
+*02*   PL/X:                                                            00450000
+*        %INCLUDE SYSLIB(BPXYIPCQ)                                      00460000
+*02*   ASM:                                                             00470000
+*        BPXYIPCQ DSECT=YES/NO,LIST=YES/NO                              00480000
+*01* POINTED TO BY: Second parameter in call to BPX1GET (w_getipc)      00490000
+*01* CREATED BY:   User                                                 00500000
+*01* DELETED BY:   User                                                 00510000
+*01* STORAGE ATTRIBUTES:  User                                          00520000
+*02*   SUBPOOL:    User                                                 00530000
+*02*   KEY:        User                                                 00540000
+*02*   RESIDENCY:  User                                                 00550000
+*01* SIZE: IPCQ#LENGTH  - third parameter in call to BPX1GET            00560000
+*01* FREQUENCY: 1 IPCQ per call to BPX1GET                              00570000
+*01* SERIALIZATION: N/A                                                 00580000
+*01* DEPENDENCIES:  The offsets of existing fields must not be          00590000
+*                   changed.  Any changes/additions to this             00600000
+*                   mapping will effect the LE __getipc.h header        00610000
+*01* NOTES:  none                                                       00620000
+*01* COMPONENT:  OpenMVS (SCPX1)                                        00630000
+*01* DISTRIBUTION LIBRARY:  AMACLIB                                     00640000
+*01* EYE-CATCHER: None.                                                 00650000
+*01* CHANGE-ACTIVITY:                                                   00660000
+* $D0=DPFA051 HOM1130 940131 PDJM: A051.04 Initial XPG4 IPC             00670000
+* $D0=DWKA301 HBB6608 980914 PDJM: A301 - PLO return data changes       00680000
+* $P1=PYN0220 HBB7708 020301 PDFO: Bilingual fixup                      00690000
+* $D1=DYNA608 HBB7709 020723 PD2R: Map service support (DCR A608.00)    00700000
+* $D2=DYNA567 HBB7708 020430 PDJQ: A567.00 (MLS)                        00710000
+* $D3=DYNA519 HBB7709 000515 PDJC: 64 bit support                       00720000
+* $D4=TJK0554 HBB7709 021025 PDKG: Update for 8 byte messageq types     00730000
+* $P2=ME04180 HBB7730 051110 PDKG: shm addr/pid array                   00731000
+*    =DCRB241 HBB7750 070523 PDGY: Get rid of compiler msg              00732001
+****END OF SPECIFICATIONS*********************************************/ 00740000
+*        %GOTO IPCQPLS ;        /* Bilingual header                     00750000
+.A411    ANOP  ,                                                        00760000
+*********************************************************************** 00770000
+*                                                                     * 00780000
+*  BPXYIPCQ: w_getipc interface mapping                               * 00790000
+*   Used By: BPXGXGET                                                 * 00800000
+*                                                                     * 00810000
+*********************************************************************** 00820000
+         AIF   ('&DSECT' EQ 'NO').B411                                  00830000
+IPCQ          DSECT ,      Interprocess Communications - Query          00840000
+         AGO   .C411                                                    00850000
+.B411    ANOP  ,                                                        00860000
+IPCQ          DS    0D     Interprocess Communications - Query     @D3C 00870000
+.C411    ANOP  ,                                                        00880000
+IPCQLENGTH    DS    F      IPCQ#LENGTH used by system call.  If not     00890000
+*                          equal, check BPXYIPCQ and system levels.     00900000
+IPCQTYPE      DS    CL4    "IMSG", "ISEM", "ISHM", "OVER", "IMAP"       00910000
+IPCQOVER      DS    0D     OVERVIEW MAPPING STARTS HERE                 00920000
+*---------------------------------------------------------------------* 00930000
+*  For IPCQTYPE = OVER, data starts here and the rest of the fields   * 00940000
+*  in this section of code are not filled in.                         * 00950000
+*---------------------------------------------------------------------* 00960000
+IPCQMID       DS    FL4    MEMBER ID                                    00970000
+IPCQKEY       DS    XL4    KEY                                          00980000
+IPCQIPCP      DS    CL20   MAPPED BY BPXYIPCP                           00990000
+IPCQGTIME     DS    XL4    TIME_T OF LAST ...GET()                      01000000
+IPCQCTIME     DS    XL4    TIME_T OF LAST ...CTL()                      01010000
+IPCQTTIME     DS    XL4    TIME_T CHANGED BY TERMINATION                01020000
+*---------------------------------------------------------------------* 01030000
+*  Start of Unique data for IPCQTYPE requested                        * 01040000
+*---------------------------------------------------------------------* 01050000
+IPCQREST      DS    0C     IPCQMSG, IPCQSHM, IPCQSEM, MAPPED MEMORY     01060000
+              EJECT                                                     01070000
+**********************************************************************  01080000
+* Message Queue unique data                                          *  01090000
+**********************************************************************  01100000
+              ORG   IPCQREST                                            01110000
+              DS    0F                                                  01120000
+IPCQBYTES     DS    F      # BYTES OF MESSAGES ON QUEUE                 01130000
+IPCQQBYTES    DS    F      MAX # BYTES OF MESSAGES ALLOWED ON QUEUE     01140000
+IPCQLSPID     DS    F      PID OF LAST MSGSND()                         01150000
+IPCQLRPID     DS    F      PID OF LAST MSGRCV()                         01160000
+IPCQSTIME     DS    F      TIME_T OF LAST MSGSND()                      01170000
+IPCQRTIME     DS    F      TIME_T OF LAST MSGRCV()                      01180000
+IPCQNUM       DS    F      # OF MESSAGES ON QUEUE                       01190000
+IPCQRCNT      DS    F      COUNT OF WAITING MSGRCV                      01200000
+IPCQSCNT      DS    F      COUNT OF WAITING MSGSND                      01210000
+              DS    0CL16  MSGRCV AND MSGSND WAITERS                    01220000
+              DS    0CL8    MSGRCV - WAIT FOR TYPE                      01230000
+IPCQQRPID     DS    F        PROCESS ID                                 01240000
+IPCQQRMSGTYPE DS    F        MESSAGE TYPE                               01250000
+              DS    0CL8    MSGSND - WAIT FOR ROOM TO SEND              01260000
+IPCQQSPID     DS    F        PROCESS ID                                 01270000
+IPCQQSMSGLEN  DS    F        MESSAGE LENGTH                             01280000
+              DS    9CL16  MSGSND AND MSGRCV WAITERS                    01290000
+              DS    0CL8   MESSAGES WAITING TO BE RECEIVED              01300000
+IPCQQMPID     DS    F        PROCESS ID                                 01310000
+IPCQQMMSGTYPE DS    F        MESSAGE TYPE                               01320000
+              DS    9CL8   MESSAGES                                     01330000
+              DS    F      Reserved                               @D3A  01340000
+              DS    0D                                                  01350000
+* The 64 bit time fields will be set for either 31 or 64 bit mode @D4A  01360000
+* Must define storage different, depending on how assembled       @D4A  01370000
+         AIF  ('&SYSAM64' EQ 'YES').AM64A                         @D4A  01380000
+* AMODE 31                                                              01390000
+IPCQSTIME64   DS    2F     TIME64_T OF LAST MSGSND()              @D3A  01400000
+IPCQRTIME64   DS    2F     TIME64_T OF LAST MSGRCV()              @D3A  01410000
+IPCQQRMSGTYPE64 DS  20F    MSGRCV 64 BIT MSG TYPE                 @D4A  01420000
+IPCQQMMSGTYPE64 DS  20F    MSG WAITING 64 BIT MSG TYPE            @D4A  01430000
+         AGO  .NAM64A                                                   01440000
+.AM64A   ANOP  ,                                                  @D4A  01450000
+* AMODE 64                                                              01460000
+IPCQSTIME64   DS    FD     TIME64_T OF LAST MSGSND()              @D3A  01470000
+IPCQRTIME64   DS    FD     TIME64_T OF LAST MSGRCV()              @D3A  01480000
+IPCQQRMSGTYPE64 DS  10FD   MSGRCV 64 BIT MSG TYPE                 @D4A  01490000
+IPCQQMMSGTYPE64 DS  10FD   MSG WAITING 64 BIT MSG TYPE            @D4A  01500000
+.NAM64A   ANOP  ,                                                 @D4A  01510000
+              DS    CL96   Reserved for expansion                 @D4A  01520000
+              EJECT                                                     01530000
+**********************************************************************  01540000
+* Semaphore unique data                                              *  01550000
+**********************************************************************  01560000
+              ORG   IPCQREST                                            01570000
+              DS    0F                                                  01580000
+IPCQLOPID     DS    XL4    PID OF LAST SEMOP                            01590000
+IPCQOTIME     DS    F      TIME_T LAST SEMOP                            01600000
+IPCQADJBADCNT DS    F      TERMINATION BUMPS SEM_VAL LIMITS             01610000
+IPCQNSEMS     DS    FL2    NUMBER OF SEMAPHORES IN THIS SET             01620000
+IPCQADJCNT    DS    FL2    NUMBER OF UNDO STRUCTURES                    01630000
+IPCQNCNT      DS    FL2    COUNT OF WAITERS FOR >0                      01640000
+IPCQZCNT      DS    FL2    COUNT OF WAITERS FOR =0                      01650000
+              DS    0CL16  WAITERS AND ADJUSTERS                        01660000
+              DS    0CL8    WAITER                                      01670000
+IPCQSWPID     DS    F        PROCESS ID                                 01680000
+IPCQSWNUM     DS    H        SEMAPHORE NUMBER                           01690000
+IPCQSWOP      DS    H        SEMAPHORE OPERATION                        01700000
+              DS    0CL8    ADJUSTER                                    01710000
+IPCQSAPID     DS    F        PROCESS ID                                 01720000
+IPCQSANUM     DS    H        SEMAPHORE NUMBER                           01730000
+IPCQSAADJ     DS    H        SEMAPHORE OPERATION                        01740000
+              DS    9CL16  WAITERS AND ADJUSTERS                        01750000
+              DS    0D                                            @D3A  01760000
+         AIF  ('&SYSAM64' EQ 'YES').AM64B                         @D4A  01770000
+* AMode 31                                                              01780000
+IPCQOTIME64   DS    2F     TIME64_T LAST SEMOP                    @D4A  01790000
+         AGO  .NAM64B                                                   01800000
+.AM64B   ANOP ,                                                         01810000
+* AMode 64                                                              01820000
+IPCQOTIME64   DS    FD     TIME64_T LAST SEMOP                    @D4A  01830000
+.NAM64B  ANOP  ,                                                  @D4A  01840000
+              DS    CL360  Reserved for expansion                 @D4A  01850000
+              EJECT                                                     01860000
+**********************************************************************  01870000
+* Shared Memory unique data                                          *  01880000
+**********************************************************************  01890000
+              ORG   IPCQREST                                            01900000
+              DS    0F                                                  01910000
+IPCQACNT      DS    F      USE COUNT (#SHMAT - #SHMDT)                  01920000
+         AIF  ('&SYSAM64' EQ 'YES').AM64C                          @D3A 01930000
+IPCQSEGSZ     DS    F      MEMORY SEGMENT SIZE                          01940000
+         AGO   .NAM64C                                             @D3A 01950000
+.AM64C   ANOP  ,                                                   @D3A 01960000
+              DS    F      RESERVED IN 64 BIT MODE                 @D3A 01970000
+.NAM64C  ANOP  ,                                                   @D3A 01980000
+IPCQDTIME     DS    F      TIME_T OF LAST SHMDT()                       01990000
+IPCQATIME     DS    F      TIME_T OF LAST SHMAT()                       02000000
+IPCQLPID      DS    F      PID OF LAST SHMAT() OR SHMDT()               02010000
+IPCQCPID      DS    XL4    PID OF CREATOR                               02020000
+*---------------------------------------------------------------------* 02030000
+* 31 bit callers - 10 Element array of segments attached              * 02040000
+*    Each element is the 4 byte PID followed by the 31 bit address    * 02050000
+*---------------------------------------------------------------------* 02060000
+         AIF  ('&SYSAM64' EQ 'YES').AM64D                          @D3A 02070000
+IPCQATPID     DS    F      ATTACHED PROCESS ID                          02080000
+IPCQATADDRESS DS    F      SEGMENT ADDRESS FOR PROCESS                  02090000
+              DS    18F    MORE ATTACHED PROCESS IDS AND                02100000
+*                          SEGMENT ADDRESS                              02110000
+              DS    20F    Reserved                                @P2C 02111000
+IPCQDTIME64   DS    2F     TIME_T OF LAST SHMDT()                  @D3A 02130000
+IPCQATIME64   DS    2F     TIME_T OF LAST SHMAT()                  @D3A 02140000
+              DS    2F     Reserved - segment size in 64 bit section    02150000
+              DS    CL160  Reserved - PID/addr arrray in 64 bit    @P2A 02151000
+              AGO   .NAM64D                                             02160000
+              DS    0D                                             @D3A 02324100
+*---------------------------------------------------------------------* 02324200
+* 64 bit section                                                      * 02324300
+*---------------------------------------------------------------------* 02324500
+.AM64D   ANOP ,                                                         02324600
+              DS  20FD     Reserved - Pid/addr array plus 20 words      02328000
+*                                     extra in 31 bit section           02329000
+IPCQDTIME64   DS    FD     TIME_T OF LAST SHMDT()                  @P2M 02329100
+IPCQATIME64   DS    FD     TIME_T OF LAST SHMAT()                  @P2M 02329200
+*                                                                       02329300
+IPCQSEGSZ     DS    FD     MEMORY SEGMENT SIZE                     @P2M 02329400
+*---------------------------------------------------------------------* 02329500
+* 64 bit callers - 10 element array of segments attached              * 02329600
+*    Each element is the 4 byte pid, 4 bytes reserved, 64 bit address * 02329700
+*---------------------------------------------------------------------* 02329800
+IPCQATPID64   DS    F      ATTACHED PROCESS ID                          02329900
+              DS    F      Reserved                                     02330000
+IPCQATADDRESS64 DS  AD     Segment addresses for process           @D3A 02330100
+              DS  18FD     Rest of elements                             02330200
+*                                                                       02330300
+.NAM64D       ANOP  ,                                                   02330400
+              DS    CL184  Reserved                                @P2C 02331000
+              EJECT                                                @D1A 02340000
+**********************************************************************  02350000
+* Mapped Memory unique data                                          *  02360000
+**********************************************************************  02370000
+              ORG   IPCQREST Mapped Memory unique data             @D1A 02380000
+              DS    0F                                             @D1A 02390000
+IPCQMAPCPID   DS    F      CREATOR PROCESS ID                      @D1A 02400000
+IPCQMAPUPID   DS    F      USER PROCESS ID                         @D1A 02410000
+IPCQMAPTOKEN  DS    2F     MAP TOKEN                               @D1A 02420000
+IPCQMAPUID    DS    F      USER'S EFFECTIVE UID                    @D1A 02430000
+IPCQMAPGID    DS    F      USER'S EFFECTIVE GID                    @D1A 02440000
+IPCQMAPFLAGS  DS    XL4    FLAGS                                   @D1A 02450000
+* Flags in first byte                                                   02460000
+IPCQMAPSHUT   EQU   X'80'  SHUTDOWN OF OBJECT                      @D1A 02470000
+IPCQBLKSZ     DS    F      SIZE OF BLOCKS IN MEGS                  @D1A 02480000
+IPCQBLKSINUSE DS    F      NUMBER OF BLOCKS IN USE                 @D1A 02490000
+IPCQBLKSINMAP DS    F      NUMBER OF BLOCKS IN MAP AREA            @D1A 02500000
+IPCQBLKSMAPPED DS   F      NUMBER OF BLOCKS MAPPED                 @D1A 02510000
+*                          BY THIS PROCESS                              02520000
+              DS    CL508  Reserved for expansion                  @D4A 02530000
+              EJECT                                                     02540000
+**********************************************************************  02550000
+* Continuation of Common data                                        *  02560000
+* This next ORG gets us past the largest unique section of data      *  02570000
+* We need to preserve the field offsets from prior releases so       *  02580000
+* needed to add the rest of this common data at the end of the       *  02590000
+* unique data instead of within the common area defined above.       *  02600000
+**********************************************************************  02610000
+              ORG                                                       02620000
+         AIF  ('&SYSAM64' EQ 'YES').AM64                           @D4A 02630000
+IPCQGTIME64   DS    2F     TIME64_T OF LAST ...GET()               @D3A 02640000
+IPCQCTIME64   DS    2F     TIME64_T OF LAST ...CTL()               @D3A 02650000
+IPCQTTIME64   DS    2F     TIME64_T CHANGED BY TERMINATION         @D3A 02660000
+IPCQSECLABEL  DS    2F     SECLABEL                                @D2A 02670000
+        AGO   .NAM64                                                    02680000
+.AM64   ANOP   ,                                                   @D3A 02690000
+IPCQGTIME64   DS    FD     TIME64_T OF LAST ...GET()               @D3A 02700000
+IPCQCTIME64   DS    FD     TIME64_T OF LAST ...CTL()               @D3A 02710000
+IPCQTTIME64   DS    FD     TIME64_T CHANGED BY TERMINATION         @D3A 02720000
+IPCQSECLABEL  DS    FD     SECLABEL                                @D2A 02730000
+.NAM64   ANOP  ,                                                   @D3A 02740000
+              EJECT                                                     02750000
+**********************************************************************  02760000
+* Overview - summary data for msgqs, semaphores, shared memory       *  02770000
+**********************************************************************  02780000
+              ORG   IPCQOVER Overview                                   02790000
+                 DS    0F  MESSAGE QUEUES                               02800000
+IPCQOMSGNIDS     DS    F        Maximum number MSQs allowed             02810000
+IPCQOMSGHIGHH2O  DS    F        Most MSQs at one time                   02820000
+IPCQOMSGFREE     DS    F        Number MSQs available                   02830000
+IPCQOMSGPRIVATE  DS    F        Number MSQs with Ipc_PRIVATE            02840000
+IPCQOMSGKEYED    DS    F        Number MSQs with KEYs                   02850000
+IPCQOMSGREJECTS  DS    F        TIMES MSGGET DENIED                     02860000
+IPCQOMSGQBYTES   DS    F        MAX BYTES PER QUEUE                     02870000
+IPCQOMSGQMNUM    DS    F        MAX NUMBER MESSAGES PER QUEUE           02880000
+IPCQOMSGNOALC    DS    F        # MSGSNDS THAT RETURNED ENOMEM          02890000
+                 DS    F                                                02900000
+                 DS    0F  SEMAPHORE                                    02910000
+IPCQOSEMNIDS     DS    F        Maximum number SEMs allowed             02920000
+IPCQOSEMHIGHH2O  DS    F        Most SEMs at one time                   02930000
+IPCQOSEMFREE     DS    F        Number SEMs available                   02940000
+IPCQOSEMPRIVATE  DS    F        Number SEMs with Ipc_PRIVATE            02950000
+IPCQOSEMKEYED    DS    F        Number SEMs with KEYs                   02960000
+IPCQOSEMREJECTS  DS    F        TIMES SEMGET DENIED                     02970000
+IPCQOSEMSNSEMS   DS    F        MAX NUMBER OF SEMAPHORES PER SET        02980000
+IPCQOSEMSNOPS    DS    F        MAX NUMBER OPERATION IN SEMOP           02990000
+IPCQOSEMSBYTES   DS    F        STORAGE LIMIT                           03000000
+IPCQOSEMCBYTES   DS    F        STORAGE COUNT                           03010000
+                 DS    F                                                03020000
+                 DS    0F  SHARED MEMORY                                03030000
+IPCQOSHMNIDS     DS    F        Maximum number SHMs allowed             03040000
+IPCQOSHMHIGHH2O  DS    F        Most SHMs at one time                   03050000
+IPCQOSHMFREE     DS    F        Number SHMs available                   03060000
+IPCQOSHMPRIVATE  DS    F        Number SHMs with Ipc_PRIVATE            03070000
+IPCQOSHMKEYED    DS    F        Number SHMs with KEYs                   03080000
+IPCQOSHMREJECTS  DS    F        TIMES SHMGET DENIED                     03090000
+IPCQOSHMSPAGES   DS    F        MAX # PAGES PER SYSTEM LIMIT            03100000
+IPCQOSHMMPAGES   DS    F        MAX # PAGES PER SEGMENT LIMIT - ZERO    03110000
+*                               IF 32 BITS EXCEEDED - USE               03120000
+*                               IPCQOSHMMPAGES64 FOR GREATER THAN 32    03130000
+*                               BITS                                    03140000
+IPCQOSHMNSEGS    DS    F        MAX # SEGMENTS PER PROCESS LIMIT        03150000
+IPCQOSHMCPAGES   DS    F        CURRENT # BYTES SYSTEM WIDE             03160000
+*                               This field does not include pages for   03170000
+*                               shared memory requests processed with   03180000
+*                               the ipc_MEGA option                     03190000
+IPCQOSHMBIGGEST  DS    F        LARGEST SEGMENT ALLOCATED - ZERO IF     03200000
+*                               32 BITS EXCEEDED - USE                  03210000
+*                               IPCQOSHMBIGGEST64 FOR GREATER THAN 32   03220000
+*                               BITS                                    03230000
+                 DS    0D                                          @D3A 03240000
+         AIF  ('&SYSAM64' EQ 'YES').AM64E                          @D3A 03250000
+IPCQOSHMMPAGES64  DS   2F       MAX # PAGES PER SEGMENT LIMIT      @D3A 03260000
+IPCQOSHMBIGGEST64 DS   2F       LARGEST SEGMENT ALLOCATED          @D3A 03270000
+         AGO   .NAM64E                                                  03280000
+.AM64E   ANOP  ,                                                   @D3A 03290000
+IPCQOSHMMPAGES64  DS   FD       MAX # PAGES PER SEGMENT LIMIT      @D3A 03300000
+IPCQOSHMBIGGEST64 DS   FD       LARGEST SEGMENT ALLOCATED          @D3A 03310000
+.NAM64E  ANOP  ,                                                   @D3A 03320000
+              SPACE ,                                                   03330000
+              ORG   ,                                                   03340000
+IPCQ#LENGTH   EQU   *-IPCQ Storage needed for w_getipc function         03350000
+* w-getipc Command:                                                     03360000
+IPCQ#MSG      EQU   1      Retrieve next message queue                  03370000
+IPCQ#SHM      EQU   2      Retrieve next shared memory segment          03380000
+IPCQ#SEM      EQU   3      Retrieve next semaphore set                  03390000
+IPCQ#ALL      EQU   4      Retrieve next member, all mechanisms         03400000
+IPCQ#OVER     EQU   5      Retrieve overview                            03410000
+IPCQ#MAP      EQU   6      Retrieve mapped memory                 @D1A  03420000
+** BPXYIPCQ End                                                         03430000
+         SPACE 3                                                        03440000
+         AIF   ('&LIST' EQ 'YES').E411                                  03450000
+         POP   PRINT                                                    03460000
+.E411    ANOP  ,                                                        03470000
+         MEND  ,                  Terminating PL/X comment           */ 03480000
+*%IPCQPLS : ;                                                           03490000
+*%IF IPCQBASE='' %THEN                                                  03500000
+*  %DO;                                                                 03510000
+*    %IPCQBASE='Based';                                                 03520000
+*  %END;                                                                03530000
+*/********************************************************************/ 03540000
+*/*                                                                  */ 03550000
+*/* IPCQ Common area                                                 */ 03560000
+*/*                                                                  */ 03570000
+*/********************************************************************/ 03580000
+*Declare 1 IPCQ IPCQBASE Bdy(DWord),/* Structure to query IPC    @D3A*/ 03590000
+*    3   IpcqCommon1     ,          /* Common to MSG, SEM, SHM       */ 03600000
+*     5  IpcqCommon2     ,          /* Common to above and OVER      */ 03610000
+*      7 IpcqLength      Fixed(31), /* Ipcq#Length of syscall- could be 03620000
+*                                      different from caller.        */ 03630000
+*      7 IpcqType        Char(4),   /* "IMSG", "ISEM", "ISHM", "OVER"*/ 03640000
+*     5  IpcqMID         IsA(IpcID_t), /* Member ID                  */ 03650000
+*     5  IpcqKey         Fixed(31), /* Key (0 for private)           */ 03660000
+*     5  IpcqIpcp        Char(Length(IPCP)),                            03670000
+*                                   /* uid,gid,cuid,cgid,mode        */ 03680000
+*     5  IpcqGTime       IsA(time_t), /* time_t of ...get()          */ 03690000
+*     5  IpcqCTime       IsA(time_t), /* time_t of last ...ctl()     */ 03700000
+*     5  IpcqTTime       IsA(time_t), /* time changed by termination */ 03710000
+*                                                                       03720000
+*/********************************************************************/ 03730000
+*/*   Now comes the IPC specific section of data.  Following that    */ 03740000
+*/*   are the additional common fields.  The common fields could     */ 03750000
+*/*   not be added above the specific sections since we cannot       */ 03760000
+*/*   change the offsets of already existing sections of data.       */ 03770000
+*/*   Also, we are using the Length of Ipcq_MSG since that is the    */ 03780000
+*/*   largest of the specific sections.  Since we added common data  */ 03790000
+*/*   after the specific sections, the specific sections can now     */ 03800000
+*/*   no longer have their offsets changed nor can they be increased */ 03810000
+*/*   in size.  Additional reserved space was added to each          */ 03820000
+*/*   specific section for furture expansion.                        */ 03830000
+*/********************************************************************/ 03840000
+*    3   *  Char(Length(Ipcq_MSG)-Length(IpcqCommon1)),       /* @D4A*/ 03850000
+*                                                                       03860000
+*    3   IpcqCommon3     Bdy(DWord),                          /* @D3A*/ 03870000
+*     5  IpcqGTime64     IsA(time64_t), /* time of xxxGET()      @D3A*/ 03880000
+*     5  IpcqCTime64     IsA(time64_t), /* time of last xxxctl() @D3A*/ 03890000
+*     5  IpcqTTime64     IsA(time64_t), /* time changed by term  @D3A*/ 03900000
+*     5  IpcqSeclabel    Char(8);       /* Seclabel              @D2A*/ 03910000
+*                                                                       03920000
+*/********************************************************************/ 03930000
+*/*                                                                  */ 03940000
+*/* Message Queues                                                   */ 03950000
+*/*                                                                  */ 03960000
+*/********************************************************************/ 03970000
+*Declare 1 Ipcq_MSG      Bdy(DWord)  Based(Addr(IPCQ)),       /* @D3C*/ 03980000
+*    3   *               Char(Length(IpcqCommon1)),                     03990000
+*    3   IpcqBytes       Fixed(32),   /* # bytes of messages on queue*/ 04000000
+*    3   IpcqQBytes      Fixed(32),   /* max # bytes of messages        04010000
+*                                        allowed on queue            */ 04020000
+*    3   IpcqLSPid       IsA(pid_t),  /* pid of last msgsnd()        */ 04030000
+*    3   IpcqLRPid       IsA(pid_t),  /* pid of last msgrcv()        */ 04040000
+*    3   IpcqSTime       IsA(time_t), /* time_t of last msgsnd()     */ 04050000
+*    3   IpcqRTime       IsA(time_t), /* time_t of last msgrcv()     */ 04060000
+*    3   IpcqNum         Fixed(32),   /* # of messages on queue      */ 04070000
+*    3   IpcqRCnt        Fixed(32),   /* Count of waiting msgrcv     */ 04080000
+*    3   IpcqSCnt        Fixed(32),   /* Count of waiting msgsnd     */ 04090000
+*    3   IpcqQW (10)     ,            /* Receive and Send waiters    */ 04100000
+*     5  *               ,            /*  Msgrcv                     */ 04110000
+*      7 IpcqQRPid       IsA(pid_t),  /*    process ID               */ 04120000
+*      7 IpcqQRMsgType   Fixed(31),   /*    message type             */ 04130000
+*     5  *               ,            /*  Msgsnd                     */ 04140000
+*      7 IpcqQSPid       IsA(pid_t),  /*    process ID               */ 04150000
+*      7 IpcqQSMsgLen    Fixed(32),   /*    message length           */ 04160000
+*    3   IpcqQM (10)     ,            /* Messages on the queue       */ 04170000
+*     5  IpcqQMPid       IsA(pid_t),  /*    process ID               */ 04180000
+*     5  IpcqQMMsgType   Fixed(31),   /*    message type             */ 04190000
+*    3   *               Fixed(32),   /* Reserved                    */ 04200000
+*    3   *               Bdy(DWord),  /*                         @D3A*/ 04210000
+*     5  IpcqSTime64     IsA(time64_t), /* time of last msgsnd() @D3A*/ 04220000
+*     5  IpcqRTime64     IsA(time64_t), /* time of last msgrcv() @D3A*/ 04230000
+*    /* IpcqQRMsgType64/IpcqQMMsgType64 are 10 element arrays that   */ 04240000
+*    /* corespond to the elements in IpcqQw                          */ 04250000
+*     5  IpcqQRMsgType64(10) Fixed(64), /* msgrcv msgtype        @D4A*/ 04260000
+*     5  IpcqQMMsgType64(10) Fixed(64), /* msgtype queued msgs   @D4A*/ 04270000
+*    3   *               Char(96);      /* Reserved - expansion  @D4A*/ 04280000
+*                                                                       04290000
+*/********************************************************************/ 04300000
+*/*                                                                  */ 04310000
+*/* Semaphore Sets                                                   */ 04320000
+*/*                                                                  */ 04330000
+*/********************************************************************/ 04340000
+*Declare 1 Ipcq_SEM      Bdy(DWord)  Based(Addr(IPCQ))        /* @D3C*/ 04350000
+*                                    Char(Length(Ipcq_Msg)),  /* @D4A*/ 04360000
+*    3   *               Char(Length(IpcqCommon1)),                     04370000
+*    3   IpcqLOPid       IsA(pid_t),  /* PID of last semop           */ 04380000
+*    3   IpcqOTime       IsA(time_t), /* time of last semop          */ 04390000
+*    3   IpcqAdjBadCnt   Fixed(31),   /* termination bumps val limits*/ 04400000
+*    3   IpcqNSems       Fixed(15),   /* number of semaphores        */ 04410000
+*    3   IpcqAdjCnt      Fixed(15),   /* processes with UNDOs        */ 04420000
+*    3   IpcqNCnt        Fixed(15),   /* cnt Processes waiting on >0 */ 04430000
+*    3   IpcqZCnt        Fixed(15),   /* cnt Processes waiting on =0 */ 04440000
+*    3   IpcqSW (10)     ,            /* waiters and adjusters       */ 04450000
+*     5  *               ,            /*  Semop                      */ 04460000
+*      7 IpcqSWPid       IsA(pid_t),  /*    process ID               */ 04470000
+*      7 IpcqSWnum       Fixed(15),   /*    sem_num                  */ 04480000
+*      7 IpcqSWop        Fixed(15),   /*    sem_op                   */ 04490000
+*     5  *               ,            /*  Adjusters (UNDO)           */ 04500000
+*      7 IpcqSAPid       IsA(pid_t),  /*    process ID               */ 04510000
+*      7 IpcqSAnum       Fixed(15),   /*    sem_num                  */ 04520000
+*      7 IpcqSAadj       Fixed(15),   /*    sem_adj                  */ 04530000
+*    3   *               Fixed(32),   /* reserved                @D3A*/ 04540000
+*    3   *               Bdy(DWord),  /*                         @D3A*/ 04550000
+*     5  IpcqOTime64     IsA(time64_t), /* time OF LAST SEMOP    @D3A*/ 04560000
+*    3   *               Char(360);     /* Reserved              @D4A*/ 04570000
+*/********************************************************************/ 04580000
+*/*                                                                  */ 04590000
+*/* Shared memory segments                                           */ 04600000
+*/*                                                                  */ 04610000
+*/********************************************************************/ 04620000
+*Declare 1 Ipcq_SHM      Bdy(DWord)  Based(Addr(IPCQ))        /* @D3C*/ 04630000
+*                                    Char(Length(Ipcq_Msg)),  /* @D4A*/ 04640000
+*    3   *               Char(Length(IpcqCommon1)),                     04650000
+*    3   IpcqACnt        Fixed(31),   /* Number of current attaches  */ 04660000
+*    3   IpcqSegSz       Fixed(31),   /* Memory segment size         */ 04670000
+*    3   IpcqDTime       IsA(time_t), /* time_t of last shmdt()      */ 04680000
+*    3   IpcqATime       IsA(time_t), /* time_t of last shmat()      */ 04690000
+*    3   IpcqLPid        IsA(pid_t),  /* pid of last shmat(), shmdt()*/ 04700000
+*    3   IpcqCPid        IsA(pid_t),  /* process ID of creator       */ 04710000
+*    3   IpcqAt(10),     /* 31 bit array of attached processes   @P2M*/ 04721000
+*     5   IpcqAtPid      IsA(pid_t),  /*  process id                 */ 04722000
+*     5   IpcqAtAddress  Ptr(31),     /*  segment address            */ 04723000
+*    3   *               Char(80),    /*  reserved               @P2C*/ 04723100
+*    3   IpcqDTime64     IsA(time64_t) Bdy(DWord),            /* @D3A*/ 04800000
+*                                       /* time of last shmdt()  @D3A*/ 04810000
+*    3   IpcqATime64     IsA(time64_t), /* time of last shmat()  @D3A*/ 04820000
+*    3   IpcqSegSz64     Fixed(64),   /* Memory segment size for        04830000
+*                                        above bar shared obj    @D3A*/ 04840000
+*    3   IpcqAt64(10),   /* 64 bit array of attached processes   @P2C*/ 04840100
+*     5   IpcqAtPid64    IsA(pid_t),  /*  process id                 */ 04840200
+*     5   *              Fixed(32),   /*  padding                    */ 04840300
+*     5   IpcqAtAddress64 Ptr(64),    /*  64 bit segment address     */ 04840400
+*    3   *               Char(184);     /* Reserved              @P2C*/ 04840500
+*/********************************************************************/ 04860000
+*/*                                                                  */ 04870000
+*/* Mapped memory objects                                        @D1A*/ 04880000
+*/*                                                                  */ 04890000
+*/********************************************************************/ 04900000
+*Declare 1 Ipcq_MAP      Bdy(DWord)  Based(Addr(IPCQ))        /* @D1A*/ 04910000
+*                                    Char(Length(Ipcq_Msg)),  /* @D4A*/ 04920000
+*    3   *               Char(Length(IpcqCommon1)),                     04930000
+*    3   IpcqMapCPid     IsA(pid_t),  /* creator process ID      @D1A*/ 04940000
+*    3   IpcqMapUPid     IsA(pid_t),  /* user process ID         @D1A*/ 04950000
+*    3   IpcqMapToken    Char(8),     /* map token Bdy(Word)     @D1A*/ 04960000
+*    3   IpcqMapUid      Fixed(32),   /* User's effective UID    @D1A*/ 04970000
+*    3   IpcqMapGid      Fixed(32),   /* User's effective GID    @D1A*/ 04980000
+*    3   IpcqMapFlags    Bit(32),     /* flags                   @D1A*/ 04990000
+*     5  IpcqMapShut     Bit,         /* shutdown of object      @D1A*/ 05000000
+*     5  *               Bit(31),     /* reserved                @D1A*/ 05010000
+*    3   IpcqBlkSz       Fixed(31),   /* size of blocks in megs  @D1A*/ 05020000
+*    3   IpcqBlksInUse   Fixed(31),   /* number of blocks in use @D1A*/ 05030000
+*    3   IpcqBlksInMap   Fixed(31),   /* number of blocks in            05040000
+*                                          map area              @D1A*/ 05050000
+*    3   IpcqBlksMapped  Fixed(31),   /* number of blocks mapped        05060000
+*                                          by this process       @D1A*/ 05070000
+*    3   *               Char(508);     /* Reserved              @D4A*/ 05080000
+*/********************************************************************/ 05090000
+*/*                                                                  */ 05100000
+*/* Overview - MSG/SEM/SHM                                           */ 05110000
+*/*                                                                  */ 05120000
+*/********************************************************************/ 05130000
+*Declare 1 Ipcq_Over     Bdy(DWord)  Based(Addr(IPCQ)),       /* @D3C*/ 05140000
+*    3   *               Char(Length(IpcqCommon2)),                     05150000
+*    3   *               ,          /* Message Queues Overview       */ 05160000
+*     5  IpcqOMsgNIDs    Fixed(31), /*   maximun number MSQs allowed */ 05170000
+*     5  IpcqOMsgHighH2O Fixed(31), /*   most MSQs at one time       */ 05180000
+*     5  IpcqOMsgFree    Fixed(31), /*   number MSQs available       */ 05190000
+*     5  IpcqOMsgPrivate Fixed(31), /*   number MSQs with Ipc_PRIVATE*/ 05200000
+*     5  IpcqOMsgKeyed   Fixed(31), /*   number MSQs with KEYs       */ 05210000
+*     5  IpcqOMsgRejects Fixed(31), /*   Times msgget denied         */ 05220000
+*     5  IpcqOMsgQBytes  Fixed(31), /*   bytes per queue - max       */ 05230000
+*     5  IpcqOMsgQMNum   Fixed(31), /*   max number messages per q   */ 05240000
+*     5  IpcqOMsgNoAlc   Fixed(31), /*   # msgsnds that returned        05250000
+*                                        ENOMEM                      */ 05260000
+*     5  *               Fixed(31), /*                               */ 05270000
+*    3   *               ,          /* Semaphore Sets Overview       */ 05280000
+*     5  IpcqOSemNIDs    Fixed(31), /*   maximun number SEMs allowed */ 05290000
+*     5  IpcqOSemHighH2O Fixed(31), /*   most SEMs at one time       */ 05300000
+*     5  IpcqOSemFree    Fixed(31), /*   number SEMs available       */ 05310000
+*     5  IpcqOSemPrivate Fixed(31), /*   number SEMs with Ipc_PRIVATE*/ 05320000
+*     5  IpcqOSemKeyed   Fixed(31), /*   number SEMs with KEYs       */ 05330000
+*     5  IpcqOSemRejects Fixed(31), /*   Times semget denied         */ 05340000
+*     5  IpcqOSemNSems   Fixed(31), /*   max # semaphores per set    */ 05350000
+*     5  IpcqOSemNOps    Fixed(31), /*   max # operations per semop  */ 05360000
+*     5  IpcqOSemSBytes  Fixed(31), /*   storage limit               */ 05370000
+*     5  IpcqOSemCBytes  Fixed(31), /*   current storage count       */ 05380000
+*     5  *               Fixed(31), /*                               */ 05390000
+*    3   *               ,          /* Shared memory overview        */ 05400000
+*     5  IpcqOShmNIDs    Fixed(31), /*   maximun number SHMs allowed */ 05410000
+*     5  IpcqOShmHighH2O Fixed(31), /*   most SHMs at one time       */ 05420000
+*     5  IpcqOShmFree    Fixed(31), /*   number SHMs available       */ 05430000
+*     5  IpcqOShmPrivate Fixed(31), /*   number SHMs with Ipc_PRIVATE*/ 05440000
+*     5  IpcqOShmKeyed   Fixed(31), /*   number SHMs with KEYs       */ 05450000
+*     5  IpcqOShmRejects Fixed(31), /*   Times shmget denied         */ 05460000
+*     5  IpcqOShmSPages  Fixed(31), /*   # pages per system  limit   */ 05470000
+*     5  IpcqOShmMPages  Fixed(31), /*   # pages per segment limit   */ 05480000
+*     5  IpcqOShmNSegs   Fixed(31), /*   # segments per process limit*/ 05490000
+*     5  IpcqOShmCPages  Fixed(31), /*   # pages system wide, current.  05500000
+*                                        This field does not include    05510000
+*                                        pages for shared memory        05520000
+*                                        requests processed with the    05530000
+*                                        ipc_MEGA option             */ 05540000
+*     5  IpcqOShmBiggest Fixed(31), /*   largest segment allocated   */ 05550000
+*     3  IpcqOShmMPages64  Fixed(64), /* # pages per segment limit      05560000
+*                                        64 bit (4K pages)       @D3A*/ 05570000
+*     3  IpcqOShmBiggest64 Fixed(64); /* largest segment allocated      05580000
+*                                        64 bit (4K pages)       @D3A*/ 05590000
+*                                                                       05600000
+*Declare                                                                05610000
+*    Ipcq#Length   Constant(Max(LENGTH(Ipcq),                           05620000
+*                               LENGTH(Ipcq_Over))), /*          @D3C*/ 05630000
+*    Ipcq#MSG      Fixed(31)  CONSTANT(01),  /* message queue        */ 05640000
+*    Ipcq#SHM      Fixed(31)  CONSTANT(02),  /* shared memory        */ 05650000
+*    Ipcq#SEM      Fixed(31)  CONSTANT(03),  /* semaphore            */ 05660000
+*    Ipcq#ALL      Fixed(31)  CONSTANT(04),  /* all mechanisms       */ 05670000
+*    Ipcq#OVER     Fixed(31)  CONSTANT(05),  /* overview of IPC      */ 05680000
+*    Ipcq#MAP      Fixed(31)  CONSTANT(06);  /* mapped memory    @D1A*/ 05690000
